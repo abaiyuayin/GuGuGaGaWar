@@ -1,0 +1,46 @@
+[gd_resource type="Resource" script_class="UnitResource" format=3]
+
+[ext_resource type="Script" path="res://resources/units/unit_base_resource.gd" id="1_base"]
+[ext_resource type="Script" path="res://resources/affixes/affix_resource.gd" id="1_hero2a"]
+
+[resource]
+script = ExtResource("1_base")
+unit_id = "Hero2"
+display_name = "Doro勇士"
+description = "Doro 阵营英雄单位。为 Doro 一族而战的勇士，挥舞重兵近身搏杀，身板与输出皆为顶尖。由隐藏成就「为了欧润橘！」解锁。"
+cost = 300
+units_per_card = 1
+max_hp = 300
+armor_value = 200
+move_speed = 2.5
+damage = 30
+damage_type = 1
+damage_types = Array[int]([0])
+damage_by_type = {
+0: 200
+}
+attack_range = 3.0
+attack_range_h = 1.2
+attack_range_v = 0.6
+is_ranged_override = 0
+attack_speed = 2.0
+attack_hit_types = Array[int]([0])
+damage_by_hit = [{
+0: 150,
+2: 50
+}]
+attack_hit_frame_start = 14
+attack_hit_frame_end = 15
+attack_sound_frame = 14
+display_height = 64.0
+display_width = 64.0
+move_display_height = 58.0
+move_display_width = 47.0
+walk_display_height = 58.0
+walk_display_width = 58.0
+attack_display_height = 115.0
+attack_display_width = 115.0
+attack_anim_speed = 0.9
+color_red = Color(0.55, 0.2, 0.35, 1)
+color_blue = Color(0.25, 0.2, 0.55, 1)
+aoe_radius = 30.0

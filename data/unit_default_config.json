@@ -1,0 +1,1127 @@
+{
+	"units": [
+		{
+			"anim": {
+				"attack_anim_speed": 1.3,
+				"attack_anim_sync_interval": true,
+				"attack_display_height": 76.0,
+				"attack_display_width": 76.0,
+				"attack_flip_override": 0,
+				"default_facing": -1,
+				"display_height": 40.0,
+				"display_width": 40.0,
+				"idle_anim_speed": 1.0,
+				"idle_display_height": 0.0,
+				"idle_display_width": 0.0,
+				"idle_flip_override": 0,
+				"is_ranged_override": -1,
+				"move_anim_speed": 1.0,
+				"move_display_height": 40.0,
+				"move_display_width": 40.0,
+				"move_flip_override": 0,
+				"sprint_anim_speed": 1.0,
+				"sprint_display_height": 0.0,
+				"sprint_display_width": 0.0,
+				"sprint_flip_override": 0,
+				"walk_display_height": 0.0,
+				"walk_display_width": 0.0,
+				"walk_flip_override": 0
+			},
+			"stats": {
+				"affix_ids": [],
+				"aoe_radius": 0.0,
+				"armor_value": 50,
+				"attack_count": 1,
+				"attack_hit_types": [],
+				"attack_range": 1.0,
+				"attack_recovery_time": -1.0,
+				"attack_speed": 3.0,
+				"cost": 50,
+				"damage": 25,
+				"damage_by_type": {},
+				"damage_type": 0,
+				"max_hp": 100,
+				"move_speed": 2.5
+			},
+			"unit_id": "D1"
+		},
+		{
+			"anim": {
+				"attack_anim_speed": 1.2,
+				"attack_anim_sync_interval": true,
+				"attack_display_height": 136.0,
+				"attack_display_width": 135.0,
+				"attack_flip_override": 0,
+				"default_facing": -1,
+				"display_height": 40.0,
+				"display_width": 40.0,
+				"idle_anim_speed": 1.0,
+				"idle_display_height": 0.0,
+				"idle_display_width": 0.0,
+				"idle_flip_override": 0,
+				"is_ranged_override": -1,
+				"move_anim_speed": 1.0,
+				"move_display_height": 60.0,
+				"move_display_width": 60.0,
+				"move_flip_override": 0,
+				"sprint_anim_speed": 1.0,
+				"sprint_display_height": 0.0,
+				"sprint_display_width": 0.0,
+				"sprint_flip_override": 0,
+				"walk_display_height": 62.0,
+				"walk_display_width": 62.0,
+				"walk_flip_override": 0
+			},
+			"stats": {
+				"affix_ids": [],
+				"aoe_radius": 60.0,
+				"armor_value": 10,
+				"attack_count": 1,
+				"attack_hit_types": [
+					0
+				],
+				"attack_range": 2.0,
+				"attack_recovery_time": -1.0,
+				"attack_speed": 3.0,
+				"cost": 120,
+				"damage": 40,
+				"damage_by_type": {
+					"0": 60
+				},
+				"damage_type": 0,
+				"max_hp": 120,
+				"move_speed": 2.5
+			},
+			"unit_id": "D2"
+		},
+		{
+			"anim": {
+				"attack_anim_speed": 0.8,
+				"attack_anim_sync_interval": true,
+				"attack_display_height": 137.0,
+				"attack_display_width": 137.0,
+				"attack_flip_override": 1,
+				"default_facing": 1,
+				"display_height": 59.0,
+				"display_width": 40.0,
+				"idle_anim_speed": 1.0,
+				"idle_display_height": 0.0,
+				"idle_display_width": 0.0,
+				"idle_flip_override": 0,
+				"is_ranged_override": -1,
+				"move_anim_speed": 1.0,
+				"move_display_height": 39.0,
+				"move_display_width": 40.0,
+				"move_flip_override": 0,
+				"sprint_anim_speed": 1.0,
+				"sprint_display_height": 0.0,
+				"sprint_display_width": 0.0,
+				"sprint_flip_override": 0,
+				"walk_display_height": 0.0,
+				"walk_display_width": 0.0,
+				"walk_flip_override": 1
+			},
+			"stats": {
+				"affix_ids": [],
+				"aoe_radius": 0.0,
+				"armor_value": 10,
+				"attack_count": 1,
+				"attack_hit_types": [
+					1
+				],
+				"attack_range": 7.5,
+				"attack_recovery_time": -1.0,
+				"attack_speed": 2.5,
+				"cost": 75,
+				"damage": 40,
+				"damage_by_type": {
+					"1": 35
+				},
+				"damage_type": 1,
+				"max_hp": 100,
+				"move_speed": 1.5
+			},
+			"unit_id": "D3"
+		},
+		{
+			"anim": {
+				"attack_anim_speed": 0.9,
+				"attack_anim_sync_interval": true,
+				"attack_display_height": 100.0,
+				"attack_display_width": 100.0,
+				"attack_flip_override": 0,
+				"default_facing": -1,
+				"display_height": 40.0,
+				"display_width": 40.0,
+				"idle_anim_speed": 1.0,
+				"idle_display_height": 0.0,
+				"idle_display_width": 0.0,
+				"idle_flip_override": 0,
+				"is_ranged_override": -1,
+				"move_anim_speed": 1.0,
+				"move_display_height": 45.0,
+				"move_display_width": 45.0,
+				"move_flip_override": 0,
+				"sprint_anim_speed": 1.0,
+				"sprint_display_height": 0.0,
+				"sprint_display_width": 0.0,
+				"sprint_flip_override": 0,
+				"walk_display_height": 0.0,
+				"walk_display_width": 0.0,
+				"walk_flip_override": 0
+			},
+			"stats": {
+				"affix_ids": [],
+				"aoe_radius": 0.0,
+				"armor_value": 50,
+				"attack_count": 1,
+				"attack_hit_types": [
+					2
+				],
+				"attack_range": 1.0,
+				"attack_recovery_time": -1.0,
+				"attack_speed": 2.5,
+				"cost": 55,
+				"damage": 30,
+				"damage_by_type": {
+					"1": 35,
+					"2": 30
+				},
+				"damage_type": 2,
+				"max_hp": 100,
+				"move_speed": 2.5
+			},
+			"unit_id": "D4"
+		},
+		{
+			"anim": {
+				"attack_anim_speed": 1.0,
+				"attack_anim_sync_interval": true,
+				"attack_display_height": 48.0,
+				"attack_display_width": 48.0,
+				"attack_flip_override": 0,
+				"default_facing": -1,
+				"display_height": 40.0,
+				"display_width": 40.0,
+				"idle_anim_speed": 1.0,
+				"idle_display_height": 0.0,
+				"idle_display_width": 0.0,
+				"idle_flip_override": 0,
+				"is_ranged_override": -1,
+				"move_anim_speed": 1.0,
+				"move_display_height": 43.0,
+				"move_display_width": 43.0,
+				"move_flip_override": 0,
+				"sprint_anim_speed": 1.0,
+				"sprint_display_height": 0.0,
+				"sprint_display_width": 0.0,
+				"sprint_flip_override": 0,
+				"walk_display_height": 0.0,
+				"walk_display_width": 0.0,
+				"walk_flip_override": 0
+			},
+			"stats": {
+				"affix_ids": [],
+				"aoe_radius": 0.0,
+				"armor_value": 10,
+				"attack_count": 1,
+				"attack_hit_types": [],
+				"attack_range": 5.5,
+				"attack_recovery_time": -1.0,
+				"attack_speed": 2.5,
+				"cost": 65,
+				"damage": 30,
+				"damage_by_type": {
+					"0": 30
+				},
+				"damage_type": 0,
+				"max_hp": 100,
+				"move_speed": 2.0
+			},
+			"unit_id": "D5"
+		},
+		{
+			"anim": {
+				"attack_anim_speed": 0.9,
+				"attack_anim_sync_interval": true,
+				"attack_display_height": 105.0,
+				"attack_display_width": 105.0,
+				"attack_flip_override": 0,
+				"default_facing": -1,
+				"display_height": 40.0,
+				"display_width": 40.0,
+				"idle_anim_speed": 1.0,
+				"idle_display_height": 0.0,
+				"idle_display_width": 0.0,
+				"idle_flip_override": 0,
+				"is_ranged_override": -1,
+				"move_anim_speed": 1.0,
+				"move_display_height": 51.0,
+				"move_display_width": 51.0,
+				"move_flip_override": 0,
+				"sprint_anim_speed": 1.0,
+				"sprint_display_height": 0.0,
+				"sprint_display_width": 0.0,
+				"sprint_flip_override": 0,
+				"walk_display_height": 49.0,
+				"walk_display_width": 49.0,
+				"walk_flip_override": 0
+			},
+			"stats": {
+				"affix_ids": [
+					"knockback_basic"
+				],
+				"aoe_radius": 25.0,
+				"armor_value": 35,
+				"attack_count": 1,
+				"attack_hit_types": [
+					2
+				],
+				"attack_range": 1.5,
+				"attack_recovery_time": -1.0,
+				"attack_speed": 3.5,
+				"cost": 130,
+				"damage": 60,
+				"damage_by_type": {
+					"2": 60
+				},
+				"damage_type": 2,
+				"max_hp": 140,
+				"move_speed": 2.5
+			},
+			"unit_id": "D6"
+		},
+		{
+			"anim": {
+				"attack_anim_speed": 1.0,
+				"attack_anim_sync_interval": true,
+				"attack_display_height": 60.0,
+				"attack_display_width": 60.0,
+				"attack_flip_override": 0,
+				"default_facing": -1,
+				"display_height": 40.0,
+				"display_width": 40.0,
+				"idle_anim_speed": 1.0,
+				"idle_display_height": 0.0,
+				"idle_display_width": 0.0,
+				"idle_flip_override": 0,
+				"is_ranged_override": -1,
+				"move_anim_speed": 1.0,
+				"move_display_height": 53.0,
+				"move_display_width": 53.0,
+				"move_flip_override": 0,
+				"sprint_anim_speed": 1.0,
+				"sprint_display_height": 0.0,
+				"sprint_display_width": 0.0,
+				"sprint_flip_override": 0,
+				"walk_display_height": 55.0,
+				"walk_display_width": 55.0,
+				"walk_flip_override": 0
+			},
+			"stats": {
+				"affix_ids": [],
+				"aoe_radius": 0.0,
+				"armor_value": 10,
+				"attack_count": 1,
+				"attack_hit_types": [],
+				"attack_range": 8.0,
+				"attack_recovery_time": -1.0,
+				"attack_speed": 3.0,
+				"cost": 80,
+				"damage": 40,
+				"damage_by_type": {
+					"3": 40
+				},
+				"damage_type": 3,
+				"max_hp": 100,
+				"move_speed": 1.5
+			},
+			"unit_id": "F1"
+		},
+		{
+			"anim": {
+				"attack_anim_speed": 2.5,
+				"attack_anim_sync_interval": true,
+				"attack_display_height": 55.0,
+				"attack_display_width": 55.0,
+				"attack_flip_override": 0,
+				"default_facing": -1,
+				"display_height": 40.0,
+				"display_width": 40.0,
+				"idle_anim_speed": 1.0,
+				"idle_display_height": 0.0,
+				"idle_display_width": 0.0,
+				"idle_flip_override": 0,
+				"is_ranged_override": -1,
+				"move_anim_speed": 1.0,
+				"move_display_height": 55.0,
+				"move_display_width": 55.0,
+				"move_flip_override": 0,
+				"sprint_anim_speed": 1.0,
+				"sprint_display_height": 0.0,
+				"sprint_display_width": 0.0,
+				"sprint_flip_override": 0,
+				"walk_display_height": 47.0,
+				"walk_display_width": 47.0,
+				"walk_flip_override": 0
+			},
+			"stats": {
+				"affix_ids": [],
+				"aoe_radius": 0.0,
+				"armor_value": 10,
+				"attack_count": 1,
+				"attack_hit_types": [
+					0
+				],
+				"attack_range": 1.0,
+				"attack_recovery_time": -1.0,
+				"attack_speed": 2.0,
+				"cost": 80,
+				"damage": 35,
+				"damage_by_type": {
+					"0": 20
+				},
+				"damage_type": 0,
+				"max_hp": 100,
+				"move_speed": 3.5
+			},
+			"unit_id": "F2"
+		},
+		{
+			"anim": {
+				"attack_anim_speed": 1.0,
+				"attack_anim_sync_interval": true,
+				"attack_display_height": 105.0,
+				"attack_display_width": 105.0,
+				"attack_flip_override": 0,
+				"default_facing": -1,
+				"display_height": 40.0,
+				"display_width": 40.0,
+				"idle_anim_speed": 1.0,
+				"idle_display_height": 0.0,
+				"idle_display_width": 0.0,
+				"idle_flip_override": 0,
+				"is_ranged_override": -1,
+				"move_anim_speed": 1.0,
+				"move_display_height": 60.0,
+				"move_display_width": 60.0,
+				"move_flip_override": 0,
+				"sprint_anim_speed": 1.0,
+				"sprint_display_height": 0.0,
+				"sprint_display_width": 0.0,
+				"sprint_flip_override": 0,
+				"walk_display_height": 0.0,
+				"walk_display_width": 0.0,
+				"walk_flip_override": 0
+			},
+			"stats": {
+				"affix_ids": [],
+				"aoe_radius": 0.0,
+				"armor_value": 65,
+				"attack_count": 1,
+				"attack_hit_types": [
+					0
+				],
+				"attack_range": 1.0,
+				"attack_recovery_time": -1.0,
+				"attack_speed": 3.0,
+				"cost": 80,
+				"damage": 25,
+				"damage_by_type": {
+					"0": 35
+				},
+				"damage_type": 0,
+				"max_hp": 120,
+				"move_speed": 2.0
+			},
+			"unit_id": "F3"
+		},
+		{
+			"anim": {
+				"attack_anim_speed": 1.0,
+				"attack_anim_sync_interval": true,
+				"attack_display_height": 85.0,
+				"attack_display_width": 85.0,
+				"attack_flip_override": 0,
+				"default_facing": -1,
+				"display_height": 40.0,
+				"display_width": 40.0,
+				"idle_anim_speed": 1.0,
+				"idle_display_height": 0.0,
+				"idle_display_width": 0.0,
+				"idle_flip_override": 0,
+				"is_ranged_override": -1,
+				"move_anim_speed": 1.0,
+				"move_display_height": 54.0,
+				"move_display_width": 54.0,
+				"move_flip_override": 0,
+				"sprint_anim_speed": 1.0,
+				"sprint_display_height": 0.0,
+				"sprint_display_width": 0.0,
+				"sprint_flip_override": 0,
+				"walk_display_height": 54.0,
+				"walk_display_width": 54.0,
+				"walk_flip_override": 0
+			},
+			"stats": {
+				"affix_ids": [],
+				"aoe_radius": 20.0,
+				"armor_value": 50,
+				"attack_count": 1,
+				"attack_hit_types": [
+					3
+				],
+				"attack_range": 1.5,
+				"attack_recovery_time": -1.0,
+				"attack_speed": 3.0,
+				"cost": 170,
+				"damage": 80,
+				"damage_by_type": {
+					"3": 60
+				},
+				"damage_type": 3,
+				"max_hp": 200,
+				"move_speed": 2.0
+			},
+			"unit_id": "F4"
+		},
+		{
+			"anim": {
+				"attack_anim_speed": 0.7,
+				"attack_anim_sync_interval": true,
+				"attack_display_height": 0.0,
+				"attack_display_width": 0.0,
+				"attack_flip_override": 0,
+				"default_facing": -1,
+				"display_height": 40.0,
+				"display_width": 40.0,
+				"idle_anim_speed": 1.0,
+				"idle_display_height": 0.0,
+				"idle_display_width": 0.0,
+				"idle_flip_override": 0,
+				"is_ranged_override": -1,
+				"move_anim_speed": 1.0,
+				"move_display_height": 0.0,
+				"move_display_width": 0.0,
+				"move_flip_override": 0,
+				"sprint_anim_speed": 1.0,
+				"sprint_display_height": 0.0,
+				"sprint_display_width": 0.0,
+				"sprint_flip_override": 0,
+				"walk_display_height": 0.0,
+				"walk_display_width": 0.0,
+				"walk_flip_override": 0
+			},
+			"stats": {
+				"affix_ids": [],
+				"aoe_radius": 0.0,
+				"armor_value": 10,
+				"attack_count": 1,
+				"attack_hit_types": [
+					1
+				],
+				"attack_range": 7.5,
+				"attack_recovery_time": -1.0,
+				"attack_speed": 2.5,
+				"cost": 90,
+				"damage": 40,
+				"damage_by_type": {
+					"1": 45
+				},
+				"damage_type": 1,
+				"max_hp": 100,
+				"move_speed": 1.0
+			},
+			"unit_id": "F5"
+		},
+		{
+			"anim": {
+				"attack_anim_speed": 1.2,
+				"attack_anim_sync_interval": true,
+				"attack_display_height": 66.0,
+				"attack_display_width": 66.0,
+				"attack_flip_override": 0,
+				"default_facing": -1,
+				"display_height": 51.0,
+				"display_width": 40.0,
+				"idle_anim_speed": 1.0,
+				"idle_display_height": 0.0,
+				"idle_display_width": 0.0,
+				"idle_flip_override": 0,
+				"is_ranged_override": -1,
+				"move_anim_speed": 1.0,
+				"move_display_height": 48.0,
+				"move_display_width": 42.0,
+				"move_flip_override": 0,
+				"sprint_anim_speed": 1.0,
+				"sprint_display_height": 0.0,
+				"sprint_display_width": 0.0,
+				"sprint_flip_override": 0,
+				"walk_display_height": 45.0,
+				"walk_display_width": 45.0,
+				"walk_flip_override": 0
+			},
+			"stats": {
+				"affix_ids": [],
+				"aoe_radius": 0.0,
+				"armor_value": 50,
+				"attack_count": 1,
+				"attack_hit_types": [],
+				"attack_range": 1.0,
+				"attack_recovery_time": -1.0,
+				"attack_speed": 3.0,
+				"cost": 45,
+				"damage": 20,
+				"damage_by_type": {
+					"0": 20
+				},
+				"damage_type": 0,
+				"max_hp": 100,
+				"move_speed": 2.0
+			},
+			"unit_id": "G1"
+		},
+		{
+			"anim": {
+				"attack_anim_speed": 1.1,
+				"attack_anim_sync_interval": true,
+				"attack_display_height": 85.0,
+				"attack_display_width": 85.0,
+				"attack_flip_override": 0,
+				"default_facing": -1,
+				"display_height": 40.0,
+				"display_width": 40.0,
+				"idle_anim_speed": 1.0,
+				"idle_display_height": 0.0,
+				"idle_display_width": 0.0,
+				"idle_flip_override": 0,
+				"is_ranged_override": -1,
+				"move_anim_speed": 1.0,
+				"move_display_height": 60.0,
+				"move_display_width": 60.0,
+				"move_flip_override": 0,
+				"sprint_anim_speed": 1.0,
+				"sprint_display_height": 0.0,
+				"sprint_display_width": 0.0,
+				"sprint_flip_override": 0,
+				"walk_display_height": 55.0,
+				"walk_display_width": 55.0,
+				"walk_flip_override": 0
+			},
+			"stats": {
+				"affix_ids": [],
+				"aoe_radius": 0.0,
+				"armor_value": 80,
+				"attack_count": 1,
+				"attack_hit_types": [],
+				"attack_range": 1.5,
+				"attack_recovery_time": -1.0,
+				"attack_speed": 3.0,
+				"cost": 50,
+				"damage": 30,
+				"damage_by_type": {
+					"1": 30
+				},
+				"damage_type": 1,
+				"max_hp": 100,
+				"move_speed": 1.5
+			},
+			"unit_id": "G2"
+		},
+		{
+			"anim": {
+				"attack_anim_speed": 0.7,
+				"attack_anim_sync_interval": true,
+				"attack_display_height": 83.0,
+				"attack_display_width": 83.0,
+				"attack_flip_override": 0,
+				"default_facing": 1,
+				"display_height": 40.0,
+				"display_width": 40.0,
+				"idle_anim_speed": 1.0,
+				"idle_display_height": 0.0,
+				"idle_display_width": 0.0,
+				"idle_flip_override": 0,
+				"is_ranged_override": -1,
+				"move_anim_speed": 1.0,
+				"move_display_height": 52.0,
+				"move_display_width": 52.0,
+				"move_flip_override": 0,
+				"sprint_anim_speed": 1.0,
+				"sprint_display_height": 0.0,
+				"sprint_display_width": 0.0,
+				"sprint_flip_override": 0,
+				"walk_display_height": 50.0,
+				"walk_display_width": 50.0,
+				"walk_flip_override": 0
+			},
+			"stats": {
+				"affix_ids": [],
+				"aoe_radius": 0.0,
+				"armor_value": 10,
+				"attack_count": 1,
+				"attack_hit_types": [],
+				"attack_range": 8.0,
+				"attack_recovery_time": -1.0,
+				"attack_speed": 3.0,
+				"cost": 70,
+				"damage": 25,
+				"damage_by_type": {
+					"1": 25
+				},
+				"damage_type": 1,
+				"max_hp": 100,
+				"move_speed": 1.0
+			},
+			"unit_id": "G3"
+		},
+		{
+			"anim": {
+				"attack_anim_speed": 1.2,
+				"attack_anim_sync_interval": true,
+				"attack_display_height": 50.0,
+				"attack_display_width": 55.0,
+				"attack_flip_override": 0,
+				"default_facing": -1,
+				"display_height": 40.0,
+				"display_width": 40.0,
+				"idle_anim_speed": 1.0,
+				"idle_display_height": 0.0,
+				"idle_display_width": 0.0,
+				"idle_flip_override": 0,
+				"is_ranged_override": -1,
+				"move_anim_speed": 1.0,
+				"move_display_height": 56.0,
+				"move_display_width": 56.0,
+				"move_flip_override": 0,
+				"sprint_anim_speed": 1.0,
+				"sprint_display_height": 0.0,
+				"sprint_display_width": 0.0,
+				"sprint_flip_override": 0,
+				"walk_display_height": 44.0,
+				"walk_display_width": 44.0,
+				"walk_flip_override": 0
+			},
+			"stats": {
+				"affix_ids": [],
+				"aoe_radius": 0.0,
+				"armor_value": 50,
+				"attack_count": 1,
+				"attack_hit_types": [
+					2
+				],
+				"attack_range": 1.0,
+				"attack_recovery_time": -1.0,
+				"attack_speed": 2.5,
+				"cost": 50,
+				"damage": 20,
+				"damage_by_type": {
+					"2": 30
+				},
+				"damage_type": 2,
+				"max_hp": 100,
+				"move_speed": 2.0
+			},
+			"unit_id": "G4"
+		},
+		{
+			"anim": {
+				"attack_anim_speed": 1.0,
+				"attack_anim_sync_interval": true,
+				"attack_display_height": 60.0,
+				"attack_display_width": 60.0,
+				"attack_flip_override": 0,
+				"default_facing": -1,
+				"display_height": 40.0,
+				"display_width": 40.0,
+				"idle_anim_speed": 1.0,
+				"idle_display_height": 0.0,
+				"idle_display_width": 0.0,
+				"idle_flip_override": 0,
+				"is_ranged_override": -1,
+				"move_anim_speed": 1.0,
+				"move_display_height": 60.0,
+				"move_display_width": 60.0,
+				"move_flip_override": 0,
+				"sprint_anim_speed": 1.0,
+				"sprint_display_height": 0.0,
+				"sprint_display_width": 0.0,
+				"sprint_flip_override": 0,
+				"walk_display_height": 0.0,
+				"walk_display_width": 0.0,
+				"walk_flip_override": 0
+			},
+			"stats": {
+				"affix_ids": [],
+				"aoe_radius": 0.0,
+				"armor_value": 10,
+				"attack_count": 1,
+				"attack_hit_types": [],
+				"attack_range": 6.5,
+				"attack_recovery_time": -1.0,
+				"attack_speed": 2.5,
+				"cost": 75,
+				"damage": 30,
+				"damage_by_type": {
+					"1": 30
+				},
+				"damage_type": 1,
+				"max_hp": 100,
+				"move_speed": 1.5
+			},
+			"unit_id": "G5"
+		},
+		{
+			"anim": {
+				"attack_anim_speed": 0.7,
+				"attack_anim_sync_interval": true,
+				"attack_display_height": 100.0,
+				"attack_display_width": 100.0,
+				"attack_flip_override": 0,
+				"default_facing": -1,
+				"display_height": 40.0,
+				"display_width": 40.0,
+				"idle_anim_speed": 1.0,
+				"idle_display_height": 0.0,
+				"idle_display_width": 0.0,
+				"idle_flip_override": 0,
+				"is_ranged_override": -1,
+				"move_anim_speed": 1.0,
+				"move_display_height": 65.0,
+				"move_display_width": 65.0,
+				"move_flip_override": 0,
+				"sprint_anim_speed": 1.0,
+				"sprint_display_height": 0.0,
+				"sprint_display_width": 0.0,
+				"sprint_flip_override": 0,
+				"walk_display_height": 62.0,
+				"walk_display_width": 62.0,
+				"walk_flip_override": 0
+			},
+			"stats": {
+				"affix_ids": [],
+				"aoe_radius": 30.0,
+				"armor_value": 35,
+				"attack_count": 2,
+				"attack_hit_types": [
+					0,
+					2
+				],
+				"attack_range": 1.5,
+				"attack_recovery_time": -1.0,
+				"attack_speed": 3.0,
+				"cost": 120,
+				"damage": 40,
+				"damage_by_type": {
+					"0": 35,
+					"2": 35
+				},
+				"damage_type": 2,
+				"max_hp": 140,
+				"move_speed": 2.0
+			},
+			"unit_id": "G6"
+		},
+		{
+			"anim": {
+				"attack_anim_speed": 1.0,
+				"attack_anim_sync_interval": true,
+				"attack_display_height": 85.0,
+				"attack_display_width": 85.0,
+				"attack_flip_override": 0,
+				"default_facing": -1,
+				"display_height": 64.0,
+				"display_width": 64.0,
+				"idle_anim_speed": 1.0,
+				"idle_display_height": 0.0,
+				"idle_display_width": 0.0,
+				"idle_flip_override": 0,
+				"is_ranged_override": -1,
+				"move_anim_speed": 1.0,
+				"move_display_height": 58.0,
+				"move_display_width": 58.0,
+				"move_flip_override": 0,
+				"sprint_anim_speed": 1.0,
+				"sprint_display_height": 0.0,
+				"sprint_display_width": 0.0,
+				"sprint_flip_override": 0,
+				"walk_display_height": 58.0,
+				"walk_display_width": 58.0,
+				"walk_flip_override": 0
+			},
+			"stats": {
+				"affix_ids": [],
+				"aoe_radius": 20.0,
+				"armor_value": 200,
+				"attack_count": 1,
+				"attack_hit_types": [
+					0
+				],
+				"attack_range": 2.0,
+				"attack_recovery_time": -1.0,
+				"attack_speed": 2.0,
+				"cost": 300,
+				"damage": 30,
+				"damage_by_type": {
+					"0": 150
+				},
+				"damage_type": 0,
+				"max_hp": 400,
+				"move_speed": 2.5
+			},
+			"unit_id": "Hero1"
+		},
+		{
+			"anim": {
+				"attack_anim_speed": 0.9,
+				"attack_anim_sync_interval": true,
+				"attack_display_height": 80.0,
+				"attack_display_width": 80.0,
+				"attack_flip_override": 0,
+				"default_facing": -1,
+				"display_height": 40.0,
+				"display_width": 40.0,
+				"idle_anim_speed": 1.0,
+				"idle_display_height": 0.0,
+				"idle_display_width": 0.0,
+				"idle_flip_override": 0,
+				"is_ranged_override": -1,
+				"move_anim_speed": 1.0,
+				"move_display_height": 60.0,
+				"move_display_width": 60.0,
+				"move_flip_override": 0,
+				"sprint_anim_speed": 1.0,
+				"sprint_display_height": 0.0,
+				"sprint_display_width": 0.0,
+				"sprint_flip_override": 0,
+				"walk_display_height": 57.0,
+				"walk_display_width": 57.0,
+				"walk_flip_override": 0
+			},
+			"stats": {
+				"affix_ids": [
+					"poison_basic"
+				],
+				"aoe_radius": 0.0,
+				"armor_value": 10,
+				"attack_count": 1,
+				"attack_hit_types": [
+					1
+				],
+				"attack_range": 1.5,
+				"attack_recovery_time": -1.0,
+				"attack_speed": 3.0,
+				"cost": 100,
+				"damage": 25,
+				"damage_by_type": {
+					"1": 30
+				},
+				"damage_type": 1,
+				"max_hp": 120,
+				"move_speed": 2.5
+			},
+			"unit_id": "N1"
+		},
+		{
+			"anim": {
+				"attack_anim_speed": 1.2,
+				"attack_anim_sync_interval": true,
+				"attack_display_height": 131.0,
+				"attack_display_width": 130.0,
+				"attack_flip_override": 0,
+				"default_facing": -1,
+				"display_height": 40.0,
+				"display_width": 40.0,
+				"idle_anim_speed": 1.0,
+				"idle_display_height": 0.0,
+				"idle_display_width": 0.0,
+				"idle_flip_override": 0,
+				"is_ranged_override": -1,
+				"move_anim_speed": 1.0,
+				"move_display_height": 0.0,
+				"move_display_width": 0.0,
+				"move_flip_override": 0,
+				"sprint_anim_speed": 1.0,
+				"sprint_display_height": 0.0,
+				"sprint_display_width": 0.0,
+				"sprint_flip_override": 0,
+				"walk_display_height": 50.0,
+				"walk_display_width": 50.0,
+				"walk_flip_override": 0
+			},
+			"stats": {
+				"affix_ids": [],
+				"aoe_radius": 25.0,
+				"armor_value": 10,
+				"attack_count": 1,
+				"attack_hit_types": [
+					0
+				],
+				"attack_range": 1.5,
+				"attack_recovery_time": -1.0,
+				"attack_speed": 2.5,
+				"cost": 110,
+				"damage": 35,
+				"damage_by_type": {
+					"0": 45
+				},
+				"damage_type": 0,
+				"max_hp": 120,
+				"move_speed": 2.5
+			},
+			"unit_id": "N2"
+		},
+		{
+			"anim": {
+				"attack_anim_speed": 0.9,
+				"attack_anim_sync_interval": true,
+				"attack_display_height": 54.0,
+				"attack_display_width": 54.0,
+				"attack_flip_override": 0,
+				"default_facing": 1,
+				"display_height": 40.0,
+				"display_width": 40.0,
+				"idle_anim_speed": 1.0,
+				"idle_display_height": 0.0,
+				"idle_display_width": 0.0,
+				"idle_flip_override": 0,
+				"is_ranged_override": -1,
+				"move_anim_speed": 1.0,
+				"move_display_height": 54.0,
+				"move_display_width": 54.0,
+				"move_flip_override": 1,
+				"sprint_anim_speed": 1.0,
+				"sprint_display_height": 0.0,
+				"sprint_display_width": 0.0,
+				"sprint_flip_override": 0,
+				"walk_display_height": 45.0,
+				"walk_display_width": 45.0,
+				"walk_flip_override": 1
+			},
+			"stats": {
+				"affix_ids": [
+					"poison_basic"
+				],
+				"aoe_radius": 0.0,
+				"armor_value": 10,
+				"attack_count": 1,
+				"attack_hit_types": [],
+				"attack_range": 9.0,
+				"attack_recovery_time": -1.0,
+				"attack_speed": 3.5,
+				"cost": 120,
+				"damage": 40,
+				"damage_by_type": {
+					"1": 40
+				},
+				"damage_type": 1,
+				"max_hp": 120,
+				"move_speed": 2.5
+			},
+			"unit_id": "N3"
+		},
+		{
+			"anim": {
+				"attack_anim_speed": 0.9,
+				"attack_anim_sync_interval": true,
+				"attack_display_height": 70.0,
+				"attack_display_width": 70.0,
+				"attack_flip_override": 0,
+				"default_facing": -1,
+				"display_height": 40.0,
+				"display_width": 40.0,
+				"idle_anim_speed": 1.0,
+				"idle_display_height": 0.0,
+				"idle_display_width": 0.0,
+				"idle_flip_override": 0,
+				"is_ranged_override": -1,
+				"move_anim_speed": 1.0,
+				"move_display_height": 48.0,
+				"move_display_width": 48.0,
+				"move_flip_override": 0,
+				"sprint_anim_speed": 1.0,
+				"sprint_display_height": 0.0,
+				"sprint_display_width": 0.0,
+				"sprint_flip_override": 0,
+				"walk_display_height": 0.0,
+				"walk_display_width": 0.0,
+				"walk_flip_override": 0
+			},
+			"stats": {
+				"affix_ids": [
+					"poison_basic"
+				],
+				"aoe_radius": 0.0,
+				"armor_value": 100,
+				"attack_count": 1,
+				"attack_hit_types": [],
+				"attack_range": 1.0,
+				"attack_recovery_time": -1.0,
+				"attack_speed": 3.0,
+				"cost": 100,
+				"damage": 20,
+				"damage_by_type": {
+					"1": 20
+				},
+				"damage_type": 1,
+				"max_hp": 150,
+				"move_speed": 2.5
+			},
+			"unit_id": "N4"
+		},
+		{
+			"anim": {
+				"attack_anim_speed": 1.0,
+				"attack_anim_sync_interval": true,
+				"attack_display_height": 103.0,
+				"attack_display_width": 103.0,
+				"attack_flip_override": 0,
+				"default_facing": -1,
+				"display_height": 40.0,
+				"display_width": 40.0,
+				"idle_anim_speed": 1.0,
+				"idle_display_height": 0.0,
+				"idle_display_width": 0.0,
+				"idle_flip_override": 0,
+				"is_ranged_override": -1,
+				"move_anim_speed": 1.0,
+				"move_display_height": 52.0,
+				"move_display_width": 52.0,
+				"move_flip_override": 0,
+				"sprint_anim_speed": 1.0,
+				"sprint_display_height": 0.0,
+				"sprint_display_width": 0.0,
+				"sprint_flip_override": 0,
+				"walk_display_height": 0.0,
+				"walk_display_width": 0.0,
+				"walk_flip_override": 0
+			},
+			"stats": {
+				"affix_ids": [
+					"bleed_basic"
+				],
+				"aoe_radius": 15.0,
+				"armor_value": 40,
+				"attack_count": 2,
+				"attack_hit_types": [
+					1,
+					1
+				],
+				"attack_range": 2.0,
+				"attack_recovery_time": -1.0,
+				"attack_speed": 3.0,
+				"cost": 170,
+				"damage": 50,
+				"damage_by_type": {
+					"0": 50,
+					"1": 40
+				},
+				"damage_type": 1,
+				"max_hp": 200,
+				"move_speed": 2.5
+			},
+			"unit_id": "N5"
+		}
+	],
+	"version": 1
+}

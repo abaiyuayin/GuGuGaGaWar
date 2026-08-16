@@ -1,0 +1,320 @@
+keys,zh,en,en_GB,ko,ja,th,fr,it
+GAME_TITLE,咕咕嘎嘎战记,GuGuGaGa War,GuGuGaGa War,구구가가 전쟁,グガガガ戦記,สงครามกูกากา,GuGuGaGa War,GuGuGaGa War
+SINGLE_PLAYER,单人游戏,Single Player,Single Player,혼자 하기,シングルプレイ,ผู้เล่นเดี่ยว,Un joueur,Giocatore singolo
+TWO_PLAYER,双人游戏,Two Player,Two Player,둘이서 하기,二人プレイ,ผู้เล่นสองคน,Deux joueurs,Due giocatori
+CODEX,游戏图鉴,Codex,Codex,게임 도감,ゲーム図鑑,สารานุกรมเกม,Codex,Codice di gioco
+SETTINGS,游戏设置,Settings,Settings,게임 설정,ゲーム設定,การตั้งค่าเกม,Paramètres,Impostazioni di gioco
+EXIT_GAME,退出游戏,Exit Game,Exit Game,게임 종료,ゲーム終了,ออกจากเกม,Quitter le jeu,Esci dal gioco
+CAMPAIGN,开始游戏,Start Game,Start Game,게임 시작,ゲーム開始,เริ่มเกม,Lancer le jeu,Avvia il gioco
+TOTAL_WAR,全面战争,Total War,Total War,총력전,トータルウォー,สงครามเต็มรูปแบบ,Guerre totale,Guerra totale
+ROUND,回合,Round,Round,턴,ラウンド,รอบ,Tour,Turno
+CAMPAIGN_TITLE,战役模式,Campaign Mode,Campaign Mode,캠페인 모드,キャンペーンモード,โหมดเนื้อเรื่อง,Mode campagne,Modalità campagna
+BACK,返回,Back,Back,뒤로,戻る,กลับ,Retour,Indietro
+EXIT,退出,Exit,Exit,종료,終了,ออก,Quitter,Esci
+DIFFICULTY_EASY,普通模式,Normal Mode,Normal Mode,일반 모드,ノーマルモード,โหมดปกติ,Mode normal,Modalità normale
+DIFFICULTY_NORMAL,困难模式,Hard Mode,Hard Mode,어려움 모드,ハードモード,โหมดยาก,Mode difficile,Modalità difficile
+DIFFICULTY_HARD,地狱模式,Hell Mode,Hell Mode,지옥 모드,ヘルモード,โหมดนรก,Mode enfer,Modalità inferno
+TWO_PLAYER_MODE,双人模式,Two Player Mode,Two Player Mode,멀티플레이어 모드,二人モード,โหมดผู้เล่นสองคน,Mode deux joueurs,Modalità due giocatori
+HELP,游戏帮助,Help,Help,게임 도움말,ゲームヘルプ,ช่วยเหลือเกม,Aide,Aiuto
+SETTINGS_TITLE,游戏设置,Settings,Settings,게임 설정,ゲーム設定,การตั้งค่าเกม,Paramètres,Impostazioni
+WINDOW_SETTINGS,窗口设置,Window,Window,창 설정,ウィンドウ設定,การตั้งค่าหน้าต่าง,Fenêtre,Finestra
+LANGUAGE_SETTINGS,语言设置,Language,Language,언어 설정,言語設定,การตั้งค่าภาษา,Langue,Lingua
+AUDIO_SETTINGS,音频设置,Audio,Audio,오디오 설정,オーディオ設定,การตั้งค่าเสียง,Audio,Audio
+WINDOWED,窗口模式,Windowed,Windowed,창 모드,ウィンドウモード,โหมดหน้าต่าง,Mode fenêtré,Modalità finestra
+FULLSCREEN,全屏模式,Fullscreen,Fullscreen,전체 화면 모드,フルスクリーン,โหมดเต็มจอ,Plein écran,Schermo intero
+BORDERLESS,无边框窗口,Borderless,Borderless,테두리 없는 창,ボーダーレスウィンドウ,หน้าต่างไร้ขอบ,Sans bordure,Senza bordi
+SIMPLIFIED_CHINESE,简体中文,Simplified Chinese,Simplified Chinese,간체 중국어,簡体字,จีนตัวย่อ,Chinois simplifié,Cinese semplificato
+ENGLISH,English,English,English,영어,英語,อังกฤษ,Anglais,Inglese
+MASTER_VOLUME,主音量,Master Volume,Master Volume,마스터 볼륨,マスターボリューム,ระดับเสียงหลัก,Volume principal,Volume principale
+CONFIRM,确认,OK,OK,확인,確認,ตกลง,Confirmer,Conferma
+SAVE,保存,Save,Save,저장,保存,บันทึก,Enregistrer,Salva
+CLOSE,关闭,Close,Close,닫기,閉じる,ปิด,Fermer,Chiudi
+RESTART,再来一局,Play Again,Play Again,다시 하기,もう一局,เล่นอีกครั้ง,Rejouer,Rigioca
+RETURN_MAP,返回地图,Return to Map,Return to Map,맵으로 돌아가기,マップに戻る,กลับแผนที่,Retour à la carte,Torna alla mappa
+MAIN_MENU,返回主菜单,Main Menu,Main Menu,메인 메뉴로,メインメニューへ,กลับเมนูหลัก,Menu principal,Menu principale
+YOU_WIN,你赢了！,You Win!,You Win!,승리!,勝利！,คุณชนะ!,Victoire !,Hai vinto!
+YOU_LOSE,你输了！,You Lose!,You Lose!,패배!,敗北！,คุณแพ้!,Défaite !,Hai perso!
+RED_WINS,红方胜利,Red Wins,Red Wins,빨강 승리,赤チーム勝利,ฝ่ายแดงชนะ,Victoire des rouges,Vittoria dei rossi
+BLUE_WINS,蓝方胜利,Blue Wins,Blue Wins,파랑 승리,青チーム勝利,ฝ่ายน้ำเงินชนะ,Victoire des bleus,Vittoria dei blu
+GOLD,金币,Gold,Gold,골드,ゴールド,ทอง,Or,Oro
+POPULATION,人口,Population,Population,인구,人口,ประชากร,Population,Popolazione
+INCOME,收入,Income,Income,수입,収入,รายได้,Revenu,Reddito
+SELECT_DIFFICULTY,选择难度,Select Difficulty,Select Difficulty,난이도 선택,難易度選択,เลือกความยาก,Choisir la difficulté,Scegli la difficoltà
+CANCEL,取消,Cancel,Cancel,취소,キャンセル,ยกเลิก,Annuler,Annulla
+HELP_TEXT,Q/E 移动镜头。P1 使用 WASD 选择兵种，数字键 1-9 快速出兵。双人模式下 P2 用方向键选择兵种。点击下方兵种即可持续出兵，再次点击同一兵种取消。," number keys 1-9 to deploy. In two-player mode P2 uses arrow keys. Click a unit below to deploy continuously; click again to cancel."""," number keys 1-9 to deploy. In two-player mode P2 uses arrow keys. Click a unit below to deploy continuously; click again to cancel.""","Q/E로 카메라를 움직입니다. P1은 WASD로 유닛을 선택하고 숫자키 1-9로 출격합니다. 두 명 모드에서 P2는 방향키로 유닛을 선택합니다. 아래 유닛을 클릭하면 계속 출격하며, 같은 유닛을 다시 클릭하면 취소됩니다.",Q/Eでカメラを動かします。P1はWASDでユニット選択、数字キー1-9で出撃。二人モードではP2が方向キーで選択。下のユニットをクリックで連続出撃、もう一度クリックでキャンセル。,Q/E ปรับมุมกล้อง P1 ใช้ WASD เลือกยูนิต ปุ่ม 1-9 ออกรบ โหมดสองคน P2 ใช้ปุ่มลูกศร คลิกยูนิตด้านล่างออกรบต่อเนื่อง คลิกซ้ำยกเลิก,"Q/E pour bouger la caméra. Le J1 utilise WASD pour choisir les unités, les touches 1-9 pour déployer. En mode deux joueurs le J2 utilise les flèches. Cliquez une unité en bas pour déployer en continu, recliquez pour annuler.","Q/E per muovere la telecamera. P1 usa WASD per selezionare le unità, i tasti 1-9 per schierarle. In modalità due giocatori P2 usa i frecce. Clicca un'unità in basso per schierarla continuamente, clicca di nuovo per annullare."
+VS,VS,VS,VS,VS,VS,VS,VS,VS
+TIP_TITLE,提示,Tip,Tip,알림,ヒント,ทิป,Astuce,Suggerimento
+NOT_IMPLEMENTED,%s功能开发中，敬请期待！,"%s is under development, stay tuned!","%s is under development, stay tuned!",%s 기능은 개발 중입니다. 기대해 주세요!,%sは開発中です。お楽しみに！,%s กำลังพัฒนา โปรดรอติดตาม!,"La fonction %s est en développement, restez à l'écoute !","La funzione %s è in sviluppo, restate sintonizzati!"
+EXIT_CONFIRM,确定要退出当前战斗并返回主菜单吗？,Are you sure you want to exit the current battle and return to the main menu,Are you sure you want to exit the current battle and return to the main menu,현재 전투를 종료하고 메인 메뉴로 돌아가시겠습니까?,現在の戦闘を終了してメインメニューに戻りますか？,แน่ใจหรือไม่ว่าต้องการออกจากการต่อสู้และกลับเมนูหลัก?,Êtes-vous sûr de vouloir quitter le combat et revenir au menu principal ?,Sei sicuro di voler uscire dalla battaglia e tornare al menu principale?
+QUIT_CONFIRM,确定要退出游戏吗？,Are you sure you want to quit the game,Are you sure you want to quit the game,게임을 종료하시겠습니까?,ゲームを終了しますか？,แน่ใจหรือไม่ว่าต้องการออกจากเกม?,Êtes-vous sûr de vouloir quitter le jeu ?,Sei sicuro di voler uscire dal gioco?
+ARMOR_LABEL,护甲,Armor,Armor,방어구,鎧,เกราะ,Armure,Armatura
+TIER_LABEL,阶层,Tier,Tier,티어,階級,ชั้น,Grade,Grado
+COST_LABEL,造价,Cost,Cost,비용,コスト,ค่าใช้จ่าย,Coût,Costo
+SUPPLY_LABEL,人口,Supply,Supply,인구,人口,ประชากร,Population,Popolazione
+HP_LABEL,生命值,HP,HP,체력,HP,พลังชีวิต,PV,PV
+DAMAGE_LABEL,攻击力,Damage,Damage,공격력,攻撃力,พลังโจมตี,Attaque,Attacco
+ATTACK_SPEED_LABEL,攻击速度,Attack Speed,Attack Speed,공격 속도,攻撃速度,ความเร็วโจมตี,Vitesse d'attaque,Velocità d'attacco
+ATTACK_RANGE_LABEL,攻击距离,Attack Range,Attack Range,공격 거리,攻撃範囲,ระยะโจมตี,Portée d'attaque,Gittata d'attacco
+MOVE_SPEED_LABEL,移动速度,Move Speed,Move Speed,이동 속도,移動速度,ความเร็วเคลื่อนที่,Vitesse de déplacement,Velocità di movimento
+INCOME_LABEL,收入,Income,Income,수입,収入,รายได้,Revenu,Reddito
+CODEX_TITLE,游戏图鉴,Unit Codex,Unit Codex,유닛 도감,ユニット図鑑,สารานุกรมหน่วย,Codex des unités,Codice delle unità
+SELECT_UNIT,选择兵种查看详情,Select a unit to view details,Select a unit to view details,유닛을 선택해 상세정보 보기,ユニットを選択して詳細表示,เลือกหน่วยเพื่อดูรายละเอียด,Sélectionnez une unité pour voir les détails,Seleziona un'unità per vedere i dettagli
+AVATAR_PLACEHOLDER,头像,Avatar,Avatar,아바타,アイコン,รูปโปรไฟล์,Avatar,Avatar
+FULL_BODY_PLACEHOLDER,全身立绘,Full Body,Full Body,전신 일러스트,全身イラスト,ภาพตัวเต็ม,Illustration complète,Illustrazione completa
+UNIT_INTRO,单位介绍,Introduction,Introduction,유닛 소개,ユニット紹介,แนะนำหน่วย,Présentation,Presentazione
+UNIT_STATS,基本数据,Base Stats,Base Stats,기본 능력치,基本ステータス,สถิติพื้นฐาน,Statistiques de base,Statistiche base
+UNIT_G1_NAME,盾剑士,Shield Swordsman,Shield Swordsman,방패 검사,盾剣士,ทหารดาบโล่,Épéiste à bouclier,Spadaccino con scudo
+UNIT_G1_DESC,咕嘎阵营前排抗线单位。手持长剑与大方盾，以挥砍伤害为主，能有效抵挡敌方近战进攻。,Guga front-line tank wielding sword and large shield; strong against melee.,Guga front-line tank wielding sword and large shield; strong against melee.,구가 진영의 전방 방어 유닛. 장검과 대형 방패를 들고 휘두르며 적의 근접 공격을 효과적으로 막아냅니다.,グガ陣営の前衛タンク。長剣と大盾を構え、斬撃を主体に敵の近接攻撃をしっかり防ぎます。,ยูนิตหน้าทัพกูกา ถือดาบยาวกับโล่ใหญ่ โจมตีฟันฟาด เชี่ยวชาญรับมือรบประชิด,"Tank de front ligne de Guga maniant épée et grand bouclier ; dommages tranchants, bloque efficacement la mêlée ennemie.","Tank di prima linea di Guga con spada e scudo grande; danni da taglio, blocca efficacemente il corpo a corpo nemico."
+UNIT_G2_NAME,盾矛兵,Shield Spearman,Shield Spearman,방패 창병,盾槍兵,ทหารหอกโล่,Piquier à bouclier,Lanciere con scudo
+UNIT_G2_DESC,咕嘎阵营中阶近战输出。以圆盾护身，单手长矛进行突刺，对重甲单位也有不错杀伤。,Guga mid-rank melee DPS with round shield and spear; effective against armoured targets.,Guga mid-rank melee DPS with round shield and spear; effective against armoured targets.,구가 진영의 중급 근접 딜러. 둥근 방패와 한 손 창으로 찌르며 중갑 유닛에게도 좋은 피해를 줍니다.,グガ陣営の中堅メリーダメージ。丸盾と片手槍で突き、重鎧にも十分なダメージを与えます。,ยูนิตดาเมจรบประชิดระดับกลางกูกา ใช้โล่กลมกับหอก เจาะเกราะหนาได้ดี,"DPS de mêlée intermédiaire de Guga avec rondache et lance ; perforant, efficace contre les blindés.","DPS da mischia intermedio di Guga con rondella e lancia; perforante, efficace contro i corazzati."
+UNIT_G3_NAME,弓箭手,Archer,Archer,궁수,弓兵,นักธนู,Archer,Arciere
+UNIT_G3_DESC,咕嘎阵营远程输出。持弓射击，无盾轻装，能在远距离以刺伤持续打击敌人。,Guga back-line ranged unit with bow; deals piercing damage from afar.,Guga back-line ranged unit with bow; deals piercing damage from afar.,구가 진영의 원거리 딜러. 활을 쏘며 방어구 없이 가볍게 원거리에서 관통 피해를 줍니다.,グガ陣営の後衛遠隔ユニット。弓で射撃し無防備だが、遠距離から貫通ダメージを与えます。,ยูนิตระยะไกลกูกา ยิงธนู ไร้โล่เบาโปร่ง ทำความเสียหายเจาะทะลุจากไกล,"Unité à distance de Guga à l'arc ; sans bouclier, inflige des dégâts perçants de loin.","Unità a distanza di Guga con arco; senza scudo, infligge danni perforanti da lontano."
+UNIT_G4_NAME,盾锤兵,Shield Hammer,Shield Hammer,방패 망치병,盾鎚兵,ทหารค้อนโล่,Martelier à bouclier,Martello con scudo
+UNIT_G4_DESC,咕嘎阵营破甲抗线单位。一手圆锤一手小圆盾，以钝伤击破重甲目标。,Guga armour-breaking tank with round hammer and small shield.,Guga armour-breaking tank with round hammer and small shield.,구가 진영의 방어구 파괴 탱크. 둥근 망치와 작은 방패로 둔타로 중갑 목표를 부숩니다.,グガ陣営の対甲タンク。丸锤と小盾で、打撃ダメージで重鎧を破ります。,ยูนิตเจาะเกราะกูกา ใช้ค้อนกลมกับโล่เล็ก ทำดาเมจกระแทกพังเกราะหนา,"Tank anti-armure de Guga. Marteau rond et petit bouclier, dégâts contondants pour briser les blindés.","Tank anti-corazza di Guga. Martello rotondo e piccolo scudo, danni contundenti per spezzare i corazzati."
+UNIT_G5_NAME,标枪兵,Javelineer,Javelineer,표창병,投槍兵,ทหารพละ,Javelineer,Giavellottista
+UNIT_G5_DESC,咕嘎阵营中距离输出，投掷标枪进行游击，能在接敌前消耗敌方有生力量。,Guga skirmisher throwing javelins at medium range.,Guga skirmisher throwing javelins at medium range.,구가 진영의 중거리 딜러. 표창을 던져 유격전을 펼치며 교전 전 적 전력을 소모시킵니다.,グガ陣営の中距離ダメージ。ジャベリンを投げてゲリラ戦を行い、接触前に敵を削ります。,ยูนิตระยะกลางกูกา ปาเส็งจรวดรบกวน กดดันศัตรูก่อนประชิด,"Skirmisher de Guga lançant des javelots à moyenne portée, use l'ennemi avant le contact.","Skirmish di Guga che lancia giavellotti a media gittata, logora il nemico prima del contatto."
+UNIT_G6_NAME,长戟兵,Halberdier,Halberdier,장창병,長戟兵,ทหารทวน,Hallebardier,Alabardiere
+UNIT_G6_DESC,咕嘎阵营近战范围输出。双手挥舞长戟，以挥砍伤害压制密集敌人。,Guga two-handed halberd unit with wide reach; good at suppressing crowds.,Guga two-handed halberd unit with wide reach; good at suppressing crowds.,구가 진영의 광역 근접 딜러. 양손 장창을 휘둘러 밀집한 적을 억제합니다.,グガ陣営の範囲メリーダメージ。両手のハルバードで、密集した敵を抑え込みます。,ยูนิตดาเมจรบประชิดแบบกลุ่มกูกา ฟันทวนสองมือ กดดันข้าศึกที่แน่นหนา,"DPS de zone de mêlée de Guga. Hallebarde à deux mains, excellent contre les groupes denses.","DPS da mischia ad area di Guga. Alabarda a due mani, eccellente contro gruppi fitti."
+UNIT_D1_NAME,盾斧兵,Axeman,Axeman,방패 도끼병,盾斧兵,ทหารขวาน,Hache,Ascia
+UNIT_D1_DESC,Doro 阵营基础近战爆发单位。双手持斧，攻速快、爆发高，但缺乏防护。,Doro basic melee burst unit with fast axe attacks but no armour.,Doro basic melee burst unit with fast axe attacks but no armour.,도로 진영의 기본 근접 폭발 유닛. 양손 도끼로 빠르고 강력하지만 방어가 없습니다.,ドロ陣営の基本近接バースト。両手斧で攻速が速くバーストが高いが防御がありません。,ยูนิตบัสต์รบประชิดพื้นฐานโดโร ฟันขวานสองมือเร็วแรง但ไร้เกราะ,"Unité burst de mêlée de base de Doro, hache à deux mains, attaque rapide et puissante mais sans protection.","Unità burst da mischia base di Doro, ascia a due mani, attacco veloce e potente ma senza protezione."
+UNIT_D2_NAME,关刀武士,Guan Dao Warrior,Guan Dao Warrior,관도 무사,關刀武士,นักรบกวนเตา,Guan Dao,Guerriero Guan Dao
+UNIT_D2_DESC,Doro 阵营近战范围输出。双手挥舞关刀，以挥砍对成群轻甲敌人造成出色伤害。,Doro area-damage unit wielding a guan dao; excels against groups.,Doro area-damage unit wielding a guan dao; excels against groups.,도로 진영의 광역 딜러. 양손 관도를 휘둘러 군집 경갑 적에게 훌륭한 피해를 줍니다.,ドロ陣営の範囲ダメージ。両手の Guan Dao で、軽甲の群れに圧倒的ダメージを与えます。,ยูนิตดาเมจกลุ่มโดโร ฟันกวนเตาสองมือ สร้างความเสียหายมหาศาลต่อกองพลเบา,Unité de zone de Doro maniant un guan dao ; excelle contre les groupes de légère armure.,DPS ad area di Doro con guan dao; eccelle contro i gruppi di armatura leggera.
+UNIT_D3_NAME,弩手,Crossbowman,Crossbowman,석궁병,弩手,นักแม่นสะสม,Balestrier,Balestriere
+UNIT_D3_DESC,Doro 阵营远程爆发单位。使用弩进行射击，装填较慢，但对重甲目标伤害惊人。,Doro high-damage ranged unit with slow reload but devastating to armoured targets.,Doro high-damage ranged unit with slow reload but devastating to armoured targets.,도로 진영의 원거리 폭발 유닛. 석궁을 쏘며 장전이 느리지만 중갑 표적 피해가 놀랍습니다.,ドロ陣営の遠隔バースト。弩で射撃し装填が遅いが、重鎧に凄まじいダメージを与えます。,ยูนิตบัสต์ระยะไกลโดโร ยิงหน้าไม้ชัก รีดด重工ช้า但ดาเมจหนักต่อเกราะ,Unité à distance de burst de Doro. Arbalète à rechargement lent mais dégâts terribles contre les blindés.,Unità burst a distanza di Doro. Balestra lenta da ricaricare ma danni terribili contro i corazzati.
+UNIT_D4_NAME,钉锤兵,Spiked Hammer,Spiked Hammer,쇠망치병,釘鎚兵,ทหารค้อนหนาม,Marteau à pointes,Martello chiodato
+UNIT_D4_DESC,Doro 阵营纯破甲输出。一手钉锤一手铁盾，同时造成钝伤与刺伤，专门粉碎高护甲目标。,Doro anti-armour DPS with spiked hammer and iron shield.,Doro anti-armour DPS with spiked hammer and iron shield.,도로 진영의 순수 방어구 파괴 딜러. 쇠망치와 철방패로 둔타와 관통으로 고갑을 부숩니다.,ドロ陣営の純対甲DPS。釘锤と鉄盾で、打撃と貫通で高鎧を粉砕します。,ยูนิตเจาะเกราะแท้โดโร ใช้ค้อนหนามกับโล่เหล็ก กระแทกเจาะพังเกราะสูง,"DPS anti-armure pur de Doro avec marteau à pointes et bouclier de fer, contondant + perforant.","DPS anti-corazza puro di Doro con martello chiodato e scudo di ferro, contundente + perforante."
+UNIT_D5_NAME,飞斧兵,Throwing Axe,Throwing Axe,투척 도끼병,飛斧兵,ทหารขวานปา,Lance-hache,Lancia-asce
+UNIT_D5_DESC,Doro 阵营中距离输出。快速投掷飞斧进行骚扰，机动性较强，以挥砍伤害消耗敌人。,Doro skirmisher throwing axes at medium range.,Doro skirmisher throwing axes at medium range.,도로 진영의 중거리 딜러. 투척 도끼로 빠르게 유격하며 기동성이 좋아 휘두르는 피해로 소모시킵니다.,ドロ陣営の中距離ダメージ。飛斧を素早く投げて攪乱、機動性が高く斬撃で消耗させます。,ยูนิตระยะกลางโดโร ปาขวานเร็ว คล่องแคล่ว ทำดาเมจฟันเฟือนรบกวน,"Skirmisher de Doro lançant des haches à moyenne portée, mobile, dégâts tranchants pour harceler.","Skirmish di Doro che lancia asce a media gittata, mobile, danni da taglio per infastidire."
+UNIT_D6_NAME,大锤兵,Great Hammer,Great Hammer,대망치병,大鎚兵,ทหารค้อนใหญ่,Grand marteau,Gran martello
+UNIT_D6_DESC,Doro 阵营近战爆发单位。双手挥舞大锤，以钝伤对重甲单位造成毁灭性打击。,Doro melee burst unit with great hammer; devastating to heavy armour.,Doro melee burst unit with great hammer; devastating to heavy armour.,도로 진영의 근접 폭발 유닛. 양손 대망치를 휘둘러 둔타로 중갑에 파괴적 타격을 줍니다.,ドロ陣営の近接バースト。両手の大鎚で、打撃ダメージで重鎧に壊滅的打撃を与えます。,ยูนิตบัสต์รบประชิดโดโร ฟันค้อนใหญ่สองมือ กระแทกพังเกราะหนัก,"Unité de burst de mêlée de Doro. Grand marteau à deux mains, contondant dévastateur contre les blindés.","Unità burst da mischia di Doro. Gran martello a due mani, contundente devastante contro i corazzati."
+UNIT_F1_NAME,元素师,Elementalist,Elementalist,엘리멘탈리스트,元素使い,นักเวทย์ธาตุ,Élémentaliste,Elementalista
+UNIT_F1_DESC,菲比丘比阵营远程输出。手持魔法棒引导元素之力，以魔法伤害打击远处敌人。,Phoebe ranged magic unit wielding a magic wand.,Phoebe ranged magic unit wielding a magic wand.,피비 진영의 원거리 딜러. 마법 지팡이로 원소의 힘을 이끌어 원거리에서 마법 피해를 줍니다.,フィビ陣営の遠隔魔法ユニット。魔法杖で元素の力を導き、遠距離から魔法ダメージを与えます。,ยูนิตระยะไกลฟีบี ชักนำพลังธาตุด้วยไม้กายสิทธิ์ ทำดาเมจเวทจากไกล,"Unité à distance magique de Phoebe maniant une baguette, dégâts magiques à distance.","Unità a distanza di Phoebe. Bacchetta magica che incanala gli elementi, danni magici da lontano."
+UNIT_F2_NAME,菲叭丘比,Phoebe Claw,Phoebe Claw,피비 클로,フィビ・クロー,ฟีบีคลอว์,Phoebe Griffe,Phoebe Artiglio
+UNIT_F2_DESC,菲比丘比阵营基础近战爆发单位。不使用武器，以爪击造成物理伤害，灵活且致命。,Phoebe basic melee burst unit fighting with claws.,Phoebe basic melee burst unit fighting with claws.,"피비 진영의 기본 근접 폭발 유닛. 무기를 쓰지 않고 발톱으로 물리 피해를, 민첩하고 치명적입니다.",フィビ陣営の基本近接バースト。武器を使わず爪で物理ダメージ、敏捷で致命的です。,ยูนิตบัสต์รบประชิดพื้นฐานฟีบี ใช้กรงเล็บโจมตีกายภาพ คล่องตัวและร้ายกาจ,"Unité de burst de mêlée de base de Phoebe, attaque aux griffes, physique, agile et mortelle.","Unità burst da mischia base di Phoebe. Attacca con gli artigli, fisico, agile e letale."
+UNIT_N2_NAME,持剑勇士,Sword Champion,Sword Champion,검 챔피언,剣の覇者,แชมเปี้ยนดาบ,Champion à l'épée,Campione con spada
+UNIT_N2_DESC,糯糯阵营远程输出。使用长弓进行远距离射击，箭矢带有穿刺与流血效果，对轻甲威胁极大。,Nuonuo ranged unit with longbow; arrows deal piercing and bleeding damage.,Nuonuo ranged unit with longbow; arrows deal piercing and bleeding damage.,누오누오 진영의 원거리 딜러. 장궁으로 원거리 사격하며 화살에 관통과 출혈 효과가 있어 경갑에 큰 위협입니다.,ヌオヌオ陣営の遠隔ユニット。長弓で遠距離射撃、矢に貫通と出血効果があり軽甲に脅威。,ยูนิตระยะไกลนัวนัว ยิงธนูยาว ห sustainability穿透เลือดออก อันตรายต่อเกราะเบา,"Unité à distance de Nuonuo. Arc long, flèches perçantes avec saignement, menace majeure pour les armures légères.","Unità a distanza di Nuonuo. Arco lungo, frecce perforanti con sanguinamento, minaccia enorme per le armature leggere."
+CODEX_RUN,奔跑,Run,Run,달리기,ダッシュ,วิ่ง,Course,Corsa
+CODEX_ATTACK,攻击,Attack,Attack,공격,攻撃,โจมตี,Attaque,Attacco
+CODEX_WALK,行走,Walk,Walk,걷기,歩行,เดิน,Marche,Camminata
+CODEX_IDLE,待机,Idle,Idle,대기,待機,ยืนเฉย,Repos,Attesa
+CODEX_AUTHOR_TIPS,作者Tips,Author Tips,Author Tips,제작자 팁,作者のヒント,เคล็ดลับผู้สร้าง,Conseils de l'auteur,Consigli dell'autore
+CODEX_PRICE,价格,Price,Price,가격,価格,ราคา,Prix,Prezzo
+CODEX_ATTRIBUTES,属性,Attributes,Attributes,속성,属性,แอตทริบิวต์,Attributs,Attributi
+CODEX_FACTION_GUGA,咕嘎,Guga,Guga,구가,グガ,กูกา,Guga,Guga
+CODEX_FACTION_DORO,Doro,Doro,Doro,도로,ドロ,โดโร,Doro,Doro
+CODEX_FACTION_PHOEBE,菲比,Phoebe,Phoebe,피비,ピビ,ฟีบี,Phoebe,Phoebe
+CODEX_FACTION_NUONUO,糯糯,Nuonuo,Nuonuo,누오누오,ヌオヌオ,นัวนัว,Nuonuo,Nuonuo
+CODEX_FACTION_SPECIAL,特殊,Special,Special,특수,スペシャル,พิเศษ,Spécial,Speciale
+CODEX_FACTION_ANOMALY,异象,Anomaly,Anomaly,이상,異象,อานอมะลี,Anomalie,Anomalia
+CODEX_NO_ANIM,该兵种暂无动画资源,This unit has no animation assets,This unit has no animation assets,이 유닛은 애니메이션이 없습니다,このユニットにはアニメーションがありません,ยูนิตนี้ยังไม่มีแอนิเมชัน,Cette unité n'a pas d'animations,Questa unità non ha animazioni
+CODEX_ROLE_STATS,角色数据,Role Stats,Role Stats,역할 능력치,役割ステータス,สถิติบทบาท,Stats de rôle,Statistiche ruolo
+UNIT_G1_TIPS,前排抗线核心，造价低廉性价比高，适合开局快速铺线。,Core front-line tank,Core front-line tank,"전방 방어의 핵심. 저렴하고 가성비 좋음, 오픈 빠른 라인 형성에 적합.",前衛タンクの要。安価でコスパが良く、序盤のライン構築に最適。,แกนกลางหน้าทัพ ราคาถูกคุ้มค่า เหมาะตั้งรับต้นเกม,"Tank de première ligne clé, bon marché et rentable, idéal pour débuter.","Tank chiave in prima linea, economico e conveniente, ideale per iniziare."
+UNIT_G2_TIPS,中阶近战稳定输出，对重甲单位有不错杀伤，万金油选择。,Stable mid-tier melee DPS,Stable mid-tier melee DPS,"중급 근접 안정적 딜러. 중갑에 좋은 피해, 만능 선택.",中堅メリーダメージ安定。重鎧に良いダメージ、万能選択。,ดาเมจรบประชิดระดับกลางเสถียร เจาะเกราะหนาได้ดี เลือกได้ทุกสถานการณ์,"DPS de mêlée stable, efficace contre les blindés, choix polyvalent.","DPS da mischia stabile, efficace contro i corazzati, scelta versatile."
+UNIT_G3_TIPS,远程持续输出，无盾脆皮，注意保护不被近战贴身。,Sustained ranged DPS but fragile,Sustained ranged DPS but fragile,원거리 지속 딜러지만 몸이 약해 근접에 붙지 않게 보호하세요.,遠隔持続ダメージだが脆い。近接に貼られないよう保護を。,ดาเมจระยะไกลต่อเนื่อง但เปราะบาง ระวังให้มันถูกจับระยะประชิด,"DPS à distance soutenu mais fragile, protégez-le de la mêlée.","DPS a distanza sostenuto ma fragile, proteggilo dalla mischia."
+UNIT_G4_TIPS,破甲专家，专克重甲单位，面对轻甲时优势不大。,Armour-break specialist,Armour-break specialist,"방어구 파괴 전문가. 중갑 전문, 경갑엔 약함.",対甲の専門家。重鎧に強く軽甲には弱い。, specialists ทำลายเกราะ เก่งเกราะหนา แต่สู้เกราะเบาไม่ค่อยได้,"Spécialiste anti-armure, excelle contre les blindés mais faible contre les légers.","Specialista anti-corazza, eccelle contro i corazzati ma debole contro i leggeri."
+UNIT_G5_TIPS,中距离游击消耗，接敌前能打出几轮标枪，适合拉扯。,Skirmisher for medium range,Skirmisher for medium range,"중거리 유격 소모. 교전 전 표창 몇 방울, 끌어당기기에 좋음.",中距離ゲリラ消耗。接触前にジャベリン数発、引き撃ちに良い。,รบกวนระยะกลาง ปาเส็งจรวดก่อนประชิด เหมาะดึงดูดศัตรู,"Skirmisher à moyenne portée, javelots avant le contact, bon pour le kiting.","Skirmish a media gittata, giavellotti prima del contatto, ottimo per il kiting."
+UNIT_G6_TIPS,双手长戟范围输出，压制密集敌群效果出色，怕被分散。,Two-handed area DPS,Two-handed area DPS,"양손 장창 광역 딜러. 밀집 적 억제에 탁월, 분산에 약함.",両手ハルバード範囲ダメージ。密集に強く分散に弱い。,ดาเมจกลุ่มทวนสองมือ กดดันกองพลแน่นดี แต่สู้กระจายไม่เก่ง,"Hallebarde à deux mains, annihile les groupes denses mais peine contre les ennemis dispersés.","Alabarda ad area, annienta i gruppi fitti ma fatica contro nemici sparsi."
+UNIT_D1_TIPS,高攻速爆发近战，无防护容易被集火，需配合抗线单位。,High-attack-speed burst melee,High-attack-speed burst melee,"고속 공격 폭발 근접. 방어 없어 집중포에 취약, 탱크와 병행.",高速攻撃バースト近接。無防備で集中砲火に弱く、タンクと併用を。,บัสต์โจมตีเร็ว แต่ไร้เกราะโดนซ้ำง่าย ต้องมีตัวรับ,"Burst de mêlée rapide, fragile, besoin d'un tank de soutien.","Burst da mischia rapido, fragile, ha bisogno di un tank di supporto."
+UNIT_D2_TIPS,关刀范围挥砍，对成群轻甲敌人伤害极佳，冲阵利器。,Guan dao area slash,Guan dao area slash,"관도 범위 휘두름. 군집 경갑 적에게 피해 훌륭, 돌파 무기.",Guan Dao 範囲薙ぎ。軽甲の群れに絶大ダメージ、突撃の利器。,ฟันกวนเตากลุ่ม กวาดพลเบาได้ดี อาวุธ breakthroughs,"Tranchant de zone du guan dao, dégâts excellents contre les groupes légers, arme de charge.","Fendente ad area del guan dao, danni eccellenti contro i gruppi leggeri, arma d'assalto."
+UNIT_D3_TIPS,弩矢破甲爆发，装填慢但单发伤害惊人，优先打重甲。,Crossbow burst,Crossbow burst,"석궁 방어구 파괴 폭발. 장전 느리지만 단발 피해 놀랍, 중갑 우선.",弩の対甲バースト。装填遅いが単発ダメージ凄まじく、重鎧を狙え。,บัสต์เจาะเกราะหน้าไม้ชัก รีดด重工ช้า但ดาเมจมหาศาล เป้าเกราะหนา,"Arbalète anti-armure, rechargement lent mais dégâts énormes, visez les blindés.","Balestra anti-corazza, ricarica lenta ma danni enormi, mira ai corazzati."
+UNIT_D4_TIPS,钝伤与刺伤兼备，专门粉碎高护甲目标，面对轻甲略浪费。,Blunt+pierce hybrid,Blunt+pierce hybrid,"둔타와 관통 겸비. 고갑 목표 전문 파쇄, 경갑엔 다소 낭비.",打撃と貫通の両立。高鎧粉砕に特化、軽甲にはやや無駄。,กระแทกเจาะคู่ เชี่ยวชาญพังเกราะสูง แต่เทียบเกราะเบาแพงไป,"Contondant + perforant, broie les armures élevées, excessif contre les légers.","Contondente + perforante, frantuma le armature alte, eccessivo contro i leggeri."
+UNIT_D5_TIPS,快速投掷飞斧骚扰，机动性强，适合拉扯与消耗。,Fast throwing axe harasser,Fast throwing axe harasser,빠른 투척 도끼 유격. 기동성 강해 끌어당기기와 소모에 좋음.,飛斧を素早く投げて攪乱。機動性高く引き撃ちと消耗に良い。,ปาขวานเร็วคล่องตัว เหมาะดึงดูดและรบกวน,"Haches rapides de harcèlement, mobile, bon pour l'usure.","Asce rapide di disturbo, mobile, buono per logorare."
+UNIT_D6_TIPS,大锤毁灭性钝伤，专打重甲单位，攻速慢需保护。,Great hammer devastating blunt,Great hammer devastating blunt,"대망치 파괴적 둔타. 중갑 전문, 공속 느려 보호 필요.",大鎚の破滅的打撃。重鎧特化、攻速遅く保護必要。,ค้อนใหญ่กระแทกพังเกราะหนัก ช้า需มีตัวคุ้ม,"Grand marteau à dégâts contondants, anti-blindés, lent et à protéger.","Gran martello a danni contundenti, anti-corazzato, lento e da proteggere."
+CODEX_TAB_UNIT,兵种图鉴,Unit Codex,Unit Codex,병종 도감,ユニット図鑑,สารานุกรมหน่วย,Codex des unités,Codice delle unità
+CODEX_TAB_ARTIFACT,文物图鉴,Artifact Codex,Artifact Codex,유물 도감,文物図鑑,สารานุกรมวัตถุ,Codex des artefacts,Codice dei manufatti
+CODEX_TAB_ORDER,军令图鉴,Order Codex,Order Codex,군령 도감,軍令図鑑,สารานุกรมคำสั่ง,Codex des ordres,Codice degli ordini
+CODEX_TAB_EVENT,事件图鉴,Event Codex,Event Codex,이벤트 도감,イベント図鑑,สารานุกรมเหตุการณ์,Codex des événements,Codice degli eventi
+DEV_MODE_ENABLED,开发者模式已开启,Developer mode enabled,Developer mode enabled,개발자 모드 활성화됨,開発者モード有効,โหมดนักพัฒนาเปิดใช้งาน,Mode développeur activé,Modalità sviluppatore attiva
+DEV_MODE_DISABLED,开发者模式已关闭,Developer mode disabled,Developer mode disabled,개발자 모드 비활성화,開発者モード無効,โหมดนักพัฒนาปิดใช้งาน,Mode développeur désactivé,Modalità sviluppatore disattiva
+CODEX_HERO_SPECIAL,英雄（特殊）,Hero (Special),Hero (Special),영웅 (특수),英雄（特殊）,ฮีโร่ (พิเศษ),Héros (spécial),Eroe (speciale)
+CODEX_LOCKED_UNIT,🔒 %s（尚未解锁）,🔒 %s (Locked),🔒 %s (Locked),🔒 %s（잠김）,🔒 %s（ロック中）,🔒 %s（ล็อค）,🔒 %s (verrouillé),🔒 %s (bloccato)
+UNIT_INFO_CLOSE,关闭信息面板,Close panel,Close panel,정보 패널 닫기,情報パネルを閉じる,ปิดแผงข้อมูล,Fermer le panneau,Chiudi pannello
+UNIT_INFO_STATS,"%s
+伤害:%d
+攻速:%.1f
+移速:%.1f
+射程:%.1f
+造价:%d","%s
+Damage:%d
+AtkSpd:%.1f
+MoveSpd:%.1f
+Range:%.1f
+Cost:%d","%s
+Damage:%d
+AtkSpd:%.1f
+MoveSpd:%.1f
+Range:%.1f
+Cost:%d","%s
+피해:%d
+공속:%.1f
+이속:%.1f
+사거리:%.1f
+비용:%d","%s
+ダメージ:%d
+攻速:%.1f
+移速:%.1f
+射程:%.1f
+コスト:%d","%s
+ดาเมจ:%d
+ความเร็วโจมตี:%.1f
+ความเร็วเคลื่อนที่:%.1f
+ระยะโจมตี:%.1f
+ค่าใช้จ่าย:%d","%s
+Dégâts:%d
+Vit. att.:%.1f
+Vit. dépl.:%.1f
+Portée:%.1f
+Coût:%d","%s
+Danno:%d
+Vel. att.:%.1f
+Vel. mov.:%.1f
+Gittata:%.1f
+Costo:%d"
+UNIT_INFO_SHIELD,护盾: %d/%d,Shield: %d/%d,Shield: %d/%d,보호막: %d/%d,シールド: %d/%d,โล่: %d/%d,Bouclier : %d/%d,Scudo: %d/%d
+BATTLE_CRYSTAL,水晶,Crystal,Crystal,크리스탈,クリスタル,คริสตัล,Cristal,Cristallo
+ECON_GOLD,金币: %d,Gold: %d,Gold: %d,골드: %d,ゴールド: %d,ทอง: %d,Or : %d,Oro: %d
+ECON_INCOME,收入: +%d/回合,Income: +%d/round,Income: +%d/round,수입: +%d/턴,収入: +%d/ラウンド,รายได้: +%d/รอบ,Revenu : +%d/tour,Reddito: +%d/turno
+COUNTDOWN_ROUND,回合 %d,Round %d,Round %d,턴 %d,ラウンド %d,รอบ %d,Tour %d,Turno %d
+ROGUE_FLOOR_WAVE,第 %d 层 · 第 %d/%d 波,Floor %d · Wave %d/%d,Floor %d · Wave %d/%d,제 %d 층 · 제 %d/%d 파,第 %d 層 · 第 %d/%d ウェーブ,ชั้นที่ %d · คลื่นที่ %d/%d,Étage %d · Vague %d/%d,Piano %d · Onda %d/%d
+ROGUE_REINFORCE,换防完毕：手牌已补满,Reinforce done: hand refilled,Reinforce done: hand refilled,교체 완료: 패 보충됨,交替完了：手札を補充,เปลี่ยนเวรเสร็จ: เติมมือใหม่,Relève : main regarnie,Cambio fatto: mano riempita
+ROGUE_DRAFT,征兵令：牌库新增一张兵种卡,Draft order: new unit card added,Draft order: new unit card added,징병령: 유닛 카드 추가,徴兵令：デッキに兵種カード追加,คำสั่งเกณฑ์ทหาร: เพิ่มการ์ดยูนิต,Conscription : carte unité ajoutée,Coscrizione: carta unità aggiunta
+ROGUE_REORG,整编完毕：移除一张旧卡并重新抽牌,"Reorg done: removed old card, redrew","Reorg done: removed old card, redrew",재편성 완료: 카드 교체 후 재뽑기,編成完了：古いカードを除き再抽選,จัดระเบียบเสร็จ: เอาการ์ดเก่าออกแล้วจั่วใหม่,Réorganisation : carte retirée et repiochée,Riorganizzazione: carta rimossa e pescata
+ROGUE_FEAST,犒军：全军回复 %d%% 生命,Feast: all units recover %d%% HP,Feast: all units recover %d%% HP,위문: 전군 %d%% 회복,犒軍：全軍 %d%% 回復,เลี้ยงทัพ: ฮีล %d%% ให้กองทัพ,Fête : +%d%% PV à toute l'armée,Banchetto: +%d%% PV a tutto l'esercito
+ROGUE_FEINT,佯攻奏效：下一波敌军延后 %d 秒,Feint works: next wave delayed %d s,Feint works: next wave delayed %d s,기만 성공: 다음 파 %d초 지연,陽動成功: 次ウェーブ %d 秒遅延,ลวงทัพสำเร็จ: คลื่นถัดไปเลื่อน %d วินาที,Feinte réussie : vague suivante +%d s,Finta riuscita: ondata +%d s
+ROGUE_FORTIFY,筑垒完毕：据点耐久 +%d,Fortify done: stronghold durability +%d,Fortify done: stronghold durability +%d,요새화 완료: 거점 내구 +%d,築塁完了: 拠点耐久 +%d,สร้างป้อมเสร็จ: ความทนทานจุด +%d,Fortification : durabilité +%d,Fortificazione: durabilità +%d
+ROGUE_INTEL,谍报：本层敌军已全部登场，撑住即可,"Intel: all enemies deployed, hold on","Intel: all enemies deployed, hold on","첩보: 적 전원 등장, 버티면 됨",諜報: 全敵出撃済み、耐えろ,ข่าวกรอง: ศัตรูออกครบแล้ว แค่ถึก,Renseignement : tous les ennemis sont là,Spionaggio: nemici tutti schierati
+ROGUE_INTEL_WAVE,谍报：第 %d 波共 %d 名敌军（阶层上限 T%d）,Intel: wave %d has %d enemies (tier cap T%d),Intel: wave %d has %d enemies (tier cap T%d),첩보: %d 파에 적 %d명(계층 상한 T%d),諜報: %d ウェーブに敵 %d 体（階層上限 T%d）,ข่าวกรอง: คลื่น %d มีศัตรู %d ตัว (เพดานชั้น T%d),"Renseignement : vague %d, %d ennemis (plafond T%d)","Spionaggio: ondata %d, %d nemici (tetto T%d)"
+ROGUE_WHITEFLAG,白旗高举：当前这一波敌军撤退了,White flag: this wave retreats,White flag: this wave retreats,백기: 이번 파 적 퇴각,白旗: このウェーブ撤退,ธงขาว: ศัตรูคลื่นนี้ถอย,Drapeau blanc : vague en retraite,Bandiera bianca: ondata in ritirata
+ROGUE_HERO_TRAIT,英雄特性：%s,Hero trait: %s,Hero trait: %s,영웅 특성: %s,英雄特性: %s,คุณสมบัติฮีโร่: %s,Trait de héros : %s,Tratto eroe: %s
+ROGUE_CHOOSE_REWARD,选择一张奖励卡牌,Choose a reward card,Choose a reward card,보상 카드 선택,報酬カードを選択,เลือกการ์ดรางวัล,Choisissez une carte,Scegli una carta
+DIFF_NAME_NORMAL,普通,Normal,Normal,일반,ノーマル,ปกติ,Normal,Normale
+DIFF_NAME_HARD,困难,Hard,Hard,어려움,ハード,ยาก,Difficile,Difficile
+DIFF_NAME_HELL,地狱,Hell,Hell,지옥,ヘル,นรก,Enfer,Inferno
+DIFF_NORMAL_DESC,普通难度：敌方兵种与玩家同档，适合熟悉战斗机制,"Normal: enemy tiers match yours, good for learning","Normal: enemy tiers match yours, good for learning","일반: 적 계층이 동일, 익숙해지기 좋음",ノーマル：敵階層は同程度、覚えやすい,ปกติ: ศัตรูเท่าผู้เล่น เหมาะเรียนรู้,Normal : ennemis au même niveau,Normale: nemici allo stesso livello
+DIFF_HARD_DESC,困难难度：敌方兵种高一个 tier，挑战升级,"Hard: enemies one tier higher, tougher","Hard: enemies one tier higher, tougher","어려움: 적이 한 계층 높음, 도전적",ハード：敵が1階層上、厳しい,ยาก: ศัตรูสูงกว่า 1 ชั้น ท้าทาย,Difficile : ennemis un palier au-dessus,Difficile: nemici un livello sopra
+DIFF_HELL_DESC,地狱难度：敌方更强，极限挑战,"Hell: enemies even stronger, ultimate challenge","Hell: enemies even stronger, ultimate challenge","지옥: 적이 더 강함, 극한 도전",ヘル：更に強い敵、極限の挑戦,นรก: ศัตรูแข็งแกร่งที่สุด ท้าทายขีดสุด,Enfer : ennemis redoutables,Inferno: nemici fortissimi
+CAMPAIGN_BOSS,强敌,Boss,Boss,강적,強敵,ข้าศึกโหด,Boss,Boss
+CAMPAIGN_SELECT_DIFF,关卡 %d - 选择难度,Level %d - Choose difficulty,Level %d - Choose difficulty,레벨 %d - 난이도 선택,レベル %d - 難易度選択,ด่าน %d - เลือกความยาก,Niveau %d - Choisir la difficulté,Livello %d - Scegli difficoltà
+CAMPAIGN_CANCEL,取消,Cancel,Cancel,취소,キャンセル,ยกเลิก,Annuler,Annulla
+CAMPAIGN_LOCKED_HINT,未解锁，需先通关更低难度,Locked: clear a lower difficulty first,Locked: clear a lower difficulty first,잠김: 낮은 난이도 먼저 클리어,未解放：より低い難易度をクリア,ล็อค: ต้องผ่านความยากต่ำกว่าก่อน,Verrouillé : clear une difficulté inférieure,Bloccato: completa prima una difficoltà inferiore
+CAMPAIGN_VICTORY,获得胜利,Victory,Victory,승리 획득,勝利を得た,ได้รับชัยชนะ,Victoire,Vittoria
+UNLOCK_TITLE,兵种解锁,Unit unlocked,Unit unlocked,병종 해금,兵種解放,ปลดล็อคยูนิต,Unité débloquée,Unità sbloccata
+UNLOCK_NEW,获得新兵种！,New unit acquired!,New unit acquired!,새 병종 획득!,新兵種ゲット！,ได้ยูนิตใหม่!,Nouvelle unité !,Nuova unità!
+UNLOCK_DESC,已加入编成，可在后续关卡中部署,"Added to roster, deployable in later levels","Added to roster, deployable in later levels","편성에 추가, 이후 레벨에서 출격 가능",編成に追加、以降の関に出撃可能,เพิ่มลงกองแล้ว deploy ได้ในด่านถัดไป,"Ajoutée à l'escouade, déployable plus tard","Aggiunta alla squadra, schierabile dopo"
+UNLOCK_OK,确定,OK,OK,확인,OK,ตกลง,OK,OK
+ACH_HIDDEN_DESC,隐藏成就，解锁后可见,"Hidden achievement, visible after unlock","Hidden achievement, visible after unlock","숨겨진 업적, 해금 후 공개",隠し実績、解除で表示,"ความสำเร็จซ่อน, เห็นหลังปลดล็อค","Succès caché, visible après déblocage","Traguardo nascosto, visibile dopo"
+ACH_HIDDEN_PREFIX,[隐藏成就] ,[Hidden] ,[Hidden] ,[숨김] ,[隠し] ,[ซ่อน] ,[Caché] ,[Nascosto] 
+ACH_UNLOCKED,已解锁,Unlocked,Unlocked,해금됨,解除済み,ปลดล็อคแล้ว,Débloqué,Sbloccato
+ACH_LOCKED,未解锁,Locked,Locked,잠김,未解除,ล็อค,Verrouillé,Bloccato
+ACH_UNLOCK_BTN,解锁,Unlock,Unlock,해금,解除,ปลดล็อค,Débloquer,Sblocca
+ACH_ICON_TOOLTIP,点击上传成就图标（开发者模式）,Click to upload icon (dev mode),Click to upload icon (dev mode),아이콘 업로드(개발자 모드),アイコン投稿(開発者モード),คลิกอัปโหลดไอคอน(โหมดdev),Cliquez pour l'icône (mode dev),Clicca per l'icona (modalità dev)
+ACH_UNLOCK_TOOLTIP,开发者模式：直接解锁该成就,Dev mode: unlock directly,Dev mode: unlock directly,개발자: 직접 해금,開発者: 直接解除,โหมดdev: ปลดล็อคเลย,Mode dev : débloque direct,Modalità dev: sblocca
+ACH_ICON_TITLE,选择成就图标,Select achievement icon,Select achievement icon,아이콘 선택,アイコン選択,เลือกไอคอน,Choisir l'icône,Scegli icona
+ACH_ICON_FILTER,"*.png, *.jpg, *.jpeg, *.webp ; 图片文件","*.png, *.jpg, *.jpeg, *.webp ; images","*.png, *.jpg, *.jpeg, *.webp ; images","*.png, *.jpg, *.jpeg, *.webp ; 이미지","*.png, *.jpg, *.jpeg, *.webp ; 画像","*.png, *.jpg, *.jpeg, *.webp ; ไฟล์รูป","*.png, *.jpg, *.jpeg, *.webp ; images","*.png, *.jpg, *.jpeg, *.webp ; immagini"
+CODEX_RARITY,稀有度：,Rarity: ,Rarity: ,희귀도: ,レア度: ,ความหายาก: ,Rareté : ,Rarità: 
+CODEX_CHEST_EVENT,宝箱事件,Chest event,Chest event,보물상자 이벤트,宝箱イベント,เหตุการณ์กล่อง,Événement coffre,Evento scrigno
+CODEX_CHEST_DESC,进入宝箱时随机触发的奇遇，三选一抉择。,"A random encounter at chests, choose 1 of 3.","A random encounter at chests, choose 1 of 3.","보물상자에서 무작위 모험, 3택1.",宝箱でランダム奇遇、3択1.,เข้ากล่องแล้วสุ่มเหตุการณ์ 3 選 1.,"Rencontre aléatoire aux coffres, 3 choix.","Incontro casuale agli scrigni, 3 scelte."
+CODEX_RESULT,结果：%s,Result: %s,Result: %s,결과: %s,結果: %s,ผลลัพธ์: %s,Résultat : %s,Risultato: %s
+CODEX_EFFECT_DESC,效果说明,Effect,Effect,효과 설명,効果說明,คำอธิบายผล,Description,Descrizione
+CODEX_FLAVOR,风味描述,Flavor,Flavor,플레이버,風味描述,บรรยายรสชาติ,Saveur,Sapore
+CODEX_EDIT,编辑,Edit,Edit,편집,編集,แก้ไข,Modifier,Modifica
+CODEX_ATTR_UNIT_HP_PCT,生命值提升,Max HP up,Max HP up,최대 HP 증가,最大HP上昇,เพิ่มเลือด,PV max +,PV max +
+CODEX_ATTR_UNIT_ARMOR_FLAT,护甲增加,Armor up,Armor up,방어구 증가,鎧増加,เพิ่มเกราะ,Armure +,Armatura +
+CODEX_ATTR_UNIT_MOVE_SPEED_PCT,移动速度提升,Move speed up,Move speed up,이속 증가,移動速度上昇,เพิ่มความเร็วเคลื่อนที่,Vitesse dépl. +,Vel. mov. +
+CODEX_ATTR_MELEE_DAMAGE_PCT,近战伤害提升,Melee damage up,Melee damage up,근접 피해 증가,近接ダメージ上昇,เพิ่มดาเมจประชิด,Dégâts mêlée +,Danni mischia +
+CODEX_ATTR_UNIT_ATTACK_SPEED_PCT,攻击速度提升,Attack speed up,Attack speed up,공속 증가,攻撃速度上昇,เพิ่มความเร็วโจมตี,Vit. att. +,Vel. att. +
+CODEX_ATTR_BLEED_DAMAGE_PCT,流血伤害提升,Bleed damage up,Bleed damage up,출혈 피해 증가,流血ダメージ上昇,เพิ่มดาเมจเลือดออก,Dégâts saignement +,Danni sanguinamento +
+CODEX_ATTR_MAGIC_DAMAGE_PCT,法术伤害提升,Magic damage up,Magic damage up,마법 피해 증가,魔法ダメージ上昇,เพิ่มดาเมจเวท,Dégâts magie +,Danni magia +
+CODEX_ATTR_RANGED_DAMAGE_PCT,远程伤害提升,Ranged damage up,Ranged damage up,원거리 피해 증가,遠隔ダメージ上昇,เพิ่มดาเมจระยะไกล,Dégâts distance +,Danni distanza +
+CODEX_ATTR_FIRST_WAVE_SHIELD,首波护盾,First-wave shield,First-wave shield,첫 파 보호막,初波シールド,โล่คลื่นแรก,Bouclier 1re vague,Scudo 1a ondata
+CODEX_ATTR_GOLD_PER_NODE,每节点金币,Gold per node,Gold per node,노드당 골드,ノード毎ゴールド,ทองต่อโหนด,Or par nœud,Oro per nodo
+CODEX_ATTR_PIERCE_DAMAGE_PCT,穿透伤害提升,Pierce damage up,Pierce damage up,관통 피해 증가,貫通ダメージ上昇,เพิ่มดาเมจเจาะทะลุ,Dégâts perçants +,Danni perforanti +
+CODEX_ATTR_SHOP_DISCOUNT_PCT,商店折扣,Shop discount,Shop discount,상점 할인,ショップ割引,ส่วนลดร้าน,Remise magasin,Sconto negozio
+CODEX_ATTR_ARMOR_PCT,护甲减伤提升,Armor reduction up,Armor reduction up,방깎 감소 증가,鎧軽減上昇,เพิ่มลดดาเมจเกราะ,Réduc. armure +,Riduz. armatura +
+CODEX_ATTR_DEPLOY_COUNT_BONUS,部署数量加成,Deploy count bonus,Deploy count bonus,배치 수 보너스,展開数ボーナス,โบนัสจัด部署,Bonus déploiement,Bonus schieramento
+CODEX_ATTR_ENEMY_ATTACK_SPEED_PCT,敌军攻击速度下降,Enemy atk speed down,Enemy atk speed down,적 공속 감소,敵攻速低下,ลดความเร็วโจมตีศัตรู,Vit. att. ennemi -,Vel. att. nemico -
+CODEX_ATTR_DEATH_GOLD,击杀掉落金币,Gold on kill,Gold on kill,킬당 골드,撃殺ゴールド,ทองเมื่อฆ่า,Or par kill,Oro per uccisione
+CODEX_ATTR_HAND_LIMIT_BONUS,手牌上限加成,Hand limit bonus,Hand limit bonus,มือขีดจำกัดโบนัส,手札上限ボーナス,โบนัสขีดมือ,Bonus main,Bonus mano
+CODEX_ATTR_REGEN_PER_WAVE_PCT,每波回复,Regen per wave,Regen per wave,파당 회복,波毎回復,ฟื้นฟูต่อคลื่น,Régén. par vague,Rigene per ondata
+CODEX_ATTR_UNIT_DAMAGE_PCT,全体伤害提升,All damage up,All damage up,전체 피해 증가,全体ダメージ上昇,เพิ่มดาเมจทั้งหมด,Tous dégâts +,Tutti danni +
+CODEX_ATTR_RALLY_MOVE_SPEED,集结进军速度,Rally move speed,Rally move speed,집결 이속,集結移動速度,ความเร็วรวม,Vitesse ralliement,Vel. ralliement
+CODEX_ATTR_ARMOR_FLAT_BONUS,护甲加成,Armor bonus,Armor bonus,방어구 보너스,鎧ボーナス,โบนัสเกราะ,Bonus armure,Bonus armatura
+CODEX_ATTR_DEPLOY_COOLDOWN_PCT,部署冷却缩短,Deploy cooldown down,Deploy cooldown down,배치 쿨다운 감소,展開クールダウン短縮,ลดคูลดาวน์จัด部署,CD déploiement -,CD schieramento -
+CODEX_ATTR_REFILL_HAND,补满手牌,Refill hand,Refill hand,손보충,手札補充,เติมมือ,Main pleine,Mano piena
+CODEX_ATTR_GAIN_RANDOM_CARD,获得随机卡牌,Gain random card,Gain random card,랜덤 카드 획득,ランダムカード取得,ได้การ์ดสุ่ม,Carte aléatoire,Carta casuale
+CODEX_ATTR_HEAL_ALL_PCT,全军治疗,Heal all,Heal all,전군 치료,全軍治療,ฮีลกองทัพ,Soin total,Cura totale
+CODEX_ATTR_REGEN_PER_SEC_PCT,每秒回复,Regen per sec,Regen per sec,초당 회복,毎秒回復,ฟื้นฟูต่อวินาที,Régén. par s,Rigene/s
+CODEX_ATTR_ENEMY_DAMAGE_PCT,敌军伤害下降,Enemy damage down,Enemy damage down,적 피해 감소,敵ダメージ低下,ลดดาเมจศัตรู,Dégâts ennemi -,Danni nemico -
+CODEX_ATTR_BURN_FIELD_DAMAGE,灼烧场地伤害,Burn field damage,Burn field damage,화상 장판 피해,燃焼フィールド,ดาเมจพื้นเผา,Champ brûlant,Campo bruciato
+CODEX_ATTR_ENEMY_WAVE_DELAY,敌军波次延迟,Enemy wave delay,Enemy wave delay,적 파 지연,敵ウェーブ遅延,หน่วงคลื่นศัตรู,Retard ennemi,Ritardo nemico
+CODEX_ATTR_ENEMY_RETREAT_PCT,敌军撤退概率,Enemy retreat chance,Enemy retreat chance,적 퇴각 확률,敵撤退確率,โอกาสศัตรูถอย,Chance retraite,Chance ritirata
+CODEX_ATTR_DAMAGE_PCT_AT_LOW_HP,残血伤害提升,Low-HP damage up,Low-HP damage up,저혈피해 증가,低HPダメージ上昇,เพิ่มดาเมจเลือดน้อย,Dégâts bas PV +,Danni a PV bassi +
+CODEX_ATTR_GOLD_ON_KILL,击杀得金,Gold on kill,Gold on kill,킬골드,撃殺得金,ทองจากการฆ่า,Or à l'kill,Oro su kill
+CODEX_ATTR_REMOVE_CARD_AND_DRAW,替换手牌,Replace & redraw,Replace & redraw,카드 교체,手札入替,เปลี่ยนมือ,Remplacer,Sostituisci
+CODEX_ATTR_REVEAL_NEXT_WAVE,预知下一波,Reveal next wave,Reveal next wave,다음 파 예지,次ウェーブ予知,รู้คลื่นถัดไป,Vague suivante,Onda dopo
+CODEX_ATTR_BASE_HP_BONUS,基地生命加成,Base HP bonus,Base HP bonus,기지 HP 보너스,基地HPボーナス,โบนัสเลือดฐาน,Bonus base,Bonus base
+CODEX_ATTR_DEATH_EXPLOSION_DAMAGE,死亡爆炸伤害,Death explosion dmg,Death explosion dmg,죽을때폭발 피해,死亡爆発ダメージ,ดาเมจระเบิดตาย,Explosion mort,Esplosione morte
+CODEX_ATTR_SKIP_WAVE,跳过波次,Skip wave,Skip wave,파 스킵,ウェーブスキップ,ข้ามคลื่น,Sauter vague,Salta ondata
+ACH_NAME_first_win,初战告捷,First Victory,First Victory,첫 승리,初陣勝利,ชัยชนะแรก,Première victoire,Prima vittoria
+ACH_DESC_first_win,赢得任意一场战斗,Win any battle,Win any battle,전투 승리,任意の戦闘に勝つ,ชนะการรบใดก็ได้,Gagnez une bataille,Vinci una battaglia
+ACH_NAME_first_hard_win,攻城拔寨,Fortress Fallen,Fortress Fallen,성을 함락,城を抜く,ยึดป้อม,Prise de fort,Presa della fortezza
+ACH_DESC_first_hard_win,首次赢得困难模式,First hard-mode win,First hard-mode win,어려움 첫 승리,初ハード勝利,ชนะโหมดยากครั้งแรก,Première victoire difficle,Prima vittoria difficile
+ACH_NAME_first_hell_win,炼狱归来,Back from Hell,Back from Hell,지옥 생환,地獄归来,คืนจากนรก,Retour des enfers,Ritorno dall'inferno
+ACH_DESC_first_hell_win,首次赢得地狱模式,First hell-mode win,First hell-mode win,지옥 첫 승리,初ヘル勝利,ชนะโหมดนรกครั้งแรก,Première victoire enfer,Prima vittoria inferno
+ACH_NAME_no_damage_win,毫发无伤,Flawless,Flawless,무결점,無傷,ไม่สะท้อนแม้ขน,Sans égratignure,Senza un graffio
+ACH_DESC_no_damage_win,一场胜利且己方基地未受任何伤害,Win without your base taking damage,Win without your base taking damage,기지 무데미지 승리,基地にダメージなしで勝利,ชนะโดยฐานไม่รับดาเมจ,Gagnez sans dégât à la base,Vinci senza danni alla base
+ACH_NAME_speed_clear,速战速决,Lightning War,Lightning War,속전속결,電撃戦,จบไว,Guerre éclair,Guerra lampo
+ACH_DESC_speed_clear,一场胜利且耗时不足 240 秒,Win in under 240s,Win in under 240s,240초 내 승리,240秒以内勝利,ชนะใน 240 วินาที,Victoire en <240s,Vittoria in <240s
+ACH_NAME_blitz_clear,闪电突袭,Blitz,Blitz,블리츠,電撃強襲,突袭ไว,Blitz,Blitz
+ACH_DESC_blitz_clear,任意困难/地狱模式中 240 秒内胜利,Win hard/hell in 240s,Win hard/hell in 240s,어려움/지옥 240초 내 승리,ハード/ヘルを240秒で,ชนะยาก/นรกใน 240 วินาที,Difficile/Enfer en 240s,Difficile/Inferno in 240s
+ACH_NAME_flawless_commander,指挥若定,Flawless Commander,Flawless Commander,완벽 지휘,指揮官無傷,ผู้บัญชาการไร้ตำหนิ,Commandant impeccable,Comandante impeccabile
+ACH_DESC_flawless_commander,同场战斗无伤且 240 秒内取胜,No damage and win in 240s,No damage and win in 240s,무데미지 240초 내 승리,無傷240秒勝利,ไม่รับดาเมจและชนะใน 240 วินาที,"Sans dégât, <240s","Senza danni, <240s"
+ACH_NAME_campaign_complete,我来，我见，我征服,"I came, I saw, I conquered","I came, I saw, I conquered","왔다, 보았다, 정복했다",来た、見た、勝った,มา เห็น ชนะ,"Je suis venu, j'ai vaincu","Venni, vidi, vinsi"
+ACH_DESC_campaign_complete,通关全部 10 个战役关卡,Clear all 10 campaign levels,Clear all 10 campaign levels,캠페인 10관 클리어,全10関クリア,ผ่านแคมเปญ 10 ด่าน,Terminez les 10 niveaux,Completa i 10 livelli
+ACH_NAME_all_units,兵种大师,Unit Master,Unit Master,병종 마스터,兵種マスター,มาสเตอร์ยูนิต,Maître des unités,Maestro delle unità
+ACH_DESC_all_units,解锁全部 24 个兵种,Unlock all 24 units,Unlock all 24 units,병종 24개 해금,全24兵種解放,ปลดล็อคยูนิต 24,Débloquez 24 unités,Sblocca 24 unità
+ACH_NAME_star_collector,星耀将星,Star Collector,Star Collector,별 수집가,星収集家,นักสะสมดาว,Collectionneur d'étoiles,Collezionista di stelle
+ACH_DESC_star_collector,累计获得 20 颗星,Earn 20 stars total,Earn 20 stars total,별 20개 획득,星20個獲得,สะสมดาว 20 ดวง,20 étoiles cumulées,20 stelle totali
+ACH_NAME_kills_200,百战之师,Seasoned Army,Seasoned Army,백전노장,百戦の軍,กองทัพรบร้อยครั้ง,Armée aguerrie,Esercito esperto
+ACH_DESC_kills_200,累计击杀敌方单位达到 500,500 total kills,500 total kills,킬 500,撃殺500,ฆ่าศัตรู 500,500 kills cumulés,500 uccisioni
+ACH_NAME_kills_500,血染沙场,Bloodied Sands,Bloodied Sands,피칠沙子,血染沙場,ทรายแดง,Sables sanglants,Sabbie insanguinate
+ACH_DESC_kills_500,累计击杀敌方单位达到 1000,1000 total kills,1000 total kills,킬 1000,撃殺1000,ฆ่าศัตรู 1000,1000 kills cumulés,1000 uccisioni
+ACH_NAME_kills_800,万军之敌,Enemy of Armies,Enemy of Armies,만군의 적,万軍の敵,ศัตรูทัพใหญ่,Ennemi des armées,Nemico degli eserciti
+ACH_DESC_kills_800,累计击杀敌方单位达到 1500,1500 total kills,1500 total kills,킬 1500,撃殺1500,ฆ่าศัตรู 1500,1500 kills cumulés,1500 uccisioni
+ACH_NAME_level_3_clear,区区小敌,Petty Foe,Petty Foe,소악,小敵,ศัตรูเล็กน้อย,Faible ennemi,Nemico minore
+ACH_DESC_level_3_clear,通过第三关,Clear level 3,Clear level 3,3관 클리어,第3関クリア,ผ่านด่าน 3,Niveau 3 terminé,Livello 3 completato
+ACH_NAME_level_6_clear,区区强敌,Mighty Foe,Mighty Foe,강적,強敵,ศัตรูโหด,Ennemi puissant,Nemico forte
+ACH_DESC_level_6_clear,通过第六关,Clear level 6,Clear level 6,6관 클리어,第6関クリア,ผ่านด่าน 6,Niveau 6 terminé,Livello 6 completato
+ACH_NAME_sword_master,剑术大师,Sword Master,Sword Master,검술 마스터,剣術マスター,อาจารย์ดาบ,Maître épéiste,Maestro spadaccino
+ACH_DESC_sword_master,使用 N2 击杀敌方单位达到 500,500 kills with N2,500 kills with N2,N2로 킬 500,N2で500撃殺,ฆ่า 500 ด้วย N2,500 kills avec N2,500 uccisioni con N2
+ACH_NAME_aoe_multi_kill,大力出奇迹,Power Wins,Power Wins,힘의 기적,力の奇跡,พลังสร้างปาฏิหาริย์,La force triomphe,La forza vince
+ACH_DESC_aoe_multi_kill,任意己方兵种一次攻击击杀三名及以上敌方单位,Kill 3+ enemies in one hit,Kill 3+ enemies in one hit,한 방에 적 3명 이상,一撃で敵3体以上,ฆ่าศัตรู 3+ ด้วยโจมตีเดียว,3+ ennemis en une attaque,3+ nemici in un colpo
+ACH_NAME_fast_defeat,经验+3,XP +3,XP +3,경험치+3,経験値+3,เอ็กซ์พี+3,XP +3,XP +3
+ACH_DESC_fast_defeat,任意一关中在 30 秒内被打败,Lose within 30s in any level,Lose within 30s in any level,30초 내 패배,30秒以内敗北,พ่ายใน 30 วินาที,Défaite en <30s,Sconfitta in <30s
+ACH_NAME_day_night,日夜交替,Day & Night,Day & Night,주야 교체,昼夜交代,กลางวันกลางคืน,Jour et nuit,Giorno e notte
+ACH_DESC_day_night,点击左上角太阳,Click the top-left sun,Click the top-left sun,좌상단 태양 클릭,左上太阳をクリック,คลิกพระอาทิตย์ซ้ายบน,Cliquez le soleil,Clicca il sole
+ACH_NAME_roguelike_g1,无名小卒还是名扬天下,Nobody or Legend,Nobody or Legend,무명인지 전설인지,無名か伝説か,คนธรรมดาหรือตำนาน,Personne ou légende,Nessuno o leggenda
+ACH_DESC_roguelike_g1,肉鸽模式全程只使用 G1 兵种通关一次,Roguelike clear using only G1,Roguelike clear using only G1,로그라이크 G1만으로 클리어,ログライクG1のみクリア,ไขว้G1 อย่างเดียว,Roguelike avec G1 seul,Roguelike solo G1
+ACH_NAME_magic_apprentice,魔法学徒,Magic Apprentice,Magic Apprentice,마법 견습생,魔法見習,เด็กฝึกเวท,Apprenti mage,Apprendista mago
+ACH_DESC_magic_apprentice,使用 N1 击杀敌方单位达到 500,500 kills with N1,500 kills with N1,N1로 킬 500,N1で500撃殺,ฆ่า 500 ด้วย N1,500 kills avec N1,500 uccisioni con N1
+ACH_NAME_knight_spirit,骑士精神,Chivalry,Chivalry,기사 정신,騎士精神,จิตวิญญาณอัศวิน,Chevalerie,Cavalieria
+ACH_DESC_knight_spirit,地狱模式最后一关全程只部署 F 系兵种并获胜,"Hell last level, only F units, win","Hell last level, only F units, win",지옥 마지막관 F계열만 승리,ヘル最終関Fのみ勝利,นรกด่านสุดท้าย ใช้ F อย่างเดียว,"Enfer dernier, F seulement","Inferno finale, solo F"
+ACH_NAME_for_orange,为了欧润橘！,For Orange!,For Orange!,오렌지 위하여!,オレンジのために！,เพื่อออเรนจ์!,Pour Orange !,Per Orange!
+ACH_DESC_for_orange,累计购买 500 次 Doro 兵种,Buy Doro units 500 times,Buy Doro units 500 times,도로 500회 구매,ドロ500回購入,ซื้อ Doro 500 ครั้ง,Achetez 500 Doro,Compra 500 Doro
+ACH_NAME_anomaly_invasion,异象入侵,Anomaly Invasion,Anomaly Invasion,이상 침입,異象侵入,การบุกรุกผี,Invasion anomalie,Invasione anomalia
+ACH_DESC_anomaly_invasion,第一次触发异象入侵,First anomaly invasion,First anomaly invasion,첫 이상침입,初異象侵入,ครั้งแรกที่บุกผี,Première invasion,Prima invasione
+ACH_NAME_parallel_heroes,平行时空的英雄们,Heroes of Parallel Worlds,Heroes of Parallel Worlds,평행세계 영웅,平行世界の英雄,ฮีโร่โลกคู่ขนาน,Héros des mondes parallèles,Eroi di mondi paralleli
+ACH_DESC_parallel_heroes,第一次触发特殊事件,First special event,First special event,첫 특수이벤트,初特殊イベント,ครั้งแรกเหตุการณ์พิเศษ,Premier événement,Primo evento speciale
+ACH_NAME_god_mode,上帝模式,God Mode,God Mode,갓 모드,神モード,โหมดพระเจ้า,Mode dieu,Modalità dio
+ACH_DESC_god_mode,解锁开发者模式,Unlock dev mode,Unlock dev mode,개발자 모드 해금,開発者モード解除,ปลดล็อคโหมดdev,Débloquez le mode dev,Sblocca modalità dev
+
+ACH_NAME_blue_witch_summon,来自异世界的蓝色魔法师,Blue Mage from Another World,Blue Mage from Another World,Blue Mage from Another World,Blue Mage from Another World,Blue Mage from Another World,Blue Mage from Another World,Blue Mage from Another World
+ACH_DESC_blue_witch_summon,第一次召唤蓝女巫兵种,Summon the blue witch for the first time,Summon the blue witch for the first time,Summon the blue witch for the first time,Summon the blue witch for the first time,Summon the blue witch for the first time,Summon the blue witch for the first time,Summon the blue witch for the first time
+ACH_NAME_death_reaper_summon,死亡使者,Death Reaper,Death Reaper,Death Reaper,Death Reaper,Death Reaper,Death Reaper,Death Reaper
+ACH_DESC_death_reaper_summon,第一次召唤死亡使者,Summon the Death Reaper for the first time,Summon the Death Reaper for the first time,Summon the Death Reaper for the first time,Summon the Death Reaper for the first time,Summon the Death Reaper for the first time,Summon the Death Reaper for the first time,Summon the Death Reaper for the first time
+ACH_NAME_hamster_summon,鼠鼠我呀,Here Comes the Hamster,Here Comes the Hamster,Here Comes the Hamster,Here Comes the Hamster,Here Comes the Hamster,Here Comes the Hamster,Here Comes the Hamster
+ACH_DESC_hamster_summon,第一次召唤仓鼠士兵,Summon the hamster soldier for the first time,Summon the hamster soldier for the first time,Summon the hamster soldier for the first time,Summon the hamster soldier for the first time,Summon the hamster soldier for the first time,Summon the hamster soldier for the first time,Summon the hamster soldier for the first time
+ACH_NAME_penguin_sacrifice,偏我来时不逢春,Spring Comes Not for Me,Spring Comes Not for Me,Spring Comes Not for Me,Spring Comes Not for Me,Spring Comes Not for Me,Spring Comes Not for Me,Spring Comes Not for Me
+ACH_DESC_penguin_sacrifice,凑企鹅死亡时己方水晶还存在,A penguin dies while your crystal still stands,A penguin dies while your crystal still stands,A penguin dies while your crystal still stands,A penguin dies while your crystal still stands,A penguin dies while your crystal still stands,A penguin dies while your crystal still stands,A penguin dies while your crystal still stands
+ACH_NAME_penguin_irony,我草了老铁，那本来是属于我的,"That Was Mine, Bro!","That Was Mine, Bro!","That Was Mine, Bro!","That Was Mine, Bro!","That Was Mine, Bro!","That Was Mine, Bro!","That Was Mine, Bro!"
+ACH_DESC_penguin_irony,我方水晶死亡时凑企鹅还存在于场上,Your crystal dies while a penguin is still on the field,Your crystal dies while a penguin is still on the field,Your crystal dies while a penguin is still on the field,Your crystal dies while a penguin is still on the field,Your crystal dies while a penguin is still on the field,Your crystal dies while a penguin is still on the field,Your crystal dies while a penguin is still on the field

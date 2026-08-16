@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="AffixResource" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://resources/affixes/affix_resource.gd" id="1_affix"]
+
+[resource]
+script = ExtResource("1_affix")
+affix_id = "frost_basic"
+display_name = "冰霜"
+affix_type = 5
+description = "受到冰霜攻击时，攻速降低 30% 持续 1 秒，不可叠加（重复施加仅刷新持续时间）"
+duration = 1.0
+value_percent = 0.3
+stackable = false
+max_stacks = 1
+trigger_timing = 0

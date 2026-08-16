@@ -1,0 +1,31 @@
+[gd_resource type="SpriteFrames" load_steps=6 format=3]
+
+[ext_resource type="Texture2D" path="res://resources/units/S1_charge/S1_charge_sheet.png" id="1_S1_charge_sheet"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_S1_charge_0"]
+atlas = ExtResource("1_S1_charge_sheet")
+region = Rect2(0, 0, 48, 48)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_S1_charge_1"]
+atlas = ExtResource("1_S1_charge_sheet")
+region = Rect2(48, 0, 48, 48)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_S1_charge_2"]
+atlas = ExtResource("1_S1_charge_sheet")
+region = Rect2(96, 0, 48, 48)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_S1_charge_3"]
+atlas = ExtResource("1_S1_charge_sheet")
+region = Rect2(144, 0, 48, 48)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_S1_charge_4"]
+atlas = ExtResource("1_S1_charge_sheet")
+region = Rect2(192, 0, 48, 48)
+
+[resource]
+animations = [{
+"frames": [SubResource("AtlasTexture_S1_charge_0"), SubResource("AtlasTexture_S1_charge_1"), SubResource("AtlasTexture_S1_charge_2"), SubResource("AtlasTexture_S1_charge_3"), SubResource("AtlasTexture_S1_charge_4")],
+"loop": true,
+"name": "charge",
+"speed": 10.0
+}]

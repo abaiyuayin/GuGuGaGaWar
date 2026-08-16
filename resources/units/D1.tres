@@ -1,0 +1,28 @@
+[gd_resource type="Resource" script_class="UnitResource" format=3]
+
+[ext_resource type="Script" path="res://resources/affixes/affix_resource.gd" id="1_b7ouj"]
+[ext_resource type="Script" path="res://resources/units/unit_base_resource.gd" id="1_base"]
+
+[resource]
+script = ExtResource("1_base")
+unit_id = "D1"
+display_name = "盾斧兵"
+description = "Doro 阵营基础近战爆发单位。双手持斧，攻速快、爆发高，但缺乏防护。"
+cost = 50
+armor_value = 50
+move_speed = 2.5
+damage = 25
+attack_speed = 3.0
+damage_by_hit = [{
+0: 25
+}]
+attack_hit_frame_start = 11
+attack_sound_frame = 11
+move_display_height = 40.0
+move_display_width = 40.0
+attack_display_height = 76.0
+attack_display_width = 76.0
+attack_anim_speed = 1.3
+attack_anim_sync_interval = true
+color_red = Color(0.7, 0.2, 0.5, 1)
+color_blue = Color(0.3, 0.2, 0.7, 1)

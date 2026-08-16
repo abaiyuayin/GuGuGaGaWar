@@ -1,0 +1,92 @@
+[gd_resource type="SpriteFrames" load_steps=11 format=3]
+
+[ext_resource type="Texture2D" path="res://resources/units/N2/sprint_sheet.png" id="1_sprint_sheet"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_sprint_0"]
+atlas = ExtResource("1_sprint_sheet")
+region = Rect2(0, 0, 512, 279)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_sprint_1"]
+atlas = ExtResource("1_sprint_sheet")
+region = Rect2(512, 0, 512, 279)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_sprint_2"]
+atlas = ExtResource("1_sprint_sheet")
+region = Rect2(1024, 0, 512, 279)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_sprint_3"]
+atlas = ExtResource("1_sprint_sheet")
+region = Rect2(1536, 0, 512, 279)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_sprint_4"]
+atlas = ExtResource("1_sprint_sheet")
+region = Rect2(2048, 0, 512, 279)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_sprint_5"]
+atlas = ExtResource("1_sprint_sheet")
+region = Rect2(2560, 0, 512, 279)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_sprint_6"]
+atlas = ExtResource("1_sprint_sheet")
+region = Rect2(3072, 0, 512, 279)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_sprint_7"]
+atlas = ExtResource("1_sprint_sheet")
+region = Rect2(3584, 0, 512, 279)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_sprint_8"]
+atlas = ExtResource("1_sprint_sheet")
+region = Rect2(4096, 0, 512, 279)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_sprint_9"]
+atlas = ExtResource("1_sprint_sheet")
+region = Rect2(4608, 0, 512, 279)
+
+[resource]
+animations = [{
+"frames": [
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_sprint_0")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_sprint_1")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_sprint_2")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_sprint_3")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_sprint_4")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_sprint_5")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_sprint_6")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_sprint_7")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_sprint_8")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_sprint_9")
+}
+],
+"loop": true,
+"name": &"sprint",
+"speed": 10.0
+}]

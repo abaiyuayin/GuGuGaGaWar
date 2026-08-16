@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="AffixResource" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://resources/affixes/affix_resource.gd" id="1_affix"]
+
+[resource]
+script = ExtResource("1_affix")
+affix_id = "knockback_basic"
+display_name = "击退"
+affix_type = 4
+description = "攻击命中时将目标向后推开一小段距离"
+duration = 0.0
+value_percent = 0.0
+stackable = false
+max_stacks = 1
+trigger_timing = 0
+knockback_distance = 0.5

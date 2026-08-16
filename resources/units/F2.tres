@@ -1,0 +1,32 @@
+[gd_resource type="Resource" script_class="UnitResource" format=3]
+
+[ext_resource type="Script" path="res://resources/affixes/affix_resource.gd" id="1_1xfn0"]
+[ext_resource type="Script" path="res://resources/units/unit_base_resource.gd" id="1_base"]
+
+[resource]
+script = ExtResource("1_base")
+unit_id = "F2"
+display_name = "菲叭丘比"
+description = "菲比丘比阵营基础近战爆发单位。不使用武器，以爪击造成物理伤害，灵活且致命。"
+cost = 80
+move_speed = 3.5
+damage = 35
+damage_by_type = {
+0: 20
+}
+attack_speed = 2.0
+attack_hit_types = Array[int]([0])
+damage_by_hit = [{
+0: 20
+}]
+attack_hit_frame_start = 11
+attack_sound_frame = 11
+move_display_height = 55.0
+move_display_width = 55.0
+walk_display_height = 47.0
+walk_display_width = 47.0
+attack_display_height = 55.0
+attack_display_width = 55.0
+attack_anim_speed = 1.7000000000000002
+color_red = Color(0.95, 0.55, 0.75, 1)
+color_blue = Color(0.7, 0.55, 0.95, 1)

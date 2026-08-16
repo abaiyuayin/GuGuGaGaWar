@@ -1,0 +1,44 @@
+[gd_resource type="Resource" script_class="UnitResource" format=3]
+
+[ext_resource type="Script" path="res://resources/units/unit_base_resource.gd" id="1_base"]
+[ext_resource type="Script" path="res://resources/affixes/affix_resource.gd" id="1_emn27"]
+[ext_resource type="Resource" path="res://resources/affixes/knockback.tres" id="2_sbx4u"]
+
+[resource]
+script = ExtResource("1_base")
+unit_id = "D6"
+display_name = "大锤手"
+description = "Doro 阵营近战爆发单位。双手挥舞大锤，以钝伤对重甲单位造成毁灭性打击。"
+tier = 3
+supply_cost = 2
+cost = 130
+max_hp = 140
+armor_value = 35
+move_speed = 2.5
+damage = 60
+damage_type = 2
+damage_types = Array[int]([2])
+damage_by_type = {
+2: 70
+}
+attack_range = 1.5
+attack_range_h = 0.9
+attack_range_v = 0.3
+attack_speed = 3.5
+attack_hit_types = Array[int]([2])
+damage_by_hit = [{
+2: 70
+}]
+attack_hit_frame_start = 8
+attack_sound_frame = 8
+move_display_height = 51.0
+move_display_width = 51.0
+walk_display_height = 49.0
+walk_display_width = 49.0
+attack_display_height = 100.0
+attack_display_width = 100.0
+attack_anim_speed = 0.9
+color_red = Color(0.55, 0.2, 0.35, 1)
+color_blue = Color(0.25, 0.2, 0.55, 1)
+aoe_radius = 25.0
+affixes = Array[ExtResource("1_emn27")]([ExtResource("2_sbx4u")])

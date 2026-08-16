@@ -1,0 +1,37 @@
+[gd_resource type="Resource" script_class="UnitResource" format=3]
+
+[ext_resource type="Script" path="res://resources/units/unit_base_resource.gd" id="1_base"]
+[ext_resource type="Script" path="res://resources/affixes/affix_resource.gd" id="1_aff"]
+
+[resource]
+script = ExtResource("1_base")
+unit_id = "S3"
+display_name = "天命人"
+description = "特殊阵营兵种（占位，素材待补）。"
+tier = 3
+supply_cost = 2
+cost = 100
+max_hp = 200
+armor_value = 80
+move_speed = 2.0
+damage = 35
+damage_types = Array[int]([0])
+damage_by_type = {
+0: 35
+}
+attack_speed = 2.0
+damage_by_hit = [{
+0: 35
+}]
+attack_hit_frame_start = 5
+attack_sound_frame = 5
+display_height = 51.0
+move_display_height = 48.0
+move_display_width = 42.0
+walk_display_height = 45.0
+walk_display_width = 45.0
+attack_display_height = 48.0
+attack_display_width = 67.0
+attack_anim_sync_interval = true
+color_red = Color(0.9, 0.35, 0.2, 1)
+color_blue = Color(0.2, 0.45, 0.9, 1)

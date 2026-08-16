@@ -1,0 +1,1096 @@
+extends Control  ## 继承 Control 控件节点
+## 游戏图鉴界面脚本
+## 左侧按阵营分组展示兵种列�?��右侧展示动画预�?与介绍信�?## 布局顺序：名�?�?精灵预�? �?动画切换按钮 �?介绍 �?作��Tips �?角色数��?表格)
+## 动画预�?�?��待机/行走/奔跑/攻击四�?模式切换，所有动画在图鉴�?���?���?## 缺失动画资源的按�?��显示红色边�?提示
+
+signal closed  ## 关闭信号，当点击返回按钮时发�?
+## 动画资源�?��常量（与 unit_base.gd 保持丢�致）
+const ANIM_ROOT_DIR := "res://resources/units"  ## 动画资源根目�?
+const ANIM_IDLE_FILE := "idle_frames.tres"  ## 待机动画帧文件名
+const ANIM_WALK_FILE := "walk_frames.tres"  ## 行走动画帧文件名
+const ANIM_MOVE_FILE := "move_frames.tres"  ## 移动(奔跑)动画帧文件名
+const ANIM_ATTACK_FILE := "attack_frames.tres"  ## 攻击动画帧文件名
+## 音效资源根目录（按单位ID分目录存�?walk/move/attack.mp3�?
+const AUDIO_ROOT_DIR := "res://assets/audio/units"  ## 音效资源根目�?## 预�?精灵图的统一显示高度（像素），比战场内更大便于查�?const PREVIEW_DISPLAY_HEIGHT: float = 220.0
+
+## 阵营定义：前缢� -> [阵营名翻译键, 排序优先�?
+const FACTION_ORDER: Array = ["G", "D", "F", "N", "H"]  ## 阵营前缀顺序：咕嘎��Doro、菲比��糯�?��英雄（特殊�?
+const FACTION_NAME_KEYS: Dictionary = {
+	"G": "CODEX_FACTION_GUGA",
+	"D": "CODEX_FACTION_DORO",
+	"F": "CODEX_FACTION_PHOEBE",
+	"N": "CODEX_FACTION_NUONUO",
+	"H": "CODEX_FACTION_HERO",
+}
+
+## 效果类型 -> �?��展示名（占位对照�?��待战斗层机制细化后可�?JSON 解��）
+const EFFECT_LABELS: Dictionary = {
+	"unit_hp_pct": "生命值提升",
+	"unit_armor_flat": "护甲增加",
+	"unit_move_speed_pct": "移动速度提升",
+	"melee_damage_pct": "近战伤害提升",
+	"unit_attack_speed_pct": "攻击速度提升",
+	"bleed_damage_pct": "流血伤害提升",
+	"magic_damage_pct": "法术伤害提升",
+	"ranged_damage_pct": "远程伤害提升",
+	"first_wave_shield": "首波护盾",
+	"gold_per_node": "每节点金币",
+	"pierce_damage_pct": "穿透伤害提升",
+	"shop_discount_pct": "商店折扣",
+	"armor_pct": "护甲减伤提升",
+	"deploy_count_bonus": "部署数量加成",
+	"enemy_attack_speed_pct": "敌军攻击速度下降",
+	"death_gold": "击杀掉落金币",
+	"hand_limit_bonus": "手牌上限加成",
+	"regen_per_wave_pct": "每波回复",
+	"unit_damage_pct": "全体伤害提升",
+	"rally_move_speed": "集结进军速度",
+	"armor_flat_bonus": "护甲加成",
+	"deploy_cooldown_pct": "部署冷却缩短",
+	"refill_hand": "补满手牌",
+	"gain_random_card": "获得随机卡牌",
+	"heal_all_pct": "全军治疗",
+	"regen_per_sec_pct": "每秒回复",
+	"enemy_damage_pct": "敌军伤害下降",
+	"burn_field_damage": "灼烧场地伤害",
+	"enemy_wave_delay": "敌军波次延迟",
+	"enemy_retreat_pct": "敌军撤退概率",
+	"damage_pct_at_low_hp": "残血伤害提升",
+	"gold_on_kill": "击杀得金",
+	"remove_card_and_draw": "替换手牌",
+	"reveal_next_wave": "预知下一波",
+	"base_hp_bonus": "基地生命加成",
+	"death_explosion_damage": "死亡爆炸伤害",
+	"skip_wave": "跳过波次",
+}
+
+## 节点引用：右侧面板路径前缢�（因新�? RightScroll 滚动容器�?
+const RIGHT_VBOX_PATH := "MarginContainer/VBoxContainer/Content/RightPanel/RightScroll/RightVBox"
+
+@onready
+var title_label: Label = $MarginContainer/VBoxContainer/Header/TitleLabel  ## 标�?标�?
+@onready
+var back_btn: Button = $MarginContainer/VBoxContainer/Header/BackBtn  ## 返回按钮
+@onready
+var list_container: VBoxContainer = $MarginContainer/VBoxContainer/Content/ListPanel/ListScroll/ListVBox  ## 当前分类的列表�?�?��兵�?/文物/军令共用�?@onready var tab_unit_btn: Button = $MarginContainer/VBoxContainer/TabBar/TabUnitBtn  ## 兵�?选项�?@onready var tab_artifact_btn: Button = $MarginContainer/VBoxContainer/TabBar/TabArtifactBtn  ## 文物选项�?@onready var tab_order_btn: Button = $MarginContainer/VBoxContainer/TabBar/TabOrderBtn  ## 军令选项�?@onready var tab_event_btn: Button = $MarginContainer/VBoxContainer/TabBar/TabEventBtn  ## 事件选项�?@onready var name_label: Label = get_node("%s/NameLabel" % RIGHT_VBOX_PATH)  ## 名称标�?（位于顶�?��
+@onready
+var rarity_label: Label = get_node("%s/RarityLabel" % RIGHT_VBOX_PATH)  ## 稢�有度标�?（文�?军令�?��
+@onready
+var preview_panel: Panel = get_node("%s/PreviewPanel" % RIGHT_VBOX_PATH)  ## 预�?面板
+@onready
+var preview_sprite: AnimatedSprite2D = get_node("%s/PreviewPanel/PreviewSprite" % RIGHT_VBOX_PATH)  ## 预�?动画精灵
+@onready
+var no_anim_label: Label = get_node("%s/PreviewPanel/NoAnimLabel" % RIGHT_VBOX_PATH)  ## 无动画提�?@onready var anim_buttons_container: HBoxContainer = get_node("%s/AnimButtons" % RIGHT_VBOX_PATH)  ## 动画切换按钮容器
+@onready
+var idle_btn: Button = get_node("%s/AnimButtons/IdleBtn" % RIGHT_VBOX_PATH)  ## 待机按钮
+@onready
+var walk_btn: Button = get_node("%s/AnimButtons/WalkBtn" % RIGHT_VBOX_PATH)  ## 行走按钮
+@onready
+var run_btn: Button = get_node("%s/AnimButtons/RunBtn" % RIGHT_VBOX_PATH)  ## 奔跑按钮
+@onready
+var attack_btn: Button = get_node("%s/AnimButtons/AttackBtn" % RIGHT_VBOX_PATH)  ## 攻击按钮
+@onready
+var intro_header: Label = get_node("%s/IntroHeader" % RIGHT_VBOX_PATH)  ## 介绍标�?
+@onready
+var desc_label: Label = get_node("%s/DescLabel" % RIGHT_VBOX_PATH)  ## 介绍文本
+@onready
+var appearance_header: Label = get_node("%s/AppearanceHeader" % RIGHT_VBOX_PATH)  ## 外�?标�?（文�?军令�?��
+@onready
+var appearance_label: Label = get_node("%s/AppearanceLabel" % RIGHT_VBOX_PATH)  ## 外�?文本
+@onready
+var tips_header: Label = get_node("%s/TipsHeader" % RIGHT_VBOX_PATH)  ## 风味标�?
+@onready
+var tips_label: Label = get_node("%s/TipsLabel" % RIGHT_VBOX_PATH)  ## 风味文本
+@onready
+var stats_header: Label = get_node("%s/StatsHeader" % RIGHT_VBOX_PATH)  ## 数��?价格标�?
+@onready
+var price_label: Label = get_node("%s/PriceLabel" % RIGHT_VBOX_PATH)  ## 价格标�?
+@onready
+var effect_header: Label = get_node("%s/EffectHeader" % RIGHT_VBOX_PATH)  ## 效果标�?（文�?军令�?��
+@onready
+var effect_label: Label = get_node("%s/EffectLabel" % RIGHT_VBOX_PATH)  ## 效果文本
+@onready
+var attributes_grid: GridContainer = get_node("%s/AttributesGrid" % RIGHT_VBOX_PATH)  ## 属��表格�?�?@onready var anim_audio_player: AudioStreamPlayer = $AnimAudioPlayer  ## 动画音效�?���?@onready var dev_edit_container: VBoxContainer = get_node("%s/DevEditContainer" % RIGHT_VBOX_PATH)  ## 弢�发��编辑�?�?## #霢��?4：兵种介绍右侧的「编辑��按�?��仅开发��模式显示，点击展开 DevEditContainer�?var _edit_desc_btn: Button = null
+## #霢��?4：兵种编辑�?当前�?��展开（由编辑按钮控制，默认收起）
+var _dev_edit_expanded: bool = false
+@onready
+var desc_edit_row: VBoxContainer = get_node("%s/DevEditContainer/DescEditRow" % RIGHT_VBOX_PATH)  ## 描述编辑�?@onready var desc_edit: TextEdit = get_node("%s/DevEditContainer/DescEditRow/DescEdit" % RIGHT_VBOX_PATH)  ## 描述编辑�?@onready var appearance_edit_row: VBoxContainer = get_node("%s/DevEditContainer/AppearanceEditRow" % RIGHT_VBOX_PATH)  ## 外�?编辑�?@onready var appearance_edit: TextEdit = get_node("%s/DevEditContainer/AppearanceEditRow/AppearanceEdit" % RIGHT_VBOX_PATH)  ## 外�?编辑�?@onready var flavor_edit_row: VBoxContainer = get_node("%s/DevEditContainer/FlavorEditRow" % RIGHT_VBOX_PATH)  ## 风味编辑�?@onready var flavor_edit: TextEdit = get_node("%s/DevEditContainer/FlavorEditRow/FlavorEdit" % RIGHT_VBOX_PATH)  ## 风味编辑�?@onready var save_edit_btn: Button = get_node("%s/DevEditContainer/SaveEditBtn" % RIGHT_VBOX_PATH)  ## 保存按钮
+
+enum DetailType { UNIT, ARTIFACT, ORDER, EVENT }  ## 详情类型：兵�?/ 文物 / 军令 / 事件
+
+var _unit_buttons: Array[Button] = []  ## 兵�?按钮数组
+var _artifact_buttons: Array[Button] = []  ## 文物按钮数组
+var _order_buttons: Array[Button] = []  ## 军令按钮数组
+var _event_buttons: Array[Button] = []  ## 事件按钮数组
+var _selected_kind: String = ""  ## 当前选中类型：unit / artifact / order / event
+var _selected_id: String = ""  ## 当前选中条目 ID（兵�?unit_id / 文物 artifact_id / 军令 order_id / 事件 event_id�?
+var _current_tab: String = "unit"  ## 当前顶部选项卡：unit / artifact / order / event
+var _selected_unit: UnitResource = null  ## 当前选中的兵种资�?
+var _selected_artifact: ArtifactData = null  ## 当前选中的文物资�?var _selected_order: MilitaryOrderData = null  ## 当前选中的军令资�?var _selected_event: ChestEventData = null  ## 当前选中的宝箱事�?var _current_anim_mode: String = "move"  ## 当前动画模式：idle/walk/move/attack
+var _anim_idle_frames: SpriteFrames = null  ## 当前兵�?的待机动画帧
+var _anim_walk_frames: SpriteFrames = null  ## 当前兵�?的�?走动画帧
+var _anim_move_frames: SpriteFrames = null  ## 当前兵�?的移�?奔跑)动画�?
+var _anim_attack_frames: SpriteFrames = null  ## 当前兵�?的攻击动画帧
+var _audio_idle: AudioStream = null  ## 当前兵�?的待机音�?
+var _audio_walk: AudioStream = null  ## 当前兵�?的�?走音�?var _audio_move: AudioStream = null  ## 当前兵�?的�?跑音�?var _audio_attack: AudioStream = null  ## 当前兵�?的攻击音�?var _last_panel_size: Vector2 = Vector2.ZERO  ## 记录上�?面板尺�?，用于�?测变�?
+func _ready() -> void:  ## 节点就绪时自动调�?
+	_apply_localization()  ## 应用�?��化文�?
+	SettingsManager.settings_changed.connect(_apply_localization)  ## 连接设置变更信号
+	## #霢��?4：兵种介绍右侧的「编辑��按�?��仅开发��模式显示，点击展开编辑框）
+	_setup_desc_edit_btn()
+	back_btn.pressed.connect(_on_back_pressed)  ## 连接返回按钮信号
+	UIButtonHelper.setup_button(back_btn)  ## 设置返回按钮样式
+	UIButtonHelper.setup_button(idle_btn)  ## 设置待机按钮样式
+	UIButtonHelper.setup_button(walk_btn)  ## 设置行走按钮样式
+	UIButtonHelper.setup_button(run_btn)  ## 设置奔跑按钮样式
+	UIButtonHelper.setup_button(attack_btn)  ## 设置攻击按钮样式
+	idle_btn.pressed.connect(_on_idle_btn_pressed)  ## 连接待机按钮信号
+	walk_btn.pressed.connect(_on_walk_btn_pressed)  ## 连接行走按钮信号
+	run_btn.pressed.connect(_on_run_btn_pressed)  ## 连接奔跑按钮信号
+	attack_btn.pressed.connect(_on_attack_btn_pressed)  ## 连接攻击按钮信号
+	_setup_style()  ## 设置面板样式
+	UIButtonHelper.setup_button(save_edit_btn)  ## 设置保存按钮样式
+	save_edit_btn.pressed.connect(_on_save_edit_pressed)  ## 连接保存按钮
+	DevMode.dev_mode_changed.connect(_on_dev_mode_toggled)  ## 监听弢�发��模式切�?
+	UIButtonHelper.setup_button(tab_unit_btn)  ## 设置兵�?选项卡样�?
+	UIButtonHelper.setup_button(tab_artifact_btn)  ## 设置文物选项卡样�?
+	UIButtonHelper.setup_button(tab_order_btn)  ## 设置军令选项卡样�?
+	UIButtonHelper.setup_button(tab_event_btn)  ## 设置事件选项卡样�?
+	tab_unit_btn.pressed.connect(_on_tab_unit_pressed)  ## 连接兵�?选项�?
+	tab_artifact_btn.pressed.connect(_on_tab_artifact_pressed)  ## 连接文物选项�?
+	tab_order_btn.pressed.connect(_on_tab_order_pressed)  ## 连接军令选项�?
+	tab_event_btn.pressed.connect(_on_tab_event_pressed)  ## 连接事件选项�?
+	_switch_tab("unit")  ## 默�?显示兵�?选项卡并选中�?���?	## #新需求：文物/军令/事件图鉴仅开发��模式可见����按当前 DevMode 初�?�?Tab 显隐
+	_apply_dev_tab_visibility()
+
+## #新需求：文物/军令/事件图鉴仅开发��模式可�?## 非开发��模式隐藏文�?军令/事件三个选项卡按�?��仅保留兵种图鉴；
+## F11 弢��?��发��模式后恢�?显示（与 DevMode 切换回调联动�?
+func _apply_dev_tab_visibility() -> void:
+	var on: bool = DevMode.enabled
+	tab_artifact_btn.visible = on
+	tab_order_btn.visible = on
+	tab_event_btn.visible = on
+
+## ============================================================
+## #霢��?9：abay 秘技—��图鉴爱弥斯详情页顺序输�?a-b-a-y 弢��?��发��模�?## ============================================================
+## 秘技码（小写�?
+const SECRET_CODE: String = "abay"
+## 秘技输入缓冲（按顺序�?��，错丢��?��母从头重来）
+var _secret_buffer: String = ""
+## #15�?026-08-11）：G1 待机按钮连按秘技—��从爱弥�?���?abay 移�?�?## 图鉴详情页点 G1 待机按钮 7 次开�?��发��模式；3 秒未继续点击则重�??数��?
+const G1_SECRET_TAPS: int = 7
+const G1_TAP_RESET_MSEC: int = 3000
+var _g1_idle_taps: int = 0
+var _g1_idle_last_tap_msec: int = 0
+
+## 图鉴�?��输入：仅在��兵�?+ G1（咕嘎勇�?��」�?情页生效
+## 依�?�?a �?b �?a �?y 四键（不区分大小写），全部命�?��弢��?��发��模式；
+## 其他页面或非字母�?��清空缓冲，避免�?触发
+## #6�?026-08-11 用户拍板）：abay 秘技从爱弥斯（Hero1）页迁移�?G1 页，删除爱弥�?���?
+func _unhandled_input(event: InputEvent) -> void:
+	## �?G1 详情页生效（用户拍板�?
+	if not (_selected_kind == "unit" and _selected_unit != null and _selected_unit.unit_id == "G1"):
+		_secret_buffer = ""
+		return
+	if not (event is InputEventKey) or not event.pressed or event.echo:
+		return
+	## 仅接�?a/b/y �?��其他�?��空缓冲）
+
+	var ch: String = ""
+	match (event as InputEventKey).keycode:
+		KEY_A: ch = "a"
+		KEY_B: ch = "b"
+		KEY_Y: ch = "y"
+		_:
+			_secret_buffer = ""
+			return
+	## 与�?抢�码当前位�?���?
+	var expect: String = SECRET_CODE.substr(_secret_buffer.length(), 1)
+	if ch == expect:
+		_secret_buffer += ch
+		if _secret_buffer == SECRET_CODE:
+			_secret_buffer = ""
+			_on_secret_entered()
+	else:
+		_secret_buffer = ""
+
+## abay / G1 待机连按秘技命中：开�?��发��模式（F11 弢�关仍保留�?
+func _on_secret_entered() -> void:
+	if not DevMode.enabled:
+		DevMode.set_enabled(true)
+		## #Bug3��2026-08-12����������ģʽ������ˢ��ͼ���б�����������������Ŀ
+		_build_list_for(_selected_kind)
+		_update_unit_button_texts()
+
+	var dlg := AcceptDialog.new()
+	dlg.title = tr("TIP_TITLE")
+	dlg.dialog_text = tr("DEV_MODE_ENABLED")
+	dlg.ok_button_text = tr("CONFIRM")
+	dlg.process_mode = Node.PROCESS_MODE_ALWAYS
+	add_child(dlg)
+	dlg.popup_centered()
+
+func _apply_localization() -> void:  ## 应用�?��化文�?
+	title_label.text = tr("CODEX_TITLE")  ## 设置标�?
+	back_btn.text = tr("BACK")  ## 设置返回按钮
+	idle_btn.text = tr("CODEX_IDLE")  ## 设置待机按钮
+	walk_btn.text = tr("CODEX_WALK")  ## 设置行走按钮
+	run_btn.text = tr("CODEX_RUN")  ## 设置奔跑按钮
+	attack_btn.text = tr("CODEX_ATTACK")  ## 设置攻击按钮
+	intro_header.text = tr("UNIT_INTRO")  ## 设置介绍标�?
+	tips_header.text = tr("CODEX_AUTHOR_TIPS")  ## 设置作��Tips标�?
+	stats_header.text = tr("CODEX_ROLE_STATS")  ## 角色数��标�?
+	no_anim_label.text = tr("CODEX_NO_ANIM")  ## 设置无动画提�?
+	match _selected_kind:  ## 根据当前选中的类型刷新�?情显�?
+		"artifact":
+			if _selected_artifact != null:
+				_select_artifact(_selected_artifact)
+		"order":
+			if _selected_order != null:
+				_select_order(_selected_order)
+		"event":
+			if _selected_event != null:
+				_select_event(_selected_event)
+		_:
+			if _selected_unit != null:
+				_select_unit(_selected_unit)
+			else:
+				_update_detail_placeholder()
+	tab_unit_btn.text = tr("CODEX_TAB_UNIT")  ## 兵�?选项卡文�?
+	tab_artifact_btn.text = tr("CODEX_TAB_ARTIFACT")  ## 文物选项卡文�?
+	tab_order_btn.text = tr("CODEX_TAB_ORDER")  ## 军令选项卡文�?
+	tab_event_btn.text = tr("CODEX_TAB_EVENT")  ## 事件选项卡文�?
+	_highlight_tab_buttons()  ## 刷新选项卡高�?
+	_update_unit_button_texts()  ## 更新兵�?按钮文本
+
+func _setup_style() -> void:  ## 设置面板样式
+	var panel_style = StyleBoxFlat.new()  ## 创建扁平样式�?
+	panel_style.bg_color = Color(0.12, 0.12, 0.15, 0.95)  ## 深灰半��明背景
+	panel_style.border_color = Color(0.3, 0.3, 0.35, 0.8)  ## 边�?�?
+	panel_style.set_border_width_all(1)  ## 边�?宽度
+	panel_style.set_corner_radius_all(6)  ## 圆�?
+	## 预�?面板使用稍深的背�?
+	var preview_style = StyleBoxFlat.new()  ## 创建预�?面板样式
+	preview_style.bg_color = Color(0.06, 0.06, 0.08, 1)  ## 更深的背�?
+	preview_style.border_color = Color(0.25, 0.25, 0.3, 0.6)  ## 边�?
+	preview_style.set_border_width_all(1)  ## 边�?宽度
+	preview_style.set_corner_radius_all(4)  ## 圆�?
+	preview_panel.add_theme_stylebox_override("panel", preview_style)  ## 应用样式
+	## 三个列表面板与右侧�?情面板共用同丢�套面板样�?
+	var content_path := "MarginContainer/VBoxContainer/Content"
+	get_node("%s/ListPanel" % content_path).add_theme_stylebox_override("panel", panel_style)  ## 列表面板
+	get_node("%s/RightPanel" % content_path).add_theme_stylebox_override("panel", panel_style)  ## 右侧详情面板
+
+## 根据兵�? ID 前缀获取阵营标识
+func _get_faction_prefix(unit_id: String) -> String:  ## 获取阵营前缀
+	return unit_id[0]  ## 取�?字母作为阵营前缀
+
+## 从兵�?ID 提取数字部分用于排序（G1�?, D6�?�?
+func _get_unit_number(unit_id: String) -> int:  ## 获取兵�?编号
+	var num_str: String = unit_id.substr(1)  ## 去掉前缀字母
+	if num_str.is_valid_int():  ## 如果�?��效整�?
+		return int(num_str)  ## 返回数字
+	return 0  ## 无效则返�?
+
+## 按阵营分组构建兵种列�?��阵营内按编号 1-6 排序
+## 根据分类构建对应的列表到共享容器（兵�?文物/军令共用丢��?��表面板）
+func _build_list_for(kind: String) -> void:  ## 构建指定分类列表
+	for child in list_container.get_children():  ## 清理容器
+		child.queue_free()
+	match kind:  ## 按分类分�?
+		"unit": _build_unit_buttons(list_container)  ## 兵�?
+		"artifact": _build_artifact_buttons(list_container)  ## 文物
+		"order": _build_order_buttons(list_container)  ## 军令
+		"event": _build_event_buttons(list_container)  ## 宝�?事件
+
+## 按阵营分组构建兵种列�?��阵营内按编号 1-6 排序
+func _build_unit_buttons(container: VBoxContainer) -> void:  ## 构建兵种列表
+	_unit_buttons.clear()  ## 清空按钮数组
+	## 按阵营前缀分组（常规兵种 + 特殊英雄单位，后者归入第 5 阵营「英雄」）
+	var grouped: Dictionary = {}
+	var all_units: Array = UnitDatabase.unit_list + UnitDatabase.special_units
+	for res in all_units:  ## 遍历所有兵种
+		var prefix: String = _get_faction_prefix(res.unit_id)  ## 获取阵营前缀
+		if not grouped.has(prefix):  ## 如果该阵营尚未建立分组
+			grouped[prefix] = []  ## 创建空数组
+		grouped[prefix].append(res)  ## 添加到对应阵营
+	## 按指定顺序（咕嘎、Doro、菲比、糯糯、英雄）遍历阵营
+	for prefix in FACTION_ORDER:  ## 遍历阵营顺序
+		if not grouped.has(prefix):  ## 如果该阵营没有兵种
+			continue  ## 跳过该阵营
+		grouped[prefix].sort_custom(
+			func(a, b): return _get_unit_number(a.unit_id) < _get_unit_number(b.unit_id))  ## 按编号升序
+		## 添加阵营标签
+		var faction_label = Label.new()  ## 创建阵营标签
+		var is_special: bool = (prefix == "H")  ## 英雄阵营为特殊
+		if is_special:
+			faction_label.text = tr("CODEX_HERO_SPECIAL")  ## 特殊英雄直接显示，不走翻译键
+		else:
+			var faction_key: String = FACTION_NAME_KEYS.get(prefix, "")  ## 获取阵营名翻译键
+			faction_label.text = tr(faction_key)  ## 设置阵营名
+		faction_label.add_theme_font_size_override("font_size", 16)  ## 字体大小
+		if is_special:
+			## 特殊行：明亮青金色，区别于常规金色
+			faction_label.add_theme_color_override("font_color", Color(0.4, 1.0, 0.9))  ## 青绿色
+		else:
+			faction_label.add_theme_color_override("font_color", Color(1, 0.85, 0.4))  ## 金黄色
+		faction_label.custom_minimum_size = Vector2(0, 30)  ## 最小高度
+		faction_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER  ## 垂直居中
+		container.add_child(faction_label)  ## 添加到列表
+		## 添加该阵营下的兵种按钮
+		for res in grouped[prefix]:  ## 遍历该阵营的兵种
+			var btn = Button.new()  ## 创建按钮
+			btn.custom_minimum_size = Vector2(0, 44)  ## 最小高度
+			btn.text = res.get_display_name()  ## 设置兵种名
+			btn.alignment = HORIZONTAL_ALIGNMENT_LEFT  ## 左对齐
+			btn.focus_mode = Control.FOCUS_NONE  ## 禁用焦点
+			UIButtonHelper.setup_button(btn)  ## 设置按钮样式
+			btn.set_meta("sel_kind", "unit")  ## 标记选中类型
+			btn.set_meta("sel_id", res.unit_id)  ## 标记选中 ID
+			btn.set_meta("unit_resource", res)  ## 存储兵种资源
+			btn.pressed.connect(_on_unit_button_pressed.bind(res))  ## 连接信号
+			container.add_child(btn)  ## 添加到列表
+			_unit_buttons.append(btn)  ## 添加到数组
+		## #14：构建时按解锁状态刷新按钮（锁定加 🔒 前缀并置灰，逻辑见 _update_unit_button_texts）
+	_update_unit_button_texts()
+func _build_artifact_buttons(container: VBoxContainer) -> void:  ## 构建artifact列表
+	_artifact_buttons.clear()  ## 清空按钮数组
+	if ItemDatabase.artifact_list.is_empty():  ## 无artifact数据
+		return  ## 仅留空位
+	for x in ItemDatabase.artifact_list:  ## 遍历artifact
+		var btn := _make_item_button(art.display_name, art.get_rarity_color())  ## 创建按钮
+		btn.set_meta("sel_kind", "artifact")  ## 标记选中类型
+		btn.set_meta("sel_id", art.artifact_id)  ## 标记选中 ID
+		btn.pressed.connect(_on_artifact_button_pressed.bind(x))  ## 连接信号
+		container.add_child(btn)  ## 添加
+		_artifact_buttons.append(btn)  ## 记录
+func _build_order_buttons(container: VBoxContainer) -> void:  ## 构建order列表
+	_order_buttons.clear()  ## 清空按钮数组
+	if ItemDatabase.order_list.is_empty():  ## 无order数据
+		return  ## 仅留空位
+	for x in ItemDatabase.order_list:  ## 遍历order
+		var btn := _make_item_button(od.display_name, od.get_rarity_color())  ## 创建按钮
+		btn.set_meta("sel_kind", "order")  ## 标记选中类型
+		btn.set_meta("sel_id", od.order_id)  ## 标记选中 ID
+		btn.pressed.connect(_on_order_button_pressed.bind(x))  ## 连接信号
+		container.add_child(btn)  ## 添加
+		_order_buttons.append(btn)  ## 记录
+func _build_event_buttons(container: VBoxContainer) -> void:  ## 构建event列表
+	_event_buttons.clear()  ## 清空按钮数组
+	if ItemDatabase.chest_event_list.is_empty():  ## 无event数据
+		return  ## 仅留空位
+	for x in ItemDatabase.chest_event_list:  ## 遍历event
+		var btn := _make_item_button(ev.title, Color(0.9, 0.8, 0.5, 1.0))  ## 创建按钮
+		btn.set_meta("sel_kind", "event")  ## 标记选中类型
+		btn.set_meta("sel_id", ev.event_id)  ## 标记选中 ID
+		btn.pressed.connect(_on_event_button_pressed.bind(x))  ## 连接信号
+		container.add_child(btn)  ## 添加
+		_event_buttons.append(btn)  ## 记录
+func _make_item_button(text: String, color: Color) -> Button:  ## 道具按钮
+	var btn := Button.new()  ## 创建按钮
+	btn.custom_minimum_size = Vector2(0, 40)  ## 朢�小高�?
+	btn.text = text  ## 设置文本
+	btn.alignment = HORIZONTAL_ALIGNMENT_LEFT  ## 左�?�?
+	btn.focus_mode = Control.FOCUS_NONE  ## 禁用焦点
+	UIButtonHelper.setup_button(btn)  ## 设置基�?样式
+	btn.add_theme_color_override("font_color", color)  ## 按稀有度睢��?
+	return btn  ## 返回按钮
+
+func _update_unit_button_texts() -> void:  ## 更新按钮文本
+	for btn in _unit_buttons:  ## 遍历所有按钮
+		var res: UnitResource = btn.get_meta("unit_resource")  ## 获取兵种资源
+		## #14：锁定兵种锁定显示 🔒 前缀 + 暗灰文字；已解锁正常显示
+		## #5：锁定兵种点击不再显示详情（右侧占位），图鉴只读展示已解锁兵种
+		var unlocked: bool = CampaignProgress.is_unit_unlocked(res.unit_id)
+		btn.text = res.get_display_name() if unlocked else "🔒 " + res.get_display_name()
+		btn.add_theme_color_override("font_color", Color(0.88, 0.88, 0.88, 1.0) if unlocked else Color(0.45, 0.45, 0.5, 1.0))
+func _on_unit_button_pressed(res: UnitResource) -> void:  ## 兵�?按钮按下回调
+	## #5�?026-08-11）：�?��锁兵种不�?��看�?细信�?����右侧锁定为占位提示
+	if not CampaignProgress.is_unit_unlocked(res.unit_id):
+		_show_locked_unit_placeholder(res)
+		return
+	_select_unit(res)  ## 选中该兵�?
+## #5�?026-08-11）：锁定兵�?的右侧占位�����?用��用占位布局后�?盖提示文�?
+func _show_locked_unit_placeholder(res: UnitResource) -> void:
+	_update_detail_placeholder()
+	name_label.text = tr("CODEX_LOCKED_UNIT") % res.get_display_name()  ## #Bug1��2026-08-12��������������ʾ�߱��ػ�
+
+func _on_artifact_button_pressed(art: ArtifactData) -> void:  ## 文物按钮按下回调
+	_select_artifact(art)  ## 选中该文�?
+func _on_order_button_pressed(od: MilitaryOrderData) -> void:  ## 军令按钮按下回调
+	_select_order(od)  ## 选中该军�?
+func _on_event_button_pressed(ev: ChestEventData) -> void:  ## 事件按钮按下回调
+	_select_event(ev)  ## 选中该事�?
+func _on_idle_btn_pressed() -> void:  ## 待机按钮按下回调
+	_current_anim_mode = "idle"  ## 切换到待机模式
+	_play_preview_anim()  ## 播放预览动画
+	## #15：G1 待机按钮连按 7 次秘技（从爱弥斯 abay 迁移）：仅在 G1 详情页生效
+	## 3 秒未继续点击则重置计数，防止跨操作误触发
+	if _selected_kind == "unit" and _selected_unit != null and _selected_unit.unit_id == "G1":
+		var now: int = Time.get_ticks_msec()
+		if now - _g1_idle_last_tap_msec > G1_TAP_RESET_MSEC:
+			_g1_idle_taps = 0
+		_g1_idle_last_tap_msec = now
+		_g1_idle_taps += 1
+		if _g1_idle_taps >= G1_SECRET_TAPS:
+			_g1_idle_taps = 0
+			_on_secret_entered()
+func _on_walk_btn_pressed() -> void:  ## 行走按钮按下回调
+	_current_anim_mode = "walk"  ## 切换到�?走模�?
+	_play_preview_anim()  ## �?��预�?动画
+
+func _on_run_btn_pressed() -> void:  ## 奔跑按钮按下回调
+	_current_anim_mode = "move"  ## 切换到�?跑模�?
+	_play_preview_anim()  ## �?��预�?动画
+
+func _on_attack_btn_pressed() -> void:  ## 攻击按钮按下回调
+	_current_anim_mode = "attack"  ## 切换到攻击模�?
+	_play_preview_anim()  ## �?��预�?动画
+
+## 选中指定兵�?，更新右侧�?情区
+func _select_unit(res: UnitResource) -> void:  ## 选中兵�?
+	_selected_kind = "unit"  ## 记录选中类型
+	_selected_id = res.unit_id  ## 记录选中 ID
+	_selected_unit = res  ## 保存选中资源
+	_set_detail_mode(DetailType.UNIT)  ## 切换到兵种�?情布屢�
+	name_label.text = res.get_display_name()  ## 更新名称（位于顶�?��
+	desc_label.text = ItemDatabase.get_unit_description(res)  ## 介绍（支持开发���?盖文�?��
+	var tips_key = "UNIT_%s_TIPS" % res.unit_id  ## 构��Tips翻译�?
+	var tips_text = tr(tips_key)  ## 查�?翻译
+	if tips_text == tips_key:  ## 如果翻译缺失
+		tips_text = ""  ## 使用空文�?
+	tips_label.text = tips_text  ## 设置Tips文本
+	price_label.text = "%s: $%d" % [tr("CODEX_PRICE"), res.cost]  ## 显示价格
+	_build_attributes_table(res)  ## 构建属��表�?
+	_load_unit_animations(res)  ## 加载动画�?
+	_play_preview_anim()  ## �?��预�?
+	_highlight_active_list()  ## 高亮选中按钮
+	_refresh_dev_edit()  ## 刷新弢�发��编辑区
+
+## 选中指定文物，更新右侧�?情区
+func _select_artifact(art: ArtifactData) -> void:  ## 选中文物
+	_selected_kind = "artifact"  ## 记录选中类型
+	_selected_id = art.artifact_id  ## 记录选中 ID
+	_selected_artifact = art  ## 保存选中资源
+	_set_detail_mode(DetailType.ARTIFACT)  ## 切换到文物�?情布屢�
+	name_label.text = art.display_name  ## 名称
+	rarity_label.text = "稀有度：" + art.get_rarity_name()  ## 稢�有度
+	rarity_label.modulate = art.get_rarity_color()  ## 稢�有度配色
+	price_label.text = "�?���?%d" % art.cost  ## �?��
+	appearance_label.text = art.appearance  ## 外�?描述
+	desc_label.text = art.description  ## 效果说明
+	tips_label.text = art.flavor  ## 风味文本
+	effect_label.text = _format_effect(art.effect_type, art.effect_value)  ## 效果
+	_highlight_active_list()  ## 高亮选中按钮
+	_refresh_dev_edit()  ## 刷新弢�发��编辑区
+
+## 选中指定军令，更新右侧�?情区
+func _select_order(od: MilitaryOrderData) -> void:  ## 选中军令
+	_selected_kind = "order"  ## 记录选中类型
+	_selected_id = od.order_id  ## 记录选中 ID
+	_selected_order = od  ## 保存选中资源
+	_set_detail_mode(DetailType.ORDER)  ## 切换到军令�?情布屢�
+	name_label.text = od.display_name  ## 名称
+	rarity_label.text = "稀有度：" + od.get_rarity_name()  ## 稢�有度
+	rarity_label.modulate = od.get_rarity_color()  ## 稢�有度配色
+	price_label.text = "�?���?%d" % od.cost  ## �?��
+	appearance_label.text = od.appearance  ## 外�?描述
+	desc_label.text = od.description  ## 效果说明
+	tips_label.text = od.flavor  ## 风味文本
+	effect_label.text = _format_effect(od.effect_type, od.effect_value, od.get_duration_text())  ## 效果（含持续�?
+	_highlight_active_list()  ## 高亮选中按钮
+	_refresh_dev_edit()  ## 刷新弢�发��编辑区
+
+## 选中指定宝�?事件，更新右侧�?情区
+func _select_event(ev: ChestEventData) -> void:  ## 选中事件
+	_selected_kind = "event"  ## 记录选中类型
+	_selected_id = ev.event_id  ## 记录选中 ID
+	_selected_event = ev  ## 保存选中资源
+	_set_detail_mode(DetailType.EVENT)  ## 切换到道具�?情布屢�（�?用文�?���?
+	name_label.text = ev.title  ## 事件标�?
+	rarity_label.text = "宝�?事件"  ## 类型标识
+	rarity_label.modulate = Color(0.9, 0.8, 0.5, 1.0)  ## 暖金�?
+	price_label.text = ""  ## 无价�?
+	appearance_label.text = ev.description  ## 场景描述
+	desc_label.text = _format_event_options(ev)  ## 三个选项
+	tips_label.text = "进入宝箱时随机触发的奇遇，三选一抉择。"  ## 说明
+	effect_label.text = ""  ## 无数值效�?
+	_highlight_active_list()  ## 高亮选中按钮
+	_refresh_dev_edit()  ## 刷新弢�发��编辑区
+
+## 将事件��项格式化为多�?文本（①②③ + 对应结果�?
+func _format_event_options(ev: ChestEventData) -> String:  ## 格式化选项
+	var lines: Array[String] = []  ## 行数组
+	var marks: Array[String] = ["①", "②", "③", "④"]  ## 序号标记
+	for i in range(ev.options.size()):  ## 遍历选项
+		var opt: Dictionary = ev.options[i]  ## 当前选项
+		var label: String = String(opt.get("label", ""))  ## 选项文本
+		var result: String = String(opt.get("result", ""))  ## 选项结果
+		var mark: String = marks[i] if i < marks.size() else "·"  ## 序号
+		var line: String = "%s %s" % [mark, label]  ## 基础行
+		if not result.is_empty():  ## 有结果时
+			line += "\n结果：%s" % result  ## 追加结果
+		lines.append(line)  ## 加入行数组
+	return "\n\n".join(lines)  ## 合并为多行文本
+func _set_detail_mode(mode: DetailType) -> void:  ## 切换详情布局
+	var is_unit: bool = mode == DetailType.UNIT  ## �?��为兵�?
+	preview_panel.visible = is_unit  ## 动画预�?仅兵种显�?
+	anim_buttons_container.visible = is_unit  ## 动画按钮仅兵种显�?
+	rarity_label.visible = not is_unit  ## 稢�有度仅道具显�?
+	appearance_header.visible = not is_unit  ## 外�?区块仅道具显�?
+	appearance_label.visible = not is_unit
+	effect_header.visible = not is_unit  ## 效果区块仅道具显�?
+	effect_label.visible = not is_unit
+	attributes_grid.visible = is_unit  ## 属��表仅兵种显�?
+	if is_unit:  ## 兵�?标�?文�?
+		intro_header.text = tr("UNIT_INTRO")  ## 介绍
+		stats_header.text = tr("CODEX_ROLE_STATS")  ## 角色数��?
+		tips_header.text = tr("CODEX_AUTHOR_TIPS")  ## 作��Tips
+	else:  ## 道具标�?文�?
+		intro_header.text = "效果说明"  ## 介绍
+		stats_header.text = "价格"  ## 价格
+		tips_header.text = "风味描述"  ## 风味
+
+## 将效果类型与数��格式化为可读中文（占位机制，待战斗层精细化�?
+func _format_effect(effect_type: String, effect_value: float, duration_text: String = "") -> String:  ## 格式化效果
+	var label: String = EFFECT_LABELS.get(effect_type, effect_type)  ## 查不到则用原始 key
+	var result := "%s：%s" % [label, _format_effect_value(effect_value)]  ## 拼接
+	if not duration_text.is_empty():  ## 军令带持续时间
+		result += "（%s）" % duration_text  ## 追加持续
+	return result  ## 返回
+func _format_effect_value(value: float) -> String:  ## 格式化数�?
+	if value == 0.0:  ## 零��?
+		return "0"  ## 直接显示
+	if absf(value) < 1.0:  ## 小数按百分比处理
+		return "%+d%%" % roundi(value * 100.0)  ## �?0.10 -> +10%
+	return "%+g" % value  ## 整数类直接带符号显示
+
+## 构建属��表格（使用 GridContainer 实现两列表格�?## �?��列为属��名标�?，�?二列为属性��标�?## res: 兵�?资源对象
+func _build_attributes_table(res: UnitResource) -> void:  ## 构建属性表格
+	## 清空旧表格内容
+	for child in attributes_grid.get_children():  ## 遍历表格子节点
+		child.queue_free()  ## 释放子节点
+	## 定义属性数据：[翻译键, 显示值]
+	var rows: Array = []
+	rows.append([tr("TIER_LABEL"), "%d" % res.tier])  ## 阶层
+	rows.append([tr("HP_LABEL"), "%d" % res.max_hp])  ## 生命值
+	rows.append([tr("ARMOR_LABEL"), "%d" % res.armor_value])  ## 护甲
+	rows.append([tr("DAMAGE_LABEL"), "%d" % res.damage])  ## 攻击力
+	rows.append([tr("ATTACK_SPEED_LABEL"), "%.2f" % res.attack_speed])  ## 攻击速度
+	rows.append([tr("ATTACK_RANGE_LABEL"), "%.1f" % res.attack_range])  ## 攻击距离
+	rows.append([tr("MOVE_SPEED_LABEL"), "%.2f" % res.move_speed])  ## 移动速度
+	rows.append([tr("SUPPLY_LABEL"), "%d" % res.supply_cost])  ## 人口
+	## 逐行创建标签并添加到表格
+	for row in rows:  ## 遍历属性行
+		var name_lbl = Label.new()  ## 属性名标签
+		name_lbl.text = row[0]  ## 设置属性名
+		name_lbl.add_theme_font_size_override("font_size", 14)  ## 字体大小
+		name_lbl.add_theme_color_override("font_color", Color(0.75, 0.75, 0.8))  ## 浅灰色
+		name_lbl.custom_minimum_size = Vector2(120, 28)  ## 最小尺寸
+		name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER  ## 水平居中
+		name_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER  ## 垂直居中
+		attributes_grid.add_child(name_lbl)  ## 添加到表格
+		var value_lbl = Label.new()  ## 属性值标签
+		value_lbl.text = row[1]  ## 设置属性值
+		value_lbl.add_theme_font_size_override("font_size", 14)  ## 字体大小
+		value_lbl.add_theme_color_override("font_color", Color(1, 0.95, 0.7))  ## 暖白色
+		value_lbl.custom_minimum_size = Vector2(100, 28)  ## 最小尺寸
+		value_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER  ## 水平居中
+		value_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER  ## 垂直居中
+		attributes_grid.add_child(value_lbl)  ## 添加到表格
+func _load_unit_animations(res: UnitResource) -> void:  ## 加载动画资源
+	_anim_idle_frames = null  ## 清空待机动画
+	_anim_walk_frames = null  ## 清空行走动画
+	_anim_move_frames = null  ## 清空移动动画
+	_anim_attack_frames = null  ## 清空攻击动画
+
+var base_path := "%s/%s" % [ANIM_ROOT_DIR, res.unit_id]  ## 拼接�?��
+
+var idle_path := base_path + "/" + ANIM_IDLE_FILE  ## 待机动画�?��
+
+var walk_path := base_path + "/" + ANIM_WALK_FILE  ## 行走动画�?��
+
+var move_path := base_path + "/" + ANIM_MOVE_FILE  ## 移动动画�?��
+
+var attack_path := base_path + "/" + ANIM_ATTACK_FILE  ## 攻击动画�?��
+	if ResourceLoader.exists(idle_path):  ## 如果待机动画存在
+		_anim_idle_frames = _load_loop_frames(idle_path, "idle")  ## 加载并�?�?���?
+	if ResourceLoader.exists(walk_path):  ## 如果行走动画存在
+		_anim_walk_frames = _load_loop_frames(walk_path, "walk")  ## 加载并�?�?���?
+	if ResourceLoader.exists(move_path):  ## 如果移动动画存在
+		_anim_move_frames = _load_loop_frames(move_path, "move")  ## 加载并�?�?���?
+	if ResourceLoader.exists(attack_path):  ## 如果攻击动画存在
+		_anim_attack_frames = _load_loop_frames(attack_path, "attack")  ## 加载并�?�?���?	## 如果当前动画模式不可�?��回���到可用的模式（优先级：当前→move→walk→attack→idle�?
+	if _current_anim_mode == "idle" and _anim_idle_frames == null:  ## 待机不可�?
+		_current_anim_mode = _pick_fallback_mode()  ## 选择回���模式
+	elif _current_anim_mode == "walk" and _anim_walk_frames == null:  ## 行走不可�?
+		_current_anim_mode = _pick_fallback_mode()  ## 选择回���模式
+	elif _current_anim_mode == "move" and _anim_move_frames == null:  ## 奔跑不可�?
+		_current_anim_mode = _pick_fallback_mode()  ## 选择回���模式
+	elif _current_anim_mode == "attack" and _anim_attack_frames == null:  ## 攻击不可�?
+		_current_anim_mode = _pick_fallback_mode()  ## 选择回���模式
+	## 加载音效资源
+	_load_unit_audio(res)  ## 加载音效
+
+## 加载 SpriteFrames 资源并�?制后设置�?���?��（避免修改原始资源影响游戏）
+func _load_loop_frames(path: String, anim_name: String) -> SpriteFrames:  ## 加载�?���?
+var frames := load(path) as SpriteFrames  ## 加载资源
+	if frames == null:  ## 加载失败
+		return null  ## 返回�?
+		var dup := frames.duplicate()  ## 复制资源避免影响游戏
+	dup.set_animation_loop(anim_name, true)  ## 设置�?���?��
+	return dup  ## 返回处理后的帧资�?
+## 选择�?��的回逢�动画模式（优先级：move �?walk �?attack �?idle�?
+func _pick_fallback_mode() -> String:  ## 选择回���模式
+	if _anim_move_frames != null:  ## 优先奔跑
+		return "move"  ## 返回奔跑模式
+	if _anim_walk_frames != null:  ## 其�?行走
+		return "walk"  ## 返回行走模式
+	if _anim_attack_frames != null:  ## 其�?攻击
+		return "attack"  ## 返回攻击模式
+	if _anim_idle_frames != null:  ## 朢�后待�?
+		return "idle"  ## 返回待机模式
+	return "move"  ## 默�?值（无动画时会显示提示）
+
+## 加载兵�?的音效资源（待机/行走/奔跑/攻击�?## 音效文件位于 assets/audio/units/<unit_id>/ 下，命名�?idle.mp3/walk.mp3/move.mp3/attack.mp3
+func _load_unit_audio(res: UnitResource) -> void:  ## 加载音效资源
+	_audio_idle = null  ## 清空待机音效
+	_audio_walk = null  ## 清空行走音效
+	_audio_move = null  ## 清空奔跑音效
+	_audio_attack = null  ## 清空攻击音效
+
+var base_path := "%s/%s" % [AUDIO_ROOT_DIR, res.unit_id]  ## 拼接音效�?��
+
+var idle_path := base_path + "/idle.mp3"  ## 待机音效�?��
+
+var walk_path := base_path + "/walk.mp3"  ## 行走音效�?��
+
+var move_path := base_path + "/move.mp3"  ## 奔跑音效�?��
+
+var attack_path := base_path + "/attack.mp3"  ## 攻击音效�?��
+	if ResourceLoader.exists(idle_path):  ## 如果待机音效存在
+		_audio_idle = load(idle_path)  ## 加载
+	if ResourceLoader.exists(walk_path):  ## 如果行走音效存在
+		_audio_walk = load(walk_path)  ## 加载
+	if ResourceLoader.exists(move_path):  ## 如果奔跑音效存在
+		_audio_move = load(move_path)  ## 加载
+	if ResourceLoader.exists(attack_path):  ## 如果攻击音效存在
+		_audio_attack = load(attack_path)  ## 加载
+
+## �?��预�?动画
+func _play_preview_anim() -> void:  ## �?��预�?动画
+	var has_anim: bool = false  ## �?��有可�?��的动�?
+	if _current_anim_mode == "idle" and _anim_idle_frames != null:  ## 待机模式且有待机动画
+		preview_sprite.sprite_frames = _anim_idle_frames  ## 设置�?
+		preview_sprite.play("idle")  ## �?��
+		_apply_preview_scale(_anim_idle_frames, "idle")  ## 应用缩放
+		has_anim = true  ## 标�?有动�?
+	elif _current_anim_mode == "walk" and _anim_walk_frames != null:  ## 行走模式且有行走动画
+		preview_sprite.sprite_frames = _anim_walk_frames  ## 设置�?
+		preview_sprite.play("walk")  ## �?��
+		_apply_preview_scale(_anim_walk_frames, "walk")  ## 应用缩放
+		has_anim = true  ## 标�?有动�?
+	elif _current_anim_mode == "move" and _anim_move_frames != null:  ## 奔跑模式且有奔跑动画
+		preview_sprite.sprite_frames = _anim_move_frames  ## 设置�?
+		preview_sprite.play("move")  ## �?��
+		_apply_preview_scale(_anim_move_frames, "move")  ## 应用缩放
+		has_anim = true  ## 标�?有动�?
+	elif _current_anim_mode == "attack" and _anim_attack_frames != null:  ## 攻击模式且有攻击动画
+		preview_sprite.sprite_frames = _anim_attack_frames  ## 设置�?
+		preview_sprite.play("attack")  ## �?��
+		_apply_preview_scale(_anim_attack_frames, "attack")  ## 应用缩放
+		has_anim = true  ## 标�?有动�?
+	else:  ## 当前模式无动画，尝试回���到任意可用动�?
+		if _anim_idle_frames != null:  ## 优先回���待机
+			_current_anim_mode = "idle"  ## 切换到待机模�?
+			preview_sprite.sprite_frames = _anim_idle_frames  ## 设置待机�?
+			preview_sprite.play("idle")  ## �?��待机动画
+			_apply_preview_scale(_anim_idle_frames, "idle")  ## 应用缩放
+			has_anim = true  ## 标�?有动�?
+		elif _anim_move_frames != null:  ## 其�?回���奔跑
+			_current_anim_mode = "move"  ## 切换到�?跑模�?
+			preview_sprite.sprite_frames = _anim_move_frames  ## 设置奔跑�?
+			preview_sprite.play("move")  ## �?��奔跑动画
+			_apply_preview_scale(_anim_move_frames, "move")  ## 应用缩放
+			has_anim = true  ## 标�?有动�?
+		elif _anim_walk_frames != null:  ## 其�?回���行走
+			_current_anim_mode = "walk"  ## 切换到�?走模�?
+			preview_sprite.sprite_frames = _anim_walk_frames  ## 设置行走�?
+			preview_sprite.play("walk")  ## �?��行走动画
+			_apply_preview_scale(_anim_walk_frames, "walk")  ## 应用缩放
+			has_anim = true  ## 标�?有动�?
+		elif _anim_attack_frames != null:  ## 朢�后回逢�攻击
+			_current_anim_mode = "attack"  ## 切换到攻击模�?
+			preview_sprite.sprite_frames = _anim_attack_frames  ## 设置攻击�?
+			preview_sprite.play("attack")  ## �?��攻击动画
+			_apply_preview_scale(_anim_attack_frames, "attack")  ## 应用缩放
+			has_anim = true  ## 标�?有动�?	## 更新按钮�?��状��（无资源的按钮不�?�?��保留�?��击以便提示，但加红色边�?�?
+	idle_btn.disabled = _anim_idle_frames == null  ## 无待机动画时禁用
+	walk_btn.disabled = _anim_walk_frames == null  ## 无�?走动画时禁用
+	run_btn.disabled = _anim_move_frames == null  ## 无�?跑动画时禁用
+	attack_btn.disabled = _anim_attack_frames == null  ## 无攻击动画时禁用
+	## 更新按钮红�?提示（缺资源的按�?��红色边�?�?
+	_update_anim_button_styles()
+	## 切换显示
+	preview_sprite.visible = has_anim  ## 设置精灵�??�?
+	no_anim_label.visible = not has_anim  ## 设置提示�??�?	## 将精灵定位到预�?面板�?��
+	_center_preview_sprite()
+	## �?��对应动画音效（有动画时才�?���?
+	if has_anim:  ## 如果有动�?
+		_play_anim_audio(_current_anim_mode)
+
+## 更新动画按钮样式：缺资源的按�?��红色边�?，有资源的恢复�?常，当前选中按钮加金色边�?
+func _update_anim_button_styles() -> void:  ## 更新动画按钮样式
+	_apply_anim_button_style(idle_btn, _anim_idle_frames != null, _current_anim_mode == "idle")  ## 待机按钮
+	_apply_anim_button_style(walk_btn, _anim_walk_frames != null, _current_anim_mode == "walk")  ## 行走按钮
+	_apply_anim_button_style(run_btn, _anim_move_frames != null, _current_anim_mode == "move")  ## 奔跑按钮
+	_apply_anim_button_style(attack_btn, _anim_attack_frames != null, _current_anim_mode == "attack")  ## 攻击按钮
+
+## 为单�?��画按�?��用样�?## has_resource: �?��有�?应动画资源；is_current: �?��为当前��中模式
+func _apply_anim_button_style(btn: Button, has_resource: bool, is_current: bool) -> void:  ## 应用按钮样式
+	var style = StyleBoxFlat.new()  ## 创建样式
+	style.set_corner_radius_all(4)  ## 圆�?
+	style.set_content_margin_all(8)  ## 内边�?
+	if not has_resource:  ## 无资源：红色边�?提示
+		style.bg_color = Color(0.16, 0.08, 0.08, 0.95)  ## 暗红�?
+		style.border_color = Color(1.0, 0.25, 0.25, 1.0)  ## 红色边�?
+		style.set_border_width_all(2)  ## 边�?宽度
+	elif is_current:  ## 当前选中：金色边�?
+		style.bg_color = Color(0.25, 0.25, 0.3, 0.95)  ## 选中�?
+		style.border_color = Color(1.0, 0.85, 0.4, 1.0)  ## 金色边�?
+		style.set_border_width_all(2)  ## 边�?宽度
+	else:  ## 有资源且非��中：默认样�?
+		style.bg_color = Color(0.16, 0.16, 0.18, 0.95)  ## 默�?�?
+		style.border_color = Color(0.3, 0.3, 0.3, 0.5)  ## 默�?边�?
+		style.set_border_width_all(1)  ## 边�?宽度
+	btn.add_theme_stylebox_override("normal", style)  ## 应用�?��状�?
+	btn.add_theme_stylebox_override("hover", style)  ## 应用�?��状��?
+	btn.add_theme_stylebox_override("pressed", style)  ## 应用按下状��?
+	btn.add_theme_stylebox_override("disabled", style)  ## 应用禁用状��?
+## #霢��?4：创建兵种介绍右侧的「编辑��按�?��仅开发��模式显示，点击展开/收起编辑框）
+func _setup_desc_edit_btn() -> void:
+	_edit_desc_btn = Button.new()
+	_edit_desc_btn.name = "DescEditBtn"
+	_edit_desc_btn.text = "�?编辑"
+	_edit_desc_btn.custom_minimum_size = Vector2(64, 26)
+	_edit_desc_btn.add_theme_font_size_override("font_size", 12)
+	_edit_desc_btn.size_flags_horizontal = Control.SIZE_SHRINK_END  ## 靠右
+	_edit_desc_btn.visible = false  ## 默�?隐藏，仅弢�发��模式显�?
+	UIButtonHelper.setup_button(_edit_desc_btn)
+	_edit_desc_btn.pressed.connect(_on_desc_edit_pressed)
+	## 插入�?IntroHeader 之后（DescLabel 之前），视�?上与介绍标�?同�?
+
+var parent: Container = intro_header.get_parent()
+
+var idx: int = intro_header.get_index() + 1
+	parent.add_child(_edit_desc_btn)
+	parent.move_child(_edit_desc_btn, idx)
+
+## #霢��?4：点击��编辑��按�?��换兵种编辑�?展开/收起
+func _on_desc_edit_pressed() -> void:
+	if not DevMode.enabled:
+		return
+	_dev_edit_expanded = not _dev_edit_expanded
+	dev_edit_container.visible = _dev_edit_expanded
+	if _dev_edit_expanded:
+		## 展开时填充当前兵种描述，且仅显示描述编辑�?
+		desc_edit.text = ItemDatabase.get_unit_description(_selected_unit) if _selected_unit != null else ""
+		desc_edit_row.visible = true
+		appearance_edit_row.visible = false
+		flavor_edit_row.visible = false
+
+## 根据当前选中条目与开发��模式，�?�� / 显示或隐藏编辑区
+func _refresh_dev_edit() -> void:  ## 刷新弢�发��编辑区
+	var on: bool = DevMode.enabled  ## �?��弢�发��模�?	## #霢��?4：兵种编辑改为��编辑按�?+ 点击展开」����按�?��弢�发��模式显示；
+	## 文物/军令保持原有行为（开发��模式开�?��整体显示编辑框），互不影�?
+	_edit_desc_btn.visible = on and _selected_kind == "unit"
+	if not on or _selected_kind == "":  ## 非开发��模式或�?��中则收�?
+		dev_edit_container.visible = false
+		return
+	match _selected_kind:  ## 按类型填充可编辑字�?
+		"unit":
+			dev_edit_container.visible = _dev_edit_expanded  ## 由编辑按�?��制展弢�状��?
+			if _dev_edit_expanded:
+				desc_edit.text = ItemDatabase.get_unit_description(_selected_unit) if _selected_unit != null else ""
+				desc_edit_row.visible = true  ## 兵�?仅可改描�?
+				appearance_edit_row.visible = false
+				flavor_edit_row.visible = false
+		"artifact":
+			dev_edit_container.visible = true
+			if _selected_artifact != null:
+				desc_edit.text = _selected_artifact.description
+				appearance_edit.text = _selected_artifact.appearance
+				flavor_edit.text = _selected_artifact.flavor
+			desc_edit_row.visible = true  ## 文物三类皆可�?
+			appearance_edit_row.visible = true
+			flavor_edit_row.visible = true
+		"order":
+			dev_edit_container.visible = true
+			if _selected_order != null:
+				desc_edit.text = _selected_order.description
+				appearance_edit.text = _selected_order.appearance
+				flavor_edit.text = _selected_order.flavor
+			desc_edit_row.visible = true  ## 军令三类皆可�?
+			appearance_edit_row.visible = true
+			flavor_edit_row.visible = true
+		"event":
+			dev_edit_container.visible = false  ## 宝�?事件为纯展示，不�?���?
+## 弢�发��模式开关变化时的回调：重新�?��当前条目
+func _on_dev_mode_toggled(on: bool) -> void:  ## 弢�发��模式切�?
+	## #新需求：文物/军令/事件图鉴仅开发��可见����切换时同�? Tab 显隐
+	_apply_dev_tab_visibility()
+	## #14：DevMode 会影响解锁判定（全战/双人全解锁），切换时刷新兵�?锁定显示
+	_update_unit_button_texts()
+	## #新需求：关闭弢�发��模式时若停留在文物/军令/事件分类，自动跳回兵种图�?
+	if not on and _current_tab != "unit":
+		_switch_tab("unit")
+	match _selected_kind:  ## 刷新当前选中条目的编辑区
+		"unit":
+			_select_unit(_selected_unit)
+		"artifact":
+			_select_artifact(_selected_artifact)
+		"order":
+			_select_order(_selected_order)
+		_:
+			dev_edit_container.visible = false
+
+## 保存按钮：把编辑区文�?���?ItemDatabase 的文�??�?
+func _on_save_edit_pressed() -> void:  ## 保存弢�发��编�?
+	if _selected_kind == "" or _selected_id == "":  ## 无��中则忽�?
+		return
+	if _selected_kind == "event":  ## 宝�?事件�??，不�?��编辑
+		return
+	match _selected_kind:  ## 按类型回写可见字�?
+		"unit":
+			ItemDatabase.set_text_override("unit", _selected_id, "description", desc_edit.text)
+		"artifact":
+			ItemDatabase.set_text_override("artifact", _selected_id, "description", desc_edit.text)
+			ItemDatabase.set_text_override("artifact", _selected_id, "appearance", appearance_edit.text)
+			ItemDatabase.set_text_override("artifact", _selected_id, "flavor", flavor_edit.text)
+		"order":
+			ItemDatabase.set_text_override("order", _selected_id, "description", desc_edit.text)
+			ItemDatabase.set_text_override("order", _selected_id, "appearance", appearance_edit.text)
+			ItemDatabase.set_text_override("order", _selected_id, "flavor", flavor_edit.text)
+	match _selected_kind:  ## 重新选中以刷新标签与编辑�?
+		"unit":
+			_select_unit(_selected_unit)
+		"artifact":
+			_select_artifact(_selected_artifact)
+		"order":
+			_select_order(_selected_order)
+
+## �?��指定模式对应的音�?## mode: 动画模式（idle/walk/move/attack�?
+func _play_anim_audio(mode: String) -> void:  ## �?��动画音效
+	var stream: AudioStream = null  ## 待播放的音效
+	match mode:  ## 根据模式选择音效
+		"idle":  ## 待机模式
+			stream = _audio_idle  ## 使用待机音效
+		"walk":  ## 行走模式
+			stream = _audio_walk  ## 使用行走音效
+		"move":  ## 奔跑模式
+			stream = _audio_move  ## 使用奔跑音效
+		"attack":  ## 攻击模式
+			stream = _audio_attack  ## 使用攻击音效
+	if stream != null:  ## 如果有�?应音�?
+		anim_audio_player.stream = stream  ## 设置音效�?
+		anim_audio_player.play()  ## �?��音效
+	else:  ## 无�?应音�?
+		anim_audio_player.stop()  ## 停�?当前�?��
+
+## 应用预�?缩放，使动画按统丢�高度显示
+## 同�?控制台中�?���?display_width/display_height（动画独立��优先于通用值）�?## 按其与默认尺寸（40）的比��缩放，保证图鉴预�?与游戏内大小关系丢��?
+func _apply_preview_scale(frames: SpriteFrames, anim_name: String) -> void:  ## 应用缩放
+	if frames == null or preview_sprite == null:  ## 缺少资源则返�?
+		return
+	if frames.get_frame_count(anim_name) <= 0:  ## 无帧则返�?
+		preview_sprite.scale = Vector2.ONE  ## 重置缩放
+		return
+
+var frame_tex = frames.get_frame_texture(anim_name, 0)  ## 获取�?���?
+	if frame_tex == null:  ## 纹理为空
+		preview_sprite.scale = Vector2.ONE  ## 重置缩放
+		return
+	var frame_width: int = frame_tex.get_width()  ## 获取帧�?�?
+	var frame_height: int = frame_tex.get_height()  ## 获取帧高�?
+	if frame_height <= 0 or frame_width <= 0:  ## 尺�?无效
+		preview_sprite.scale = Vector2.ONE  ## 重置缩放
+		return
+	## 基�?缩放：按统一高度计算
+
+var scale_factor: float = PREVIEW_DISPLAY_HEIGHT / float(frame_height)
+	## 若有兵�?资源，按控制台配�?�� display_width/display_height 调整相�?大小
+	## 动画�?��值优先于通用值，0 表示回���到��用值，再回逢�到默�?40
+	if _selected_unit != null:
+	
+	var target_w: float = 40.0  ## 默�?宽度
+	
+	var target_h: float = 40.0  ## 默�?高度
+		## 先取通用�?
+		if _selected_unit.display_width > 0.0:
+			target_w = _selected_unit.display_width
+		if _selected_unit.display_height > 0.0:
+			target_h = _selected_unit.display_height
+		## 再按动画名取�?��值�?�?
+		match anim_name:
+			"idle":
+				if _selected_unit.idle_display_width > 0.0:
+					target_w = _selected_unit.idle_display_width
+				if _selected_unit.idle_display_height > 0.0:
+					target_h = _selected_unit.idle_display_height
+			"walk":
+				if _selected_unit.walk_display_width > 0.0:
+					target_w = _selected_unit.walk_display_width
+				if _selected_unit.walk_display_height > 0.0:
+					target_h = _selected_unit.walk_display_height
+			"move":
+				if _selected_unit.move_display_width > 0.0:
+					target_w = _selected_unit.move_display_width
+				if _selected_unit.move_display_height > 0.0:
+					target_h = _selected_unit.move_display_height
+			"attack":
+				if _selected_unit.attack_display_width > 0.0:
+					target_w = _selected_unit.attack_display_width
+				if _selected_unit.attack_display_height > 0.0:
+					target_h = _selected_unit.attack_display_height
+			"sprint":
+				if _selected_unit.sprint_display_width > 0.0:
+					target_w = _selected_unit.sprint_display_width
+				if _selected_unit.sprint_display_height > 0.0:
+					target_h = _selected_unit.sprint_display_height
+		## �?target_w/target_h 与默�?40 的比值调整缩�?		## 保证图鉴预�?的相对大小关系与游戏内一�?
+		var ratio_w: float = target_w / 40.0
+	
+	var ratio_h: float = target_h / 40.0
+		scale_factor *= min(ratio_w, ratio_h)
+	preview_sprite.scale = Vector2(scale_factor, scale_factor)  ## 设置缩放
+	## 使用 centered=true �?��居中，offset 设为零避免双重偏移�?致闪�?
+	preview_sprite.centered = true  ## �?���?��居中
+	preview_sprite.offset = Vector2.ZERO  ## 清除偏移，防�?�� centered 冲突
+
+## 将�?览精灵定位到面板�?��，略向左上偏移以改善视�?效果
+func _center_preview_sprite() -> void:  ## 居中精灵（带偏移�?
+var panel_size: Vector2 = preview_panel.size  ## 获取面板尺�?
+	## 向左偏移20px，向上偏�?0px，使角色展示位置更靠�?��
+	preview_sprite.position = panel_size / 2.0 + Vector2(-20.0, -20.0)  ## 定位到中心偏左上
+
+func _process(_delta: float) -> void:  ## 每帧更新
+	## 仅在面板尺�?变化时重新定位精灵，避免每帧重�? position 导致视�?抖动
+	if preview_sprite.visible:  ## 如果精灵�??
+	
+	var panel_size: Vector2 = preview_panel.size  ## 获取当前面板尺�?
+		if panel_size != _last_panel_size:  ## 面板尺�?发生变化
+			_last_panel_size = panel_size  ## 更新记录
+			_center_preview_sprite()  ## 重新居中定位
+
+func _update_detail_placeholder() -> void:  ## 更新占位文本
+	_selected_kind = ""  ## 清除选中类型
+	_selected_id = ""  ## 清除选中 ID
+	_set_detail_mode(DetailType.UNIT)  ## 默�?按兵种布屢�（动画区占位�?
+	name_label.text = tr("SELECT_UNIT")  ## 提示选择条目
+	rarity_label.text = ""  ## 清空稢�有度
+	desc_label.text = ""  ## 清空介绍
+	appearance_label.text = ""  ## 清空外�?
+	tips_label.text = ""  ## 清空风味
+	price_label.text = ""  ## 清空价格
+	effect_label.text = ""  ## 清空效果
+	## 清空属��表�?
+	for child in attributes_grid.get_children():  ## 遍历表格子节�?
+		child.queue_free()  ## 释放子节�?
+	preview_sprite.visible = false  ## 隐藏精灵
+	no_anim_label.visible = true  ## 显示提示
+	anim_audio_player.stop()  ## 停�?音效�?��
+	_highlight_active_list()  ## 刷新按钮高亮（全部取消��中�?
+## 切换到指定分类��项卡：重建该分类列表并刷新高亮
+func _switch_tab(kind: String) -> void:  ## 切换选项�?
+	_current_tab = kind  ## 记录当前选项�?
+	_build_list_for(kind)  ## 重建列表
+	_highlight_tab_buttons()  ## 刷新选项卡高�?
+	if _selected_kind == kind:  ## 若当前��中项属于本分类
+		_highlight_active_list()  ## 仅刷新高�?��详情不变
+	else:  ## 否则�?��选中该分类�?丢��?
+		_select_first_of(kind)
+
+## �?��选中指定分类的�?丢��?���?��空分类显示占�?
+func _select_first_of(kind: String) -> void:  ## 选中首项
+	match kind:  ## 按分类��择
+		"unit":
+			## #5�?026-08-11）：�?��选中�?���?��已解锁」兵种；全部锁定则显示占�?
+			var first_unlocked: UnitResource = null
+			for u in UnitDatabase.unit_list:
+				if CampaignProgress.is_unit_unlocked(u.unit_id):
+					first_unlocked = u
+					break
+			if first_unlocked != null:
+				_select_unit(first_unlocked)
+			else:
+				_update_detail_placeholder()
+		"artifact":
+			if not ItemDatabase.artifact_list.is_empty():  ## 有文�?
+				_select_artifact(ItemDatabase.artifact_list[0])  ## 选中�?���?���?
+			else:  ## 无文�?
+				_update_detail_placeholder()  ## 占位
+		"order":
+			if not ItemDatabase.order_list.is_empty():  ## 有军�?
+				_select_order(ItemDatabase.order_list[0])  ## 选中�?���?���?
+			else:  ## 无军�?
+				_update_detail_placeholder()  ## 占位
+		"event":
+			if not ItemDatabase.chest_event_list.is_empty():  ## 有事�?
+				_select_event(ItemDatabase.chest_event_list[0])  ## 选中�?���?���?
+			else:  ## 无事�?
+				_update_detail_placeholder()  ## 占位
+
+## 高亮当前�??列表�?��选中按钮
+func _highlight_active_list() -> void:  ## 高亮当前列表
+	match _current_tab:  ## 按当前��项�?
+		"unit": _highlight_in_list(_unit_buttons, "unit")  ## 兵�?�?
+		"artifact": _highlight_in_list(_artifact_buttons, "artifact")  ## 文物�?
+		"order": _highlight_in_list(_order_buttons, "order")  ## 军令�?
+		"event": _highlight_in_list(_event_buttons, "event")  ## 事件�?
+## 刷新三个选项卡按�?��高亮状��?
+func _highlight_tab_buttons() -> void:  ## 高亮选项�?
+	_style_tab_button(tab_unit_btn, _current_tab == "unit")  ## 兵�?选项�?
+	_style_tab_button(tab_artifact_btn, _current_tab == "artifact")  ## 文物选项�?
+	_style_tab_button(tab_order_btn, _current_tab == "order")  ## 军令选项�?
+	_style_tab_button(tab_event_btn, _current_tab == "event")  ## 事件选项�?
+## 为单�?��项卡按�?��用样�?
+func _style_tab_button(btn: Button, active: bool) -> void:  ## 应用选项卡样�?
+	var style = StyleBoxFlat.new()  ## 创建样式
+	style.set_corner_radius_all(6)  ## 圆�?
+	style.set_border_width_all(2)  ## 边�?宽度
+	if active:  ## 选中�?
+		style.bg_color = Color(0.25, 0.25, 0.3, 1.0)  ## 选中�?
+		style.border_color = Color(1.0, 0.85, 0.4, 1.0)  ## 金色边�?
+	else:  ## �?����?
+		style.bg_color = Color(0.16, 0.16, 0.18, 0.95)  ## 默�?�?
+		style.border_color = Color(0.3, 0.3, 0.3, 0.5)  ## 默�?边�?
+	btn.add_theme_stylebox_override("normal", style)  ## 应用�?����?
+	btn.add_theme_stylebox_override("hover", style)  ## 应用�?���?
+	btn.add_theme_stylebox_override("pressed", style)  ## 应用按下�?
+func _on_tab_unit_pressed() -> void:  ## 兵�?选项卡按�?
+	_switch_tab("unit")  ## 切换到兵�?
+func _on_tab_artifact_pressed() -> void:  ## 文物选项卡按�?
+	_switch_tab("artifact")  ## 切换到文�?
+func _on_tab_order_pressed() -> void:  ## 军令选项卡按�?
+	_switch_tab("order")  ## 切换到军�?
+func _on_tab_event_pressed() -> void:  ## 事件选项卡按�?
+	_switch_tab("event")  ## 切换到事�?
+func _highlight_in_list(buttons: Array[Button], _kind: String) -> void:  ## 高亮指定列表
+	for btn in buttons:  ## 遍历按钮
+	
+	var style = StyleBoxFlat.new()  ## 创建样式
+		style.set_corner_radius_all(4)  ## 圆�?
+		style.set_border_width_all(1)  ## 边�?
+		if btn.get_meta("sel_kind", "") == _selected_kind and btn.get_meta("sel_id", "") == _selected_id:  ## 命中选中
+			style.bg_color = Color(0.25, 0.25, 0.3)  ## 选中背景
+			style.border_color = Color(1, 0.85, 0, 0.9)  ## 金色边�?
+		else:  ## �?��中
+			style.bg_color = Color(0.16, 0.16, 0.18)  ## 默�?背景
+			style.border_color = Color(0.3, 0.3, 0.3, 0.5)  ## 默�?边�?
+		btn.add_theme_stylebox_override("normal", style)  ## 应用样式
+		btn.add_theme_stylebox_override("hover", style)  ## 应用样式
+		btn.add_theme_stylebox_override("pressed", style)  ## 应用样式
+
+func _on_back_pressed() -> void:  ## 返回按钮回调
+	closed.emit()  ## 发出关闭信号
+	get_tree().change_scene_to_file("res://scenes/ui/main_menu.tscn")  ## 返回主菜�?

@@ -1,0 +1,51 @@
+[gd_resource type="Resource" script_class="UnitResource" format=3]
+
+[ext_resource type="Script" path="res://resources/units/unit_base_resource.gd" id="1_base"]
+[ext_resource type="Script" path="res://resources/affixes/affix_resource.gd" id="1_qrqm7"]
+[ext_resource type="Resource" path="res://resources/affixes/erosion.tres" id="2_n03xx"]
+
+[resource]
+script = ExtResource("1_base")
+unit_id = "Y1"
+display_name = "死亡使者"
+description = "异象阵营兵种，来自异次元的黑暗使者，近战镰刀收割+5秒冷却远程暗影弹幕。"
+tier = 5
+supply_cost = 4
+cost = 400
+max_hp = 600
+armor_value = 300
+damage = 40
+damage_type = 3
+damage_by_type = {
+0: 80,
+3: 100
+}
+attack_range = 2.0
+attack_range_h = 0.3
+attack_range_v = 0.6
+attack_speed = 2.0
+attack_hit_types = Array[int]([3])
+damage_by_hit = [{
+0: 150,
+3: 50
+}, {}]
+attack_hit_frame_start = 5
+attack_wait_anim_end = true
+move_display_height = 135.0
+move_display_width = 135.0
+attack_display_height = 135.0
+attack_display_width = 135.0
+sprint_display_height = 135.0
+sprint_display_width = 135.0
+idle_display_height = 135.0
+idle_display_width = 135.0
+death_display_height = 135.0
+death_display_width = 135.0
+ranged_skill_damage = 60
+ranged_skill_range = 5.0
+move_anim_speed = 1.2000000000000002
+attack_anim_speed = 1.2000000000000002
+color_red = Color(0.65, 0.1, 0.15, 1)
+color_blue = Color(0.55, 0.05, 0.55, 1)
+aoe_radius = 340.0
+affixes = Array[ExtResource("1_qrqm7")]([ExtResource("2_n03xx")])

@@ -1,0 +1,17 @@
+[gd_scene format=3 uid="uid://dq2hf0xiuwjix"]
+
+[ext_resource type="Script" uid="uid://cslkflvxunjoc" path="res://scenes/battle/battle_root.gd" id="1_root"]
+[ext_resource type="PackedScene" uid="uid://battlefield" path="res://scenes/battle/battlefield.tscn" id="2_bf"]
+[ext_resource type="PackedScene" uid="uid://hud" path="res://scenes/ui/hud.tscn" id="3_hud"]
+[ext_resource type="Script" uid="uid://b47o8msildldh" path="res://scripts/ai/ai_controller.gd" id="4_ai"]
+
+[node name="BattleRoot" type="Node2D" unique_id=1715282161]
+script = ExtResource("1_root")
+
+[node name="Battlefield" parent="." unique_id=1076919888 instance=ExtResource("2_bf")]
+position = Vector2(0, 0)
+
+[node name="AIController" type="Node" parent="." unique_id=1997804677]
+script = ExtResource("4_ai")
+
+[node name="HUD" parent="." unique_id=1191476397 instance=ExtResource("3_hud")]

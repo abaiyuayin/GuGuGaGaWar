@@ -1,0 +1,205 @@
+[gd_scene format=3 uid="uid://dmrfkal31virn"]
+
+[ext_resource type="Script" uid="uid://o240nqu7qlnk" path="res://scenes/ui/main_menu.gd" id="1_menu"]
+[ext_resource type="Texture2D" uid="uid://b4p32chjyxre" path="res://assets/ui/main_menu_bg.png" id="2_bg"]
+[ext_resource type="Texture2D" uid="uid://qs2sf1cym0xe" path="res://assets/ui/btn_campaign.png" id="3_campaign"]
+[ext_resource type="Texture2D" uid="uid://bpoxv414jih5w" path="res://assets/ui/btn_single.png" id="4_single"]
+[ext_resource type="Texture2D" uid="uid://c6m10wstks240" path="res://assets/ui/btn_multi.png" id="5_multi"]
+[ext_resource type="Texture2D" uid="uid://tdqtlbbjyqws" path="res://assets/ui/btn_guide.png" id="6_guide"]
+[ext_resource type="Texture2D" uid="uid://bk7rgngpm0p1x" path="res://assets/ui/btn_settings.png" id="7_settings"]
+[ext_resource type="Texture2D" uid="uid://krnraglmhsde" path="res://assets/ui/btn_quit.png" id="8_quit"]
+[ext_resource type="Texture2D" uid="uid://bxo5bi5q86g1u" path="res://assets/ui/title.png" id="9_title"]
+[ext_resource type="Texture2D" path="res://assets/ui/bilibili_icon.png" id="10_bili"]
+[ext_resource type="Texture2D" path="res://assets/ui/qq_group.jpg" id="11_qq"]
+
+[node name="MainMenu" type="Control" unique_id=123754915]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_menu")
+
+[node name="Background" type="TextureRect" parent="." unique_id=414003221]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+texture = ExtResource("2_bg")
+expand_mode = 1
+stretch_mode = 6
+
+[node name="Title" type="TextureRect" parent="." unique_id=1531508606]
+layout_mode = 1
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -390.0
+offset_top = -113.0
+offset_right = 410.0
+offset_bottom = 367.0
+grow_horizontal = 2
+texture = ExtResource("9_title")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="MenuPanel" type="VBoxContainer" parent="." unique_id=1850883011]
+layout_mode = 1
+anchors_preset = 7
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -100.0
+offset_top = -440.0
+offset_right = 100.0
+offset_bottom = -10.0
+grow_horizontal = 2
+grow_vertical = 0
+theme_override_constants/separation = 8
+alignment = 1
+
+[node name="BtnCampaign" type="TextureButton" parent="MenuPanel" unique_id=1088408121]
+custom_minimum_size = Vector2(100, 150)
+layout_mode = 2
+offset_transform_enabled = true
+offset_transform_position = Vector2(0, 41)
+texture_normal = ExtResource("3_campaign")
+texture_pressed = ExtResource("3_campaign")
+texture_hover = ExtResource("3_campaign")
+ignore_texture_size = true
+stretch_mode = 5
+
+[node name="BtnSinglePlayer" type="TextureButton" parent="MenuPanel" unique_id=1068749347]
+custom_minimum_size = Vector2(200, 60)
+layout_mode = 2
+texture_normal = ExtResource("4_single")
+texture_pressed = ExtResource("4_single")
+texture_hover = ExtResource("4_single")
+ignore_texture_size = true
+stretch_mode = 5
+
+[node name="BtnMultiplayer" type="TextureButton" parent="MenuPanel" unique_id=1298695148]
+custom_minimum_size = Vector2(200, 60)
+layout_mode = 2
+texture_normal = ExtResource("5_multi")
+texture_pressed = ExtResource("5_multi")
+texture_hover = ExtResource("5_multi")
+ignore_texture_size = true
+stretch_mode = 5
+
+[node name="BtnGuide" type="TextureButton" parent="MenuPanel" unique_id=1153314027]
+custom_minimum_size = Vector2(200, 60)
+layout_mode = 2
+texture_normal = ExtResource("6_guide")
+texture_pressed = ExtResource("6_guide")
+texture_hover = ExtResource("6_guide")
+ignore_texture_size = true
+stretch_mode = 5
+
+[node name="BtnSettings" type="TextureButton" parent="MenuPanel" unique_id=1365690083]
+custom_minimum_size = Vector2(200, 60)
+layout_mode = 2
+texture_normal = ExtResource("7_settings")
+texture_pressed = ExtResource("7_settings")
+texture_hover = ExtResource("7_settings")
+ignore_texture_size = true
+stretch_mode = 5
+
+[node name="BtnQuit" type="TextureButton" parent="MenuPanel" unique_id=1977975175]
+custom_minimum_size = Vector2(200, 60)
+layout_mode = 2
+texture_normal = ExtResource("8_quit")
+texture_pressed = ExtResource("8_quit")
+texture_hover = ExtResource("8_quit")
+ignore_texture_size = true
+stretch_mode = 5
+
+[node name="BtnDebug" type="Button" parent="MenuPanel" unique_id=657018532]
+custom_minimum_size = Vector2(200, 60)
+layout_mode = 2
+tooltip_text = "调整所有兵种精灵图在局内的显示宽高"
+text = "控制台"
+
+[node name="BiliCredit" type="VBoxContainer" parent="." unique_id=2055360194]
+layout_mode = 1
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -196.0
+offset_top = -114.0
+offset_right = -108.0
+offset_bottom = -14.0
+grow_horizontal = 0
+grow_vertical = 0
+visible = true
+theme_override_constants/separation = 3
+alignment = 1
+
+[node name="BtnBili" type="TextureButton" parent="BiliCredit" unique_id=2109328754]
+custom_minimum_size = Vector2(80, 80)
+layout_mode = 2
+size_flags_horizontal = 4
+texture_normal = ExtResource("10_bili")
+texture_pressed = ExtResource("10_bili")
+texture_hover = ExtResource("10_bili")
+ignore_texture_size = true
+stretch_mode = 5
+
+[node name="CreditLabel" type="Label" parent="BiliCredit" unique_id=1598764321]
+layout_mode = 2
+size_flags_horizontal = 4
+text = "原作者 阿白与阿银"
+horizontal_alignment = 1
+
+[node name="QQCredit" type="VBoxContainer" parent="." unique_id=3156824102]
+layout_mode = 1
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -108.0
+offset_top = -114.0
+offset_right = -20.0
+offset_bottom = -14.0
+grow_horizontal = 0
+grow_vertical = 0
+visible = true
+theme_override_constants/separation = 3
+alignment = 1
+clip_contents = true
+
+[node name="BtnQQ" type="TextureButton" parent="QQCredit" unique_id=5489213647]
+layout_mode = 2
+custom_minimum_size = Vector2(80, 80)
+size_flags_horizontal = 4
+size_flags_vertical = 4
+texture_normal = ExtResource("11_qq")
+texture_pressed = ExtResource("11_qq")
+texture_hover = ExtResource("11_qq")
+ignore_texture_size = true
+expand = true
+stretch_mode = 4
+
+[node name="QQLabel" type="Label" parent="QQCredit" unique_id=6521398472]
+layout_mode = 2
+size_flags_horizontal = 4
+text = "官方QQ群"
+horizontal_alignment = 1
+
+[connection signal="pressed" from="QQCredit/BtnQQ" to="." method="_on_btn_qq_pressed"]
+
+[connection signal="pressed" from="MenuPanel/BtnCampaign" to="." method="_on_btn_campaign_pressed"]
+[connection signal="pressed" from="MenuPanel/BtnSinglePlayer" to="." method="_on_btn_single_player_pressed"]
+[connection signal="pressed" from="MenuPanel/BtnMultiplayer" to="." method="_on_btn_multiplayer_pressed"]
+[connection signal="pressed" from="MenuPanel/BtnGuide" to="." method="_on_btn_guide_pressed"]
+[connection signal="pressed" from="MenuPanel/BtnSettings" to="." method="_on_btn_settings_pressed"]
+[connection signal="pressed" from="MenuPanel/BtnQuit" to="." method="_on_btn_quit_pressed"]
+[connection signal="pressed" from="MenuPanel/BtnDebug" to="." method="_on_btn_debug_pressed"]
+[connection signal="pressed" from="BiliCredit/BtnBili" to="." method="_on_btn_bili_pressed"]

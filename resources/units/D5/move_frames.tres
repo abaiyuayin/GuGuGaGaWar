@@ -1,0 +1,132 @@
+[gd_resource type="SpriteFrames" load_steps=17 format=3 uid="uid://d5_move_frames"]
+
+[ext_resource type="Texture2D" path="res://resources/units/D5/move_sheet.png" id="1_move_sheet"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_move_0"]
+atlas = ExtResource("1_move_sheet")
+region = Rect2(0, 0, 400, 400)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_move_1"]
+atlas = ExtResource("1_move_sheet")
+region = Rect2(400, 0, 400, 400)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_move_2"]
+atlas = ExtResource("1_move_sheet")
+region = Rect2(800, 0, 400, 400)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_move_3"]
+atlas = ExtResource("1_move_sheet")
+region = Rect2(1200, 0, 400, 400)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_move_4"]
+atlas = ExtResource("1_move_sheet")
+region = Rect2(1600, 0, 400, 400)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_move_5"]
+atlas = ExtResource("1_move_sheet")
+region = Rect2(2000, 0, 400, 400)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_move_6"]
+atlas = ExtResource("1_move_sheet")
+region = Rect2(2400, 0, 400, 400)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_move_7"]
+atlas = ExtResource("1_move_sheet")
+region = Rect2(2800, 0, 400, 400)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_move_8"]
+atlas = ExtResource("1_move_sheet")
+region = Rect2(3200, 0, 400, 400)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_move_9"]
+atlas = ExtResource("1_move_sheet")
+region = Rect2(3600, 0, 400, 400)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_move_10"]
+atlas = ExtResource("1_move_sheet")
+region = Rect2(0, 400, 400, 400)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_move_11"]
+atlas = ExtResource("1_move_sheet")
+region = Rect2(400, 400, 400, 400)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_move_12"]
+atlas = ExtResource("1_move_sheet")
+region = Rect2(800, 400, 400, 400)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_move_13"]
+atlas = ExtResource("1_move_sheet")
+region = Rect2(1200, 400, 400, 400)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_move_14"]
+atlas = ExtResource("1_move_sheet")
+region = Rect2(1600, 400, 400, 400)
+
+[resource]
+animations = [{
+"frames": [
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_move_0")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_move_1")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_move_2")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_move_3")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_move_4")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_move_5")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_move_6")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_move_7")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_move_8")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_move_9")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_move_10")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_move_11")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_move_12")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_move_13")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_move_14")
+}
+],
+"loop": true,
+"name": &"move",
+"speed": 10
+}]

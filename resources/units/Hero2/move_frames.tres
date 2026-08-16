@@ -1,0 +1,84 @@
+[gd_resource type="SpriteFrames" load_steps=10 format=3]
+
+[ext_resource type="Texture2D" path="res://resources/units/Hero2/move_sheet.png" id="1_move_sheet"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_move_0"]
+atlas = ExtResource("1_move_sheet")
+region = Rect2(0, 0, 468, 582)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_move_1"]
+atlas = ExtResource("1_move_sheet")
+region = Rect2(468, 0, 468, 582)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_move_2"]
+atlas = ExtResource("1_move_sheet")
+region = Rect2(936, 0, 468, 582)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_move_3"]
+atlas = ExtResource("1_move_sheet")
+region = Rect2(1404, 0, 468, 582)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_move_4"]
+atlas = ExtResource("1_move_sheet")
+region = Rect2(1872, 0, 468, 582)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_move_5"]
+atlas = ExtResource("1_move_sheet")
+region = Rect2(2340, 0, 468, 582)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_move_6"]
+atlas = ExtResource("1_move_sheet")
+region = Rect2(2808, 0, 468, 582)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_move_7"]
+atlas = ExtResource("1_move_sheet")
+region = Rect2(3276, 0, 468, 582)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_move_8"]
+atlas = ExtResource("1_move_sheet")
+region = Rect2(3744, 0, 468, 582)
+
+[resource]
+animations = [{
+"frames": [
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_move_0")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_move_1")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_move_2")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_move_3")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_move_4")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_move_5")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_move_6")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_move_7")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_move_8")
+}
+],
+"loop": true,
+"name": &"move",
+"speed": 10.0
+}]

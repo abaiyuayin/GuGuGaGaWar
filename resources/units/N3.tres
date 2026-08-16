@@ -1,0 +1,32 @@
+[gd_resource type="Resource" script_class="UnitResource" format=3]
+
+[ext_resource type="Script" path="res://resources/units/unit_base_resource.gd" id="1_base"]
+[ext_resource type="Script" path="res://resources/affixes/affix_resource.gd" id="1_m15di"]
+[ext_resource type="Texture2D" path="res://assets/projectiles/arrow.png" id="2_arrow"]
+
+[resource]
+script = ExtResource("1_base")
+unit_id = "N3"
+display_name = "长弓勇士"
+description = "糯糯阵营远程输出，使用长弓进行远距离射击。"
+tier = 3
+supply_cost = 2
+cost = 150
+max_hp = 120
+move_speed = 2.5
+damage = 40
+attack_range = 8.0
+attack_speed = 4.5
+damage_by_hit = [{}]
+attack_hit_frame_start = 19
+attack_sound_frame = 19
+move_display_height = 60.0
+move_display_width = 60.0
+walk_display_height = 50.0
+walk_display_width = 50.0
+attack_display_height = 60.0
+attack_display_width = 60.0
+attack_flip_override = 1
+projectile_texture = ExtResource("2_arrow")
+color_red = Color(0.3, 0.75, 0.35, 1)
+color_blue = Color(0.2, 0.65, 0.75, 1)

@@ -1,0 +1,35 @@
+[gd_resource type="Resource" script_class="UnitResource" format=3]
+
+[ext_resource type="Script" path="res://resources/affixes/affix_resource.gd" id="1_14myj"]
+[ext_resource type="Script" path="res://resources/units/unit_base_resource.gd" id="1_base"]
+
+[resource]
+script = ExtResource("1_base")
+unit_id = "D4"
+display_name = "钉锤手"
+description = "Doro 阵营纯破甲输出。一手钉锤一手铁盾，同时造成钝伤与刺伤，专门粉碎高护甲目标。"
+tier = 2
+cost = 55
+armor_value = 50
+move_speed = 2.5
+damage = 30
+damage_type = 2
+damage_types = Array[int]([1, 2])
+damage_by_type = {
+1: 35,
+2: 30
+}
+attack_speed = 2.5
+attack_hit_types = Array[int]([2])
+damage_by_hit = [{
+2: 30
+}]
+attack_hit_frame_start = 6
+attack_sound_frame = 6
+move_display_height = 45.0
+move_display_width = 45.0
+attack_display_height = 100.0
+attack_display_width = 100.0
+attack_anim_speed = 0.9
+color_red = Color(0.6, 0.2, 0.4, 1)
+color_blue = Color(0.25, 0.2, 0.6, 1)

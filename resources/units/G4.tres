@@ -1,0 +1,35 @@
+[gd_resource type="Resource" script_class="UnitResource" format=3]
+
+[ext_resource type="Script" path="res://resources/units/unit_base_resource.gd" id="1_base"]
+[ext_resource type="Script" path="res://resources/affixes/affix_resource.gd" id="1_ds3c1"]
+
+[resource]
+script = ExtResource("1_base")
+unit_id = "G4"
+display_name = "盾锤兵"
+description = "咕嘎阵营破甲抗线单位。一手圆锤一手小圆盾，以钝伤击破重甲目标。"
+tier = 2
+cost = 50
+armor_value = 50
+damage = 20
+damage_type = 2
+damage_types = Array[int]([2])
+damage_by_type = {
+2: 30
+}
+attack_speed = 2.5
+attack_hit_types = Array[int]([2])
+damage_by_hit = [{
+2: 20
+}]
+attack_hit_frame_start = 13
+attack_sound_frame = 13
+move_display_height = 56.0
+move_display_width = 56.0
+walk_display_height = 44.0
+walk_display_width = 44.0
+attack_display_height = 50.0
+attack_display_width = 55.0
+attack_anim_speed = 1.2000000000000002
+color_red = Color(0.8, 0.45, 0.2, 1)
+color_blue = Color(0.2, 0.45, 0.8, 1)

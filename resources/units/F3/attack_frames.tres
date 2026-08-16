@@ -1,0 +1,148 @@
+[gd_resource type="SpriteFrames" load_steps=18 format=3]
+
+[ext_resource type="Texture2D" path="res://resources/units/F3/attack_sheet.png" id="1_attack_sheet"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_attack_0"]
+atlas = ExtResource("1_attack_sheet")
+region = Rect2(0, 0, 760, 414)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_attack_1"]
+atlas = ExtResource("1_attack_sheet")
+region = Rect2(760, 0, 760, 414)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_attack_2"]
+atlas = ExtResource("1_attack_sheet")
+region = Rect2(1520, 0, 760, 414)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_attack_3"]
+atlas = ExtResource("1_attack_sheet")
+region = Rect2(2280, 0, 760, 414)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_attack_4"]
+atlas = ExtResource("1_attack_sheet")
+region = Rect2(3040, 0, 760, 414)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_attack_5"]
+atlas = ExtResource("1_attack_sheet")
+region = Rect2(3800, 0, 760, 414)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_attack_6"]
+atlas = ExtResource("1_attack_sheet")
+region = Rect2(4560, 0, 760, 414)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_attack_7"]
+atlas = ExtResource("1_attack_sheet")
+region = Rect2(5320, 0, 760, 414)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_attack_8"]
+atlas = ExtResource("1_attack_sheet")
+region = Rect2(6080, 0, 760, 414)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_attack_9"]
+atlas = ExtResource("1_attack_sheet")
+region = Rect2(0, 414, 760, 414)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_attack_10"]
+atlas = ExtResource("1_attack_sheet")
+region = Rect2(760, 414, 760, 414)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_attack_11"]
+atlas = ExtResource("1_attack_sheet")
+region = Rect2(1520, 414, 760, 414)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_attack_12"]
+atlas = ExtResource("1_attack_sheet")
+region = Rect2(2280, 414, 760, 414)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_attack_13"]
+atlas = ExtResource("1_attack_sheet")
+region = Rect2(3040, 414, 760, 414)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_attack_14"]
+atlas = ExtResource("1_attack_sheet")
+region = Rect2(3800, 414, 760, 414)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_attack_15"]
+atlas = ExtResource("1_attack_sheet")
+region = Rect2(4560, 414, 760, 414)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_attack_16"]
+atlas = ExtResource("1_attack_sheet")
+region = Rect2(5320, 414, 760, 414)
+
+[resource]
+animations = [{
+"frames": [
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_attack_0")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_attack_1")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_attack_2")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_attack_3")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_attack_4")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_attack_5")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_attack_6")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_attack_7")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_attack_8")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_attack_9")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_attack_10")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_attack_11")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_attack_12")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_attack_13")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_attack_14")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_attack_15")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_attack_16")
+}
+],
+"loop": true,
+"name": &"attack",
+"speed": 15.0
+}]

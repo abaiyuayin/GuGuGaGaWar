@@ -1,0 +1,36 @@
+[gd_resource type="Resource" script_class="UnitResource" format=3]
+
+[ext_resource type="Script" path="res://resources/units/unit_base_resource.gd" id="1_base"]
+[ext_resource type="Script" path="res://resources/affixes/affix_resource.gd" id="1_qfxi2"]
+
+[resource]
+script = ExtResource("1_base")
+unit_id = "G2"
+display_name = "盾矛兵"
+description = "咕嘎阵营中阶近战输出。以圆盾护身，单手长矛进行突刺，对重甲单位也有不错杀伤。"
+tier = 2
+cost = 50
+armor_value = 80
+move_speed = 1.5
+damage = 30
+damage_type = 1
+damage_types = Array[int]([1])
+damage_by_type = {
+1: 30
+}
+attack_range = 1.5
+attack_speed = 3.0
+damage_by_hit = [{
+1: 25
+}]
+attack_hit_frame_start = 14
+attack_sound_frame = 14
+move_display_height = 60.0
+move_display_width = 60.0
+walk_display_height = 55.0
+walk_display_width = 55.0
+attack_display_height = 60.0
+attack_display_width = 89.7
+attack_anim_speed = 1.2000000000000002
+color_red = Color(0.85, 0.4, 0.15, 1)
+color_blue = Color(0.15, 0.45, 0.85, 1)

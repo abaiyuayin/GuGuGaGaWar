@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="AffixResource" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://resources/affixes/affix_resource.gd" id="1_affix"]
+
+[resource]
+script = ExtResource("1_affix")
+affix_id = "erosion_basic"
+display_name = "侵蚀"
+affix_type = 6
+description = "受到侵蚀攻击时伤害降低 10%/层，最多叠加 3 层（共 -30% 伤害），持续到该兵种死亡"
+duration = 9999.0
+value_percent = 0.1
+stackable = true
+max_stacks = 3
+trigger_timing = 0

@@ -1,0 +1,41 @@
+[gd_resource type="Resource" script_class="UnitResource" format=3]
+
+[ext_resource type="Script" path="res://resources/units/unit_base_resource.gd" id="1_base"]
+[ext_resource type="Script" path="res://resources/affixes/affix_resource.gd" id="1_lasvp"]
+[ext_resource type="Resource" path="res://resources/affixes/poison.tres" id="3_nj8uu"]
+
+[resource]
+script = ExtResource("1_base")
+unit_id = "N1"
+display_name = "持矛勇士"
+description = "糯糯阵营近战单位，手持长矛冲锋陷阵。长矛附有流血效果，攻击时使目标持续流血。"
+tier = 2
+cost = 100
+max_hp = 120
+move_speed = 2.5
+damage = 25
+damage_type = 1
+damage_types = Array[int]([1])
+damage_by_type = {
+1: 30
+}
+attack_range = 1.5
+attack_range_h = 0.6
+attack_range_v = 0.3
+attack_speed = 3.0
+attack_hit_types = Array[int]([1])
+damage_by_hit = [{
+1: 25
+}]
+attack_hit_frame_start = 12
+attack_sound_frame = 12
+move_display_height = 60.0
+move_display_width = 60.0
+walk_display_height = 57.0
+walk_display_width = 57.0
+attack_display_height = 80.0
+attack_display_width = 80.0
+attack_anim_speed = 0.9
+color_red = Color(0.3, 0.75, 0.35, 1)
+color_blue = Color(0.2, 0.65, 0.75, 1)
+affixes = Array[ExtResource("1_lasvp")]([ExtResource("3_nj8uu")])

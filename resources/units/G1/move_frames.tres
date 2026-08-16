@@ -1,0 +1,84 @@
+[gd_resource type="SpriteFrames" load_steps=11 format=3 uid="uid://g1_move_frames"]
+
+[ext_resource type="Texture2D" path="res://resources/units/G1/move_sheet.png" id="1_move_sheet"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_move_0"]
+atlas = ExtResource("1_move_sheet")
+region = Rect2(0, 0, 400, 400)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_move_1"]
+atlas = ExtResource("1_move_sheet")
+region = Rect2(400, 0, 400, 400)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_move_2"]
+atlas = ExtResource("1_move_sheet")
+region = Rect2(800, 0, 400, 400)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_move_3"]
+atlas = ExtResource("1_move_sheet")
+region = Rect2(1200, 0, 400, 400)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_move_4"]
+atlas = ExtResource("1_move_sheet")
+region = Rect2(1600, 0, 400, 400)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_move_5"]
+atlas = ExtResource("1_move_sheet")
+region = Rect2(2000, 0, 400, 400)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_move_6"]
+atlas = ExtResource("1_move_sheet")
+region = Rect2(2400, 0, 400, 400)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_move_7"]
+atlas = ExtResource("1_move_sheet")
+region = Rect2(2800, 0, 400, 400)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_move_8"]
+atlas = ExtResource("1_move_sheet")
+region = Rect2(3200, 0, 400, 400)
+
+[resource]
+animations = [{
+"frames": [
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_move_0")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_move_1")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_move_2")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_move_3")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_move_4")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_move_5")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_move_6")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_move_7")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_move_8")
+}
+],
+"loop": true,
+"name": &"move",
+"speed": 10
+}]

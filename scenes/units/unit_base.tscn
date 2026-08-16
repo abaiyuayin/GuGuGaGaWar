@@ -1,0 +1,50 @@
+[gd_scene format=3 uid="uid://dow58ylse7a60"]
+
+[ext_resource type="Script" uid="uid://n3qyyqghwd63" path="res://scenes/units/unit_base.gd" id="1_unit"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_unit"]
+radius = 12.0
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_detection"]
+radius = 200.0
+
+[node name="UnitBase" type="CharacterBody2D" unique_id=2092910000]
+collision_mask = 7
+script = ExtResource("1_unit")
+
+[node name="VisualBox" type="ColorRect" parent="." unique_id=727360038]
+offset_left = -20.0
+offset_top = -20.0
+offset_right = 20.0
+offset_bottom = 20.0
+color = Color(0.5, 0.5, 0.5, 0)
+
+[node name="UnitSprite" type="AnimatedSprite2D" parent="VisualBox" unique_id=1874601938]
+visible = false
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=1656649731]
+shape = SubResource("CircleShape2D_unit")
+
+[node name="HealthBar" type="ProgressBar" parent="." unique_id=588277191]
+offset_left = -18.0
+offset_top = -26.0
+offset_right = 18.0
+offset_bottom = -20.0
+value = 100.0
+show_percentage = false
+
+[node name="ArmorBar" type="ProgressBar" parent="." unique_id=1763696247]
+offset_left = -18.0
+offset_top = -33.0
+offset_right = 18.0
+offset_bottom = -27.0
+max_value = 10.0
+value = 10.0
+show_percentage = false
+
+[node name="DetectionArea" type="Area2D" parent="." unique_id=1909899842]
+collision_layer = 0
+collision_mask = 6
+
+[node name="DetectionShape" type="CollisionShape2D" parent="DetectionArea" unique_id=215330708]
+shape = SubResource("CircleShape2D_detection")

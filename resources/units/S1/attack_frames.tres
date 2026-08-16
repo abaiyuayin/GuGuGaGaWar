@@ -1,0 +1,19 @@
+[gd_resource type="SpriteFrames" load_steps=10 format=3]
+
+[ext_resource type="Texture2D" path="res://resources/units/S1_attack/S1_attack_1.png" id="1"]
+[ext_resource type="Texture2D" path="res://resources/units/S1_attack/S1_attack_2.png" id="2"]
+[ext_resource type="Texture2D" path="res://resources/units/S1_attack/S1_attack_3.png" id="3"]
+[ext_resource type="Texture2D" path="res://resources/units/S1_attack/S1_attack_4.png" id="4"]
+[ext_resource type="Texture2D" path="res://resources/units/S1_attack/S1_attack_5.png" id="5"]
+[ext_resource type="Texture2D" path="res://resources/units/S1_attack/S1_attack_6.png" id="6"]
+[ext_resource type="Texture2D" path="res://resources/units/S1_attack/S1_attack_7.png" id="7"]
+[ext_resource type="Texture2D" path="res://resources/units/S1_attack/S1_attack_8.png" id="8"]
+[ext_resource type="Texture2D" path="res://resources/units/S1_attack/S1_attack_9.png" id="9"]
+
+[resource]
+animations = [{
+"frames": [ExtResource("1"), ExtResource("2"), ExtResource("3"), ExtResource("4"), ExtResource("5"), ExtResource("6"), ExtResource("7"), ExtResource("8"), ExtResource("9")],
+"loop": true,
+"name": "attack",
+"speed": 10.0
+}]

@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="AffixResource" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://resources/affixes/affix_resource.gd" id="1_affix"]
+
+[resource]
+script = ExtResource("1_affix")
+affix_id = "bleed_basic"
+display_name = "流血"
+affix_type = 0
+description = "每秒扣除当前生命值的 5%，直接扣血量，不可叠加，攻击时重置持续时间"
+duration = 5.0
+value_percent = 0.05
+stackable = false
+max_stacks = 1
+trigger_timing = 0

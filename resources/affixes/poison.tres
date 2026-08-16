@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="AffixResource" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://resources/affixes/affix_resource.gd" id="1_poison"]
+
+[resource]
+script = ExtResource("1_poison")
+affix_id = "poison_basic"
+display_name = "中毒"
+affix_type = 1
+description = "每秒扣除 5% 最大生命值伤害，先扣护盾再扣血量，不可叠加，攻击时重置持续时间"
+duration = 5.0
+value_percent = 0.05
+stackable = false
+max_stacks = 1
+trigger_timing = 0

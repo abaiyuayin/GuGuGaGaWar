@@ -1,0 +1,32 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scenes/ui/roguelike_map.gd" id="1_rogue"]
+[ext_resource type="Texture2D" uid="uid://nl08uq2oc0kg" path="res://assets/ui/panel_parchment.png" id="2_bg"]
+
+[node name="RoguelikeMap" type="CanvasLayer"]
+layer = 5
+script = ExtResource("1_rogue")
+
+[node name="MapRoot" type="Control" parent="."]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+
+[node name="ParchmentBG" type="TextureRect" parent="MapRoot"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+texture = ExtResource("2_bg")
+expand_mode = 1
+stretch_mode = 6
+
+[node name="LineDrawer" type="Control" parent="MapRoot"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0

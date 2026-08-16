@@ -1,0 +1,66 @@
+# ============================================================
+# 咕嘎嘎战争 GuGuGaGa War — .gitignore
+# 仅跟踪 Godot 项目运行所需的最小集合：
+# project.godot / assets / autoload / data / resources / scenes / scripts/*.gd 子模块 / addons / README / LICENSE
+# ============================================================
+
+# ---------- Godot 4 引擎缓存 ----------
+.godot/
+
+# ---------- 本机/工具私有目录（含个人记忆与配置，切勿上传） ----------
+.workbuddy/
+.tmp/
+
+# ---------- 非 Godot 依赖（项目运行用不到） ----------
+node_modules/
+
+# ---------- 根目录开发脚本（Python / PowerShell，不影响游戏运行） ----------
+/*.py
+/*.ps1
+
+# ---------- 资源重导/调试脚本（scripts/ 根目录的 Python 工具） ----------
+scripts/*.py
+
+# ---------- 开发工具链 / 测试 / 报告 / 文档 / 内部记录（不影响运行） ----------
+tools/
+tests/
+reports/
+docs/
+AGENTS/
+AGENTS.md
+update/
+
+# ---------- 导出 / 打包产物（非源码） ----------
+GuGuGaGa War.exe
+GuGuGaGa War.pck
+GuGuGaGa War.console.exe
+Android/*.apk
+Android/*.idsig
+
+# ---------- 临时 / 调试脚本与残留（按命名约定，跨目录生效） ----------
+_tmp_*
+*_tmp_*
+_hero2_frames_8to16.png
+
+# ---------- 隐藏缓存 / 修复备份 / AI  brainstorming 产物（根目录散落，非源码） ----------
+.cache_preview/
+.repair_bak/
+.superpowers/
+
+# ---------- 已被忽略资源的孤立 .import 文件 ----------
+_hero2_frames_8to16.png.import
+
+# ---------- 备份文件 ----------
+*.bak
+*.bak.*
+*.corrupt_bak
+project.godot.bak.*
+
+# ---------- Python 字节码缓存 ----------
+__pycache__/
+*.pyc
+
+# ---------- 操作系统 / 编辑器垃圾 ----------
+.DS_Store
+Thumbs.db
+desktop.ini

@@ -1,0 +1,39 @@
+[gd_resource type="Resource" script_class="UnitResource" format=3]
+
+[ext_resource type="Script" path="res://resources/affixes/affix_resource.gd" id="1_aff"]
+[ext_resource type="Script" path="res://resources/units/unit_base_resource.gd" id="1_base"]
+
+[resource]
+script = ExtResource("1_base")
+unit_id = "S2"
+display_name = "仓鼠士兵"
+description = "特殊阵营兵种。使用 G1 盾剑兵时 1% 概率触发替换的神秘仓鼠战士，数值为 G1 五倍（攻击间隔/移速保持原值，避免失控）。"
+tier = 4
+supply_cost = 2
+cost = 500
+max_hp = 500
+armor_value = 500
+move_speed = 3.0
+damage = 100
+damage_types = Array[int]([0])
+damage_by_type = {
+0: 100
+}
+attack_range = 2.0
+attack_speed = 3.0
+damage_by_hit = [{
+0: 300
+}]
+attack_hit_frame_start = 11
+attack_sound_frame = 11
+display_height = 51.0
+move_display_height = 73.0
+move_display_width = 73.0
+walk_display_height = 60.0
+walk_display_width = 60.0
+attack_display_height = 95.0
+attack_display_width = 95.0
+attack_anim_sync_interval = false
+attack_anim_speed = 1.0
+color_red = Color(0.9, 0.6, 0.2, 1)
+color_blue = Color(0.2, 0.5, 0.3, 1)

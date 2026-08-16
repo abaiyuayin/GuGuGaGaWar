@@ -1,0 +1,95 @@
+[gd_resource type="SpriteFrames" load_steps=22 format=3]
+
+[ext_resource type="Texture2D" path="res://resources/units/Y1/death_sheet.png" id="1_sheet"]
+
+[sub_resource type="AtlasTexture" id="atlas_0"]
+atlas = ExtResource("1_sheet")
+region = Rect2(0, 0, 140, 93)
+
+[sub_resource type="AtlasTexture" id="atlas_1"]
+atlas = ExtResource("1_sheet")
+region = Rect2(140, 0, 140, 93)
+
+[sub_resource type="AtlasTexture" id="atlas_2"]
+atlas = ExtResource("1_sheet")
+region = Rect2(280, 0, 140, 93)
+
+[sub_resource type="AtlasTexture" id="atlas_3"]
+atlas = ExtResource("1_sheet")
+region = Rect2(420, 0, 140, 93)
+
+[sub_resource type="AtlasTexture" id="atlas_4"]
+atlas = ExtResource("1_sheet")
+region = Rect2(560, 0, 140, 93)
+
+[sub_resource type="AtlasTexture" id="atlas_5"]
+atlas = ExtResource("1_sheet")
+region = Rect2(700, 0, 140, 93)
+
+[sub_resource type="AtlasTexture" id="atlas_6"]
+atlas = ExtResource("1_sheet")
+region = Rect2(840, 0, 140, 93)
+
+[sub_resource type="AtlasTexture" id="atlas_7"]
+atlas = ExtResource("1_sheet")
+region = Rect2(980, 0, 140, 93)
+
+[sub_resource type="AtlasTexture" id="atlas_8"]
+atlas = ExtResource("1_sheet")
+region = Rect2(1120, 0, 140, 93)
+
+[sub_resource type="AtlasTexture" id="atlas_9"]
+atlas = ExtResource("1_sheet")
+region = Rect2(1260, 0, 140, 93)
+
+[sub_resource type="AtlasTexture" id="atlas_10"]
+atlas = ExtResource("1_sheet")
+region = Rect2(1400, 0, 140, 93)
+
+[sub_resource type="AtlasTexture" id="atlas_11"]
+atlas = ExtResource("1_sheet")
+region = Rect2(1540, 0, 140, 93)
+
+[sub_resource type="AtlasTexture" id="atlas_12"]
+atlas = ExtResource("1_sheet")
+region = Rect2(1680, 0, 140, 93)
+
+[sub_resource type="AtlasTexture" id="atlas_13"]
+atlas = ExtResource("1_sheet")
+region = Rect2(1820, 0, 140, 93)
+
+[sub_resource type="AtlasTexture" id="atlas_14"]
+atlas = ExtResource("1_sheet")
+region = Rect2(1960, 0, 140, 93)
+
+[sub_resource type="AtlasTexture" id="atlas_15"]
+atlas = ExtResource("1_sheet")
+region = Rect2(2100, 0, 140, 93)
+
+[sub_resource type="AtlasTexture" id="atlas_16"]
+atlas = ExtResource("1_sheet")
+region = Rect2(2240, 0, 140, 93)
+
+[sub_resource type="AtlasTexture" id="atlas_17"]
+atlas = ExtResource("1_sheet")
+region = Rect2(2380, 0, 140, 93)
+
+[sub_resource type="AtlasTexture" id="atlas_18"]
+atlas = ExtResource("1_sheet")
+region = Rect2(2520, 0, 140, 93)
+
+[sub_resource type="AtlasTexture" id="atlas_19"]
+atlas = ExtResource("1_sheet")
+region = Rect2(2660, 0, 140, 93)
+
+[sub_resource type="AtlasTexture" id="atlas_20"]
+atlas = ExtResource("1_sheet")
+region = Rect2(2800, 0, 140, 93)
+
+[resource]
+animations = [{
+"frames": [SubResource("atlas_0"), SubResource("atlas_1"), SubResource("atlas_2"), SubResource("atlas_3"), SubResource("atlas_4"), SubResource("atlas_5"), SubResource("atlas_6"), SubResource("atlas_7"), SubResource("atlas_8"), SubResource("atlas_9"), SubResource("atlas_10"), SubResource("atlas_11"), SubResource("atlas_12"), SubResource("atlas_13"), SubResource("atlas_14"), SubResource("atlas_15"), SubResource("atlas_16"), SubResource("atlas_17"), SubResource("atlas_18"), SubResource("atlas_19"), SubResource("atlas_20")],
+"loop": true,
+"name": "death",
+"speed": 10.0
+}]

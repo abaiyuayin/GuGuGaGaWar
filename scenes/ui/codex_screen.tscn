@@ -1,0 +1,273 @@
+[gd_scene load_steps=2 format=3 uid="uid://c8vm453s7agdx"]
+
+[ext_resource type="Script" path="res://scenes/ui/codex_screen.gd" id="1_codex"]
+
+[node name="CodexScreen" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_codex")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+color = Color(0.08, 0.08, 0.1, 1)
+
+[node name="AnimAudioPlayer" type="AudioStreamPlayer" parent="."]
+volume_db = -6.0
+
+[node name="MarginContainer" type="MarginContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 30.0
+offset_top = 20.0
+offset_right = -30.0
+offset_bottom = -20.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="Header" type="HBoxContainer" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 20
+
+[node name="TitleLabel" type="Label" parent="MarginContainer/VBoxContainer/Header"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_font_sizes/font_size = 32
+text = "游戏图鉴"
+vertical_alignment = 1
+
+[node name="BackBtn" type="Button" parent="MarginContainer/VBoxContainer/Header"]
+layout_mode = 2
+custom_minimum_size = Vector2(100, 40)
+text = "返回"
+
+[node name="TabBar" type="HBoxContainer" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="TabUnitBtn" type="Button" parent="MarginContainer/VBoxContainer/TabBar"]
+layout_mode = 2
+custom_minimum_size = Vector2(140, 40)
+text = "兵种图鉴"
+
+[node name="TabArtifactBtn" type="Button" parent="MarginContainer/VBoxContainer/TabBar"]
+layout_mode = 2
+custom_minimum_size = Vector2(140, 40)
+text = "文物图鉴"
+
+[node name="TabOrderBtn" type="Button" parent="MarginContainer/VBoxContainer/TabBar"]
+layout_mode = 2
+custom_minimum_size = Vector2(140, 40)
+text = "军令图鉴"
+
+[node name="TabEventBtn" type="Button" parent="MarginContainer/VBoxContainer/TabBar"]
+layout_mode = 2
+custom_minimum_size = Vector2(140, 40)
+text = "事件图鉴"
+
+[node name="Content" type="HBoxContainer" parent="MarginContainer/VBoxContainer"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 16
+
+[node name="ListPanel" type="PanelContainer" parent="MarginContainer/VBoxContainer/Content"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_stretch_ratio = 0.4
+
+[node name="ListScroll" type="ScrollContainer" parent="MarginContainer/VBoxContainer/Content/ListPanel"]
+layout_mode = 2
+
+[node name="ListVBox" type="VBoxContainer" parent="MarginContainer/VBoxContainer/Content/ListPanel/ListScroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/separation = 4
+
+[node name="RightPanel" type="PanelContainer" parent="MarginContainer/VBoxContainer/Content"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_stretch_ratio = 0.52
+
+[node name="RightScroll" type="ScrollContainer" parent="MarginContainer/VBoxContainer/Content/RightPanel"]
+layout_mode = 2
+
+[node name="RightVBox" type="VBoxContainer" parent="MarginContainer/VBoxContainer/Content/RightPanel/RightScroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 12
+
+[node name="NameLabel" type="Label" parent="MarginContainer/VBoxContainer/Content/RightPanel/RightScroll/RightVBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 26
+text = "选择条目查看详情"
+horizontal_alignment = 1
+
+[node name="RarityLabel" type="Label" parent="MarginContainer/VBoxContainer/Content/RightPanel/RightScroll/RightVBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 14
+horizontal_alignment = 1
+text = ""
+
+[node name="PreviewPanel" type="Panel" parent="MarginContainer/VBoxContainer/Content/RightPanel/RightScroll/RightVBox"]
+layout_mode = 2
+custom_minimum_size = Vector2(0, 260)
+
+[node name="PreviewSprite" type="AnimatedSprite2D" parent="MarginContainer/VBoxContainer/Content/RightPanel/RightScroll/RightVBox/PreviewPanel"]
+visible = false
+
+[node name="NoAnimLabel" type="Label" parent="MarginContainer/VBoxContainer/Content/RightPanel/RightScroll/RightVBox/PreviewPanel"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+horizontal_alignment = 1
+vertical_alignment = 1
+text = "该兵种暂无动画资源"
+
+[node name="AnimButtons" type="HBoxContainer" parent="MarginContainer/VBoxContainer/Content/RightPanel/RightScroll/RightVBox"]
+layout_mode = 2
+alignment = 1
+theme_override_constants/separation = 20
+
+[node name="IdleBtn" type="Button" parent="MarginContainer/VBoxContainer/Content/RightPanel/RightScroll/RightVBox/AnimButtons"]
+layout_mode = 2
+custom_minimum_size = Vector2(120, 40)
+text = "待机"
+
+[node name="WalkBtn" type="Button" parent="MarginContainer/VBoxContainer/Content/RightPanel/RightScroll/RightVBox/AnimButtons"]
+layout_mode = 2
+custom_minimum_size = Vector2(120, 40)
+text = "行走"
+
+[node name="RunBtn" type="Button" parent="MarginContainer/VBoxContainer/Content/RightPanel/RightScroll/RightVBox/AnimButtons"]
+layout_mode = 2
+custom_minimum_size = Vector2(120, 40)
+text = "奔跑"
+
+[node name="AttackBtn" type="Button" parent="MarginContainer/VBoxContainer/Content/RightPanel/RightScroll/RightVBox/AnimButtons"]
+layout_mode = 2
+custom_minimum_size = Vector2(120, 40)
+text = "攻击"
+
+[node name="IntroHeader" type="Label" parent="MarginContainer/VBoxContainer/Content/RightPanel/RightScroll/RightVBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+text = "介绍"
+
+[node name="DescLabel" type="Label" parent="MarginContainer/VBoxContainer/Content/RightPanel/RightScroll/RightVBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 14
+text = ""
+autowrap_mode = 3
+
+[node name="AppearanceHeader" type="Label" parent="MarginContainer/VBoxContainer/Content/RightPanel/RightScroll/RightVBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+text = "外观"
+
+[node name="AppearanceLabel" type="Label" parent="MarginContainer/VBoxContainer/Content/RightPanel/RightScroll/RightVBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 14
+text = ""
+autowrap_mode = 3
+
+[node name="TipsHeader" type="Label" parent="MarginContainer/VBoxContainer/Content/RightPanel/RightScroll/RightVBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+text = "作者Tips"
+
+[node name="TipsLabel" type="Label" parent="MarginContainer/VBoxContainer/Content/RightPanel/RightScroll/RightVBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 14
+text = ""
+autowrap_mode = 3
+
+[node name="StatsHeader" type="Label" parent="MarginContainer/VBoxContainer/Content/RightPanel/RightScroll/RightVBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+text = "角色数值"
+
+[node name="PriceLabel" type="Label" parent="MarginContainer/VBoxContainer/Content/RightPanel/RightScroll/RightVBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 14
+text = ""
+
+[node name="EffectHeader" type="Label" parent="MarginContainer/VBoxContainer/Content/RightPanel/RightScroll/RightVBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+text = "效果"
+
+[node name="EffectLabel" type="Label" parent="MarginContainer/VBoxContainer/Content/RightPanel/RightScroll/RightVBox"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 14
+text = ""
+autowrap_mode = 3
+
+[node name="DevEditContainer" type="VBoxContainer" parent="MarginContainer/VBoxContainer/Content/RightPanel/RightScroll/RightVBox"]
+layout_mode = 2
+visible = false
+theme_override_constants/separation = 8
+
+[node name="DevEditHeader" type="Label" parent="MarginContainer/VBoxContainer/Content/RightPanel/RightScroll/RightVBox/DevEditContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+text = "开发者编辑"
+modulate = Color(1, 0.6, 0.3, 1)
+
+[node name="DescEditRow" type="VBoxContainer" parent="MarginContainer/VBoxContainer/Content/RightPanel/RightScroll/RightVBox/DevEditContainer"]
+layout_mode = 2
+theme_override_constants/separation = 2
+
+[node name="DescEditLabel" type="Label" parent="MarginContainer/VBoxContainer/Content/RightPanel/RightScroll/RightVBox/DevEditContainer/DescEditRow"]
+layout_mode = 2
+text = "介绍 / 描述"
+
+[node name="DescEdit" type="TextEdit" parent="MarginContainer/VBoxContainer/Content/RightPanel/RightScroll/RightVBox/DevEditContainer/DescEditRow"]
+layout_mode = 2
+custom_minimum_size = Vector2(0, 90)
+placeholder_text = "输入描述..."
+
+[node name="AppearanceEditRow" type="VBoxContainer" parent="MarginContainer/VBoxContainer/Content/RightPanel/RightScroll/RightVBox/DevEditContainer"]
+layout_mode = 2
+theme_override_constants/separation = 2
+
+[node name="AppearanceEditLabel" type="Label" parent="MarginContainer/VBoxContainer/Content/RightPanel/RightScroll/RightVBox/DevEditContainer/AppearanceEditRow"]
+layout_mode = 2
+text = "外观"
+
+[node name="AppearanceEdit" type="TextEdit" parent="MarginContainer/VBoxContainer/Content/RightPanel/RightScroll/RightVBox/DevEditContainer/AppearanceEditRow"]
+layout_mode = 2
+custom_minimum_size = Vector2(0, 90)
+
+[node name="FlavorEditRow" type="VBoxContainer" parent="MarginContainer/VBoxContainer/Content/RightPanel/RightScroll/RightVBox/DevEditContainer"]
+layout_mode = 2
+theme_override_constants/separation = 2
+
+[node name="FlavorEditLabel" type="Label" parent="MarginContainer/VBoxContainer/Content/RightPanel/RightScroll/RightVBox/DevEditContainer/FlavorEditRow"]
+layout_mode = 2
+text = "风味"
+
+[node name="FlavorEdit" type="TextEdit" parent="MarginContainer/VBoxContainer/Content/RightPanel/RightScroll/RightVBox/DevEditContainer/FlavorEditRow"]
+layout_mode = 2
+custom_minimum_size = Vector2(0, 70)
+
+[node name="SaveEditBtn" type="Button" parent="MarginContainer/VBoxContainer/Content/RightPanel/RightScroll/RightVBox/DevEditContainer"]
+layout_mode = 2
+custom_minimum_size = Vector2(120, 36)
+text = "保存修改"
+
+[node name="AttributesGrid" type="GridContainer" parent="MarginContainer/VBoxContainer/Content/RightPanel/RightScroll/RightVBox"]
+layout_mode = 2
+columns = 2

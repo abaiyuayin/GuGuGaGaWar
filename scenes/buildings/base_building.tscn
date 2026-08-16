@@ -1,0 +1,23 @@
+[gd_scene load_steps=2 format=3 uid="uid://base_building"]
+
+[ext_resource type="Script" path="res://scenes/buildings/base_building.gd" id="1_base"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_base"]
+size = Vector2(40, 80)
+
+[node name="BaseBuilding" type="Area2D"]
+script = ExtResource("1_base")
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+scale = Vector2(2, 2)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("RectangleShape2D_base")
+
+[node name="HealthBar" type="TextureProgressBar" parent="."]
+offset_left = -40.0
+offset_top = -60.0
+offset_right = 40.0
+offset_bottom = -50.0
+max_value = 5000.0
+value = 5000.0

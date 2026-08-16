@@ -1,0 +1,157 @@
+[gd_scene load_steps=2 format=3 uid="uid://debug_units"]
+
+[ext_resource type="Script" path="res://scenes/ui/debug_units.gd" id="1_debug"]
+
+[node name="DebugUnits" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_debug")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+color = Color(0.08, 0.08, 0.1, 1)
+
+[node name="VBox" type="VBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 10.0
+offset_top = 10.0
+offset_right = -10.0
+offset_bottom = -10.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 8
+
+[node name="TopBar" type="HBoxContainer" parent="VBox"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="TitleLabel" type="Label" parent="VBox/TopBar"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.85, 0.4, 1)
+theme_override_font_sizes/font_size = 24
+text = "兵种调试台"
+
+[node name="Spacer" type="Control" parent="VBox/TopBar"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="BtnReset" type="Button" parent="VBox/TopBar"]
+layout_mode = 2
+custom_minimum_size = Vector2(100, 44)
+theme_override_font_sizes/font_size = 20
+text = "全部重置"
+
+[node name="BtnBack" type="Button" parent="VBox/TopBar"]
+layout_mode = 2
+custom_minimum_size = Vector2(100, 44)
+theme_override_font_sizes/font_size = 20
+text = "返回"
+
+[node name="TabContainer" type="TabContainer" parent="VBox"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="SizeTab" type="VBoxContainer" parent="VBox/TabContainer"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="SizeBtnBar" type="HBoxContainer" parent="VBox/TabContainer/SizeTab"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="SizeBtnExport" type="Button" parent="VBox/TabContainer/SizeTab/SizeBtnBar"]
+layout_mode = 2
+custom_minimum_size = Vector2(96, 0)
+text = "导出配置"
+tooltip_text = "把当前所有兵种的动画+数值配置导出为 JSON 文件，可分享给其它玩家导入"
+
+[node name="SizeBtnImport" type="Button" parent="VBox/TabContainer/SizeTab/SizeBtnBar"]
+layout_mode = 2
+custom_minimum_size = Vector2(96, 0)
+text = "导入配置"
+tooltip_text = "导入其它玩家导出的 JSON 配置，直接覆盖当前兵种动画+数值（出厂配置不会被覆盖，可用「重置配置」还原）"
+
+[node name="SizeBtnRestore" type="Button" parent="VBox/TabContainer/SizeTab/SizeBtnBar"]
+layout_mode = 2
+custom_minimum_size = Vector2(96, 0)
+text = "重置配置"
+tooltip_text = "把动画+数值恢复为游戏出厂配置（data/unit_default_config.json），已导入/调校的改动全部还原"
+
+[node name="SizeExternalHint" type="Label" parent="VBox/TabContainer/SizeTab"]
+layout_mode = 2
+text = "现在使用的是外部数据"
+visible = false
+theme_override_colors/font_color = Color(1, 0.65, 0.2, 1)
+
+[node name="SizeScroll" type="ScrollContainer" parent="VBox/TabContainer/SizeTab"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="SizeGrid" type="GridContainer" parent="VBox/TabContainer/SizeTab/SizeScroll"]
+layout_mode = 2
+columns = 1
+theme_override_constants/h_separation = 12
+theme_override_constants/v_separation = 16
+
+[node name="StatsTab" type="VBoxContainer" parent="VBox/TabContainer"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="StatsBtnBar" type="HBoxContainer" parent="VBox/TabContainer/StatsTab"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="StatsBtnExport" type="Button" parent="VBox/TabContainer/StatsTab/StatsBtnBar"]
+layout_mode = 2
+custom_minimum_size = Vector2(96, 0)
+text = "导出配置"
+tooltip_text = "把当前所有兵种的动画+数值配置导出为 JSON 文件，可分享给其它玩家导入"
+
+[node name="StatsBtnImport" type="Button" parent="VBox/TabContainer/StatsTab/StatsBtnBar"]
+layout_mode = 2
+custom_minimum_size = Vector2(96, 0)
+text = "导入配置"
+tooltip_text = "导入其它玩家导出的 JSON 配置，直接覆盖当前兵种动画+数值（出厂配置不会被覆盖，可用「重置配置」还原）"
+
+[node name="StatsBtnRestore" type="Button" parent="VBox/TabContainer/StatsTab/StatsBtnBar"]
+layout_mode = 2
+custom_minimum_size = Vector2(96, 0)
+text = "重置配置"
+tooltip_text = "把动画+数值恢复为游戏出厂配置（data/unit_default_config.json），已导入/调校的改动全部还原"
+
+[node name="StatsExternalHint" type="Label" parent="VBox/TabContainer/StatsTab"]
+layout_mode = 2
+text = "现在使用的是外部数据"
+visible = false
+theme_override_colors/font_color = Color(1, 0.65, 0.2, 1)
+
+[node name="StatsScroll" type="ScrollContainer" parent="VBox/TabContainer/StatsTab"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="StatsGrid" type="GridContainer" parent="VBox/TabContainer/StatsTab/StatsScroll"]
+layout_mode = 2
+columns = 1
+theme_override_constants/h_separation = 12
+theme_override_constants/v_separation = 16
+
+[node name="FrameTab" type="VBoxContainer" parent="VBox/TabContainer"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="DamageTestTab" type="ScrollContainer" parent="VBox/TabContainer"]
+layout_mode = 2
+
+[node name="DamageTestContainer" type="VBoxContainer" parent="VBox/TabContainer/DamageTestTab"]
+layout_mode = 2
+theme_override_constants/separation = 8

@@ -1,0 +1,327 @@
+[gd_scene load_steps=4 format=3 uid="uid://hud"]
+
+[ext_resource type="Script" path="res://scenes/ui/hud.gd" id="1_hud"]
+[ext_resource type="Texture2D" path="res://assets/ui/info_panel.png" id="2_info_panel"]
+[sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_transparent"]
+
+[node name="HUD" type="CanvasLayer"]
+layer = 2
+script = ExtResource("1_hud")
+
+[node name="TopBar" type="PanelContainer" parent="."]
+anchors_preset = 10
+anchor_right = 1.0
+offset_bottom = 50.0
+theme_override_styles/panel = SubResource("StyleBoxEmpty_transparent")
+
+[node name="TopHBox" type="HBoxContainer" parent="."]
+anchors_preset = 10
+anchor_right = 1.0
+offset_left = 10.0
+offset_top = 2.0
+offset_right = -10.0
+offset_bottom = 32.0
+theme_override_constants/separation = 20
+alignment = 1
+
+[node name="RedHP" type="VBoxContainer" parent="TopHBox"]
+custom_minimum_size = Vector2(350, 80)
+layout_mode = 2
+theme_override_constants/separation = 2
+
+[node name="RedHPBar" type="ProgressBar" parent="TopHBox/RedHP"]
+custom_minimum_size = Vector2(350, 18)
+layout_mode = 2
+size_flags_horizontal = 3
+max_value = 10000.0
+value = 10000.0
+show_percentage = false
+
+[node name="RedBattleLog" type="RichTextLabel" parent="TopHBox/RedHP"]
+custom_minimum_size = Vector2(350, 56)
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+bbcode_enabled = true
+fit_content = false
+scroll_active = true
+scroll_following = true
+selection_enabled = false
+focus_mode = 0
+theme_override_font_sizes/font_size = 11
+
+[node name="TimerLabel" type="Label" parent="TopHBox"]
+custom_minimum_size = Vector2(100, 24)
+layout_mode = 2
+size_flags_vertical = 4
+theme_override_font_sizes/font_size = 20
+text = "5 / 回合 1"
+horizontal_alignment = 1
+vertical_alignment = 0
+
+[node name="BlueHP" type="VBoxContainer" parent="TopHBox"]
+custom_minimum_size = Vector2(350, 80)
+layout_mode = 2
+theme_override_constants/separation = 2
+
+[node name="BlueHPBar" type="ProgressBar" parent="TopHBox/BlueHP"]
+custom_minimum_size = Vector2(350, 18)
+layout_mode = 2
+size_flags_horizontal = 3
+max_value = 10000.0
+value = 10000.0
+show_percentage = false
+
+[node name="BlueBattleLog" type="RichTextLabel" parent="TopHBox/BlueHP"]
+custom_minimum_size = Vector2(350, 56)
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 2
+bbcode_enabled = true
+fit_content = false
+scroll_active = true
+scroll_following = true
+selection_enabled = false
+focus_mode = 0
+theme_override_font_sizes/font_size = 11
+
+[node name="TopCenterButtons" type="HBoxContainer" parent="."]
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -180.0
+offset_top = 60.0
+offset_right = 180.0
+offset_bottom = 92.0
+theme_override_constants/separation = 12
+alignment = 1
+
+[node name="HelpBtn" type="Button" parent="TopCenterButtons"]
+custom_minimum_size = Vector2(80, 28)
+layout_mode = 2
+text = "游戏帮助"
+
+[node name="SettingsBtn" type="Button" parent="TopCenterButtons"]
+custom_minimum_size = Vector2(80, 28)
+layout_mode = 2
+text = "游戏设置"
+
+[node name="AdjustBtn" type="Button" parent="TopCenterButtons"]
+custom_minimum_size = Vector2(80, 28)
+layout_mode = 2
+text = "调整"
+
+[node name="ExitBtn" type="Button" parent="TopCenterButtons"]
+custom_minimum_size = Vector2(80, 28)
+layout_mode = 2
+text = "退出"
+
+[node name="DevBtn" type="Button" parent="TopCenterButtons"]
+custom_minimum_size = Vector2(80, 28)
+layout_mode = 2
+text = "开发工具"
+
+[node name="LeftSidePanel" type="PanelContainer" parent="."]
+anchors_preset = 9
+anchor_left = 0.0
+anchor_top = 1.0
+anchor_right = 0.0
+anchor_bottom = 1.0
+offset_left = 10.0
+offset_top = -172.0
+offset_right = 194.0
+offset_bottom = -30.0
+grow_horizontal = 0
+grow_vertical = 0
+theme_override_styles/panel = SubResource("StyleBoxEmpty_transparent")
+
+[node name="PanelBg" type="TextureRect" parent="LeftSidePanel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+texture = ExtResource("2_info_panel")
+expand_mode = 1
+stretch_mode = 5
+mouse_filter = 2
+
+[node name="PlayerData" type="VBoxContainer" parent="LeftSidePanel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 20.0
+offset_right = -15.0
+offset_top = 10.0
+offset_bottom = -6.0
+theme_override_constants/separation = 0
+alignment = 0
+
+[node name="PlayerGoldLabel" type="Label" parent="LeftSidePanel/PlayerData"]
+layout_mode = 2
+size_flags_vertical = 0
+theme_override_colors/font_color = Color(1, 0.85, 0.3, 1)
+theme_override_font_sizes/font_size = 18
+vertical_alignment = 1
+horizontal_alignment = 1
+text = "200"
+
+[node name="PlayerPopLabel" type="Label" parent="LeftSidePanel/PlayerData"]
+layout_mode = 2
+size_flags_vertical = 0
+theme_override_colors/font_color = Color(0.85, 0.85, 0.85, 1)
+theme_override_font_sizes/font_size = 16
+vertical_alignment = 1
+horizontal_alignment = 1
+text = "0/200"
+
+[node name="PlayerIncomeLabel" type="Label" parent="LeftSidePanel/PlayerData"]
+layout_mode = 2
+size_flags_vertical = 0
+theme_override_colors/font_color = Color(0.6, 1, 0.6, 1)
+theme_override_font_sizes/font_size = 16
+vertical_alignment = 1
+horizontal_alignment = 1
+text = "+0"
+
+[node name="RightSidePanel" type="PanelContainer" parent="."]
+anchors_preset = 11
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -194.0
+offset_top = -172.0
+offset_right = -10.0
+offset_bottom = -30.0
+grow_horizontal = 0
+grow_vertical = 0
+theme_override_styles/panel = SubResource("StyleBoxEmpty_transparent")
+
+[node name="PanelBg" type="TextureRect" parent="RightSidePanel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+texture = ExtResource("2_info_panel")
+expand_mode = 1
+stretch_mode = 5
+mouse_filter = 2
+
+[node name="EnemyData" type="VBoxContainer" parent="RightSidePanel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 20.0
+offset_right = -15.0
+offset_top = 10.0
+offset_bottom = -6.0
+theme_override_constants/separation = 0
+alignment = 0
+
+[node name="EnemyGoldLabel" type="Label" parent="RightSidePanel/EnemyData"]
+layout_mode = 2
+size_flags_vertical = 0
+theme_override_colors/font_color = Color(1, 0.85, 0.3, 1)
+theme_override_font_sizes/font_size = 18
+vertical_alignment = 1
+horizontal_alignment = 2
+text = "200"
+
+[node name="EnemyPopLabel" type="Label" parent="RightSidePanel/EnemyData"]
+layout_mode = 2
+size_flags_vertical = 0
+theme_override_colors/font_color = Color(0.85, 0.85, 0.85, 1)
+theme_override_font_sizes/font_size = 16
+vertical_alignment = 1
+horizontal_alignment = 2
+text = "0/200"
+
+[node name="EnemyIncomeLabel" type="Label" parent="RightSidePanel/EnemyData"]
+layout_mode = 2
+size_flags_vertical = 0
+theme_override_colors/font_color = Color(0.6, 1, 0.6, 1)
+theme_override_font_sizes/font_size = 16
+vertical_alignment = 1
+horizontal_alignment = 2
+text = "+0"
+
+[node name="BottomPanel" type="PanelContainer" parent="."]
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = -95.0
+offset_bottom = 0.0
+theme_override_styles/panel = SubResource("StyleBoxEmpty_transparent")
+
+[node name="BottomHBox" type="HBoxContainer" parent="BottomPanel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 340.0
+offset_right = -40.0
+theme_override_constants/separation = 0
+alignment = 0
+
+[node name="LeftColumn" type="VBoxContainer" parent="BottomPanel/BottomHBox"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/separation = 4
+alignment = 1
+
+[node name="PlayerScroll" type="ScrollContainer" parent="BottomPanel/BottomHBox/LeftColumn"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+custom_minimum_size = Vector2(420, 110)
+horizontal_scroll_mode = 1
+vertical_scroll_mode = 1
+
+[node name="PlayerGrid" type="VBoxContainer" parent="BottomPanel/BottomHBox/LeftColumn/PlayerScroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/separation = 2
+
+[node name="LeftSpacer" type="Control" parent="BottomPanel/BottomHBox"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="CenterPreview" type="TextureRect" parent="BottomPanel/BottomHBox"]
+custom_minimum_size = Vector2(95, 95)
+layout_mode = 2
+expand_mode = 1
+stretch_mode = 5
+mouse_filter = 2
+visible = false
+offset_top = 30.0
+
+[node name="RightSpacer" type="Control" parent="BottomPanel/BottomHBox"]
+layout_mode = 2
+custom_minimum_size = Vector2(0, 0)
+size_flags_horizontal = 3
+
+[node name="RightColumn" type="VBoxContainer" parent="BottomPanel/BottomHBox"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/separation = 4
+alignment = 1
+
+[node name="EnemyScroll" type="ScrollContainer" parent="BottomPanel/BottomHBox/RightColumn"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+custom_minimum_size = Vector2(420, 110)
+horizontal_scroll_mode = 1
+vertical_scroll_mode = 1
+
+[node name="EnemyGrid" type="VBoxContainer" parent="BottomPanel/BottomHBox/RightColumn/EnemyScroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/separation = 2

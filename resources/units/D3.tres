@@ -1,0 +1,33 @@
+[gd_resource type="Resource" script_class="UnitResource" format=3]
+
+[ext_resource type="Script" path="res://resources/units/unit_base_resource.gd" id="1_base"]
+[ext_resource type="Texture2D" path="res://assets/weapons/bolt.png" id="1_bolt"]
+[ext_resource type="Script" path="res://resources/affixes/affix_resource.gd" id="1_g85gp"]
+
+[resource]
+script = ExtResource("1_base")
+unit_id = "D3"
+display_name = "弩手"
+description = "Doro 阵营远程爆发单位。使用弩进行射击，装填较慢，但对重甲目标杀伤惊人。"
+tier = 3
+supply_cost = 2
+cost = 70
+move_speed = 1.0
+damage = 40
+attack_range = 7.0
+attack_speed = 3.0
+damage_by_hit = [{
+1: 30
+}]
+attack_hit_frame_start = 14
+attack_sound_frame = 14
+default_facing = 1
+display_height = 59.0
+move_display_height = 39.0
+move_display_width = 40.0
+attack_display_height = 137.0
+attack_display_width = 137.0
+attack_flip_override = 1
+projectile_texture = ExtResource("1_bolt")
+color_red = Color(0.75, 0.25, 0.55, 1)
+color_blue = Color(0.25, 0.3, 0.75, 1)

@@ -1,0 +1,35 @@
+[gd_resource type="Resource" script_class="UnitResource" format=3]
+
+[ext_resource type="Script" path="res://resources/affixes/affix_resource.gd" id="1_7tfe4"]
+[ext_resource type="Texture2D" path="res://assets/weapons/axe.png" id="1_axe"]
+[ext_resource type="Script" path="res://resources/units/unit_base_resource.gd" id="1_base"]
+
+[resource]
+script = ExtResource("1_base")
+unit_id = "D5"
+display_name = "飞斧手"
+description = "Doro 阵营中距离输出。快速投掷飞斧进行骚扰，机动性较强，以挥砍伤害消耗敌人。"
+tier = 2
+cost = 65
+damage = 30
+damage_types = Array[int]([0])
+damage_by_type = {
+0: 30
+}
+attack_range = 5.5
+is_ranged_override = 1
+attack_speed = 2.5
+damage_by_hit = [{
+0: 30
+}]
+attack_hit_frame_start = 8
+attack_sound_frame = 8
+move_display_height = 43.0
+move_display_width = 43.0
+attack_display_height = 48.0
+attack_display_width = 48.0
+attack_anim_speed = 0.9
+projectile_texture = ExtResource("1_axe")
+projectile_spin_speed = 720.0
+color_red = Color(0.7, 0.3, 0.5, 1)
+color_blue = Color(0.3, 0.3, 0.7, 1)

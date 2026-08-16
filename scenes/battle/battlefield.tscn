@@ -1,0 +1,48 @@
+[gd_scene format=3 uid="uid://battlefield"]
+
+[ext_resource type="Script" uid="uid://c0lkqhydywuoe" path="res://scenes/battle/battlefield.gd" id="1_bf"]
+[ext_resource type="Texture2D" uid="uid://cnsj1eo4d1yty" path="res://assets/ui/battle_ui_bg.png" id="2_ui"]
+[ext_resource type="Texture2D" uid="uid://bi6b0vkm6lave" path="res://assets/backgrounds/battle_bg.png" id="3_bg"]
+
+[node name="Battlefield" type="Node2D" unique_id=1231633098]
+script = ExtResource("1_bf")
+
+[node name="BGUI" type="CanvasLayer" parent="." unique_id=201541899]
+layer = 1
+
+[node name="BattleUI" type="TextureRect" parent="BGUI" unique_id=610661484]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
+texture = ExtResource("2_ui")
+expand_mode = 1
+stretch_mode = 6
+
+[node name="Background" type="Sprite2D" parent="."]
+position = Vector2(0, 0)
+texture = ExtResource("3_bg")
+centered = true
+
+[node name="RedBase" type="ColorRect" parent="." unique_id=956479786]
+offset_left = -592.0
+offset_top = -50.0
+offset_right = -560.0
+offset_bottom = 50.0
+color = Color(0.85, 0.15, 0.15, 1)
+
+[node name="BlueBase" type="ColorRect" parent="." unique_id=307953097]
+offset_left = 560.0
+offset_top = -50.0
+offset_right = 592.0
+offset_bottom = 50.0
+color = Color(0.15, 0.15, 0.85, 1)
+
+[node name="Camera2D" type="Camera2D" parent="." unique_id=920957191]
+zoom = Vector2(1.2, 1.2)
+limit_left = -10000
+limit_top = -10000
+limit_right = 10000
+limit_bottom = 10000
+
+[node name="UnitContainer" type="Node2D" parent="." unique_id=554147477]

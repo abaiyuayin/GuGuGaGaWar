@@ -1,0 +1,39 @@
+[gd_resource type="Resource" script_class="UnitResource" format=3]
+
+[ext_resource type="Script" path="res://resources/units/unit_base_resource.gd" id="1_base"]
+[ext_resource type="Script" path="res://resources/affixes/affix_resource.gd" id="1_idw8c"]
+[ext_resource type="Texture2D" path="res://assets/projectiles/arrow.png" id="2_arrow"]
+
+[resource]
+script = ExtResource("1_base")
+unit_id = "G3"
+display_name = "弓箭手"
+description = "咕嘎阵营远程输出。持弓射击，无盾轻装，能在远距离以刺伤持续打击敌人。"
+tier = 2
+supply_cost = 2
+cost = 70
+move_speed = 1.0
+damage = 25
+damage_type = 1
+damage_types = Array[int]([1])
+damage_by_type = {
+1: 25
+}
+attack_range = 8.0
+attack_speed = 3.0
+damage_by_hit = [{
+1: 25
+}]
+attack_hit_frame_start = 14
+attack_sound_frame = 14
+default_facing = 1
+move_display_height = 52.0
+move_display_width = 52.0
+walk_display_height = 50.0
+walk_display_width = 50.0
+attack_display_height = 83.0
+attack_display_width = 83.0
+attack_anim_speed = 0.7
+projectile_texture = ExtResource("2_arrow")
+color_red = Color(0.9, 0.5, 0.2, 1)
+color_blue = Color(0.2, 0.5, 0.9, 1)

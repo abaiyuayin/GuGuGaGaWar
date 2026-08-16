@@ -1,0 +1,204 @@
+{
+  "events": [
+    {
+      "event_id": "lost_caravan",
+      "title": "迷路商队",
+      "description": "一支押着绸缎与铁器的商队在岔路口迷了路，车轴吱呀作响，马匹打着响鼻。领队见你带兵，连忙拱手求助。",
+      "options": [
+        {"label": "护送一程：获得 40 金币", "effect_type": "gain_gold", "value": 40, "result": "商队平安过关，领队塞给你一袋谢礼。"},
+        {"label": "假装勒索：失去 30 金币并遭受反扑", "effect_type": "lose_gold", "value": 30, "result": "商队护卫拔刀相向，你只能破财消灾。"},
+        {"label": "置之不理", "effect_type": "nothing", "value": 0, "result": "商队朝另一条路驶去，很快消失在尘土中。"}
+      ]
+    },
+    {
+      "event_id": "broken_armory",
+      "title": "破损军械库",
+      "description": "一座半塌的军械库藏在断墙后，门口躺着两具白骨，甲胄锈得只剩轮廓。库内昏暗，隐约可见刀枪架。",
+      "options": [
+        {"label": "挑选兵器：获得一张随机卡牌", "effect_type": "gain_card", "value": 2, "result": "你挑出一柄尚能用的兵刃，收入行囊。"},
+        {"label": "深挖暗格：花 25 金币获得一张高阶卡牌", "effect_type": "lose_gold", "value": 25, "result": "暗格里藏着精锻兵器，但你需要贿赂守库的幽魂。"},
+        {"label": "扫兴离开", "effect_type": "nothing", "value": 0, "result": "尘土重新落回刀枪架，军械库恢复死寂。"}
+      ]
+    },
+    {
+      "event_id": "starving_refugees",
+      "title": "饥饿流民",
+      "description": "一队面黄肌瘦的流民挤在破庙里，见到你便围上来，七嘴八舌求一口吃的。他们衣衫褴褛，却目光炯炯。",
+      "options": [
+        {"label": "施舍粮草：失去 30 金币，获得一张低级卡牌", "effect_type": "gain_low_card", "value": 0, "result": "流民千恩万谢，青壮年自愿从军相报。"},
+        {"label": "招募壮丁：获得一张低级卡牌", "effect_type": "gain_low_card", "value": 0, "result": "几个精壮汉子跟你走了，别的流民继续挨饿。"},
+        {"label": "绕开而行", "effect_type": "nothing", "value": 0, "result": "你低头绕过破庙，身后传来压抑的哭声。"}
+      ]
+    },
+    {
+      "event_id": "roadside_sacrifice",
+      "title": "路祭亡魂",
+      "description": "岔路口摆着一排纸钱与白幡，是当地人为战死将士设的路祭。纸灰打着旋，似乎有什么东西在盯着你。",
+      "options": [
+        {"label": "焚香祭拜：随机一张卡获得强化", "effect_type": "upgrade_random", "value": 0, "result": "香火袅袅升起，冥冥中似有亡魂指引。"},
+        {"label": "拿走供品：失去一张卡牌", "effect_type": "lose_card", "value": 0, "result": "你刚摸到供果，一阵阴风卷走了你的行军图。"},
+        {"label": "郑重绕行", "effect_type": "nothing", "value": 0, "result": "你朝白幡拱手，快步离开了路口。"}
+      ]
+    },
+    {
+      "event_id": "abandoned_inn",
+      "title": "废弃驿站",
+      "description": "驿站的旗幡烂了一半，灶台还温着，却空无一人。桌上放着半壶酒和一卷发黄的邸报。",
+      "options": [
+        {"label": "搜刮驿站：获得 30 金币", "effect_type": "gain_gold", "value": 30, "result": "你在柜台夹层里摸到一包散碎银两。"},
+        {"label": "翻查邸报：获得一张随机军令", "effect_type": "gain_order", "value": 0, "result": "邸报里夹着一张调兵密令，你悄悄收好。"},
+        {"label": "速速离去", "effect_type": "nothing", "value": 0, "result": "你总觉得这座驿站不该有人，还是走了。"}
+      ]
+    },
+    {
+      "event_id": "veteran_relic",
+      "title": "老兵的遗物",
+      "description": "路边的坟前插着一杆断枪，枪头缠着褪色的红缨。土堆里露出一角油布包裹，像是老兵留给后人的东西。",
+      "options": [
+        {"label": "郑重带走：获得一件文物", "effect_type": "gain_artifact", "value": 0, "result": "油布里包着一件旧物，似有灵性。"},
+        {"label": "就地变卖：获得 35 金币", "effect_type": "gain_gold", "value": 35, "result": "你把旧物卖给了路过的行商。"},
+        {"label": "原样埋好", "effect_type": "nothing", "value": 0, "result": "你重新培土，让老兵安眠。"}
+      ]
+    },
+    {
+      "event_id": "stray_warhorse",
+      "title": "走失的战马",
+      "description": "一匹披甲的战马在溪边饮水，鞍鞯齐全，却不见主人。它警惕地打量着你，鬃毛被血凝成一绺一绺。",
+      "options": [
+        {"label": "尝试驯服：获得一张低级卡牌", "effect_type": "gain_low_card", "value": 0, "result": "马认了主，跟着你的队伍走了。"},
+        {"label": "卖给马贩：获得 30 金币", "effect_type": "gain_gold", "value": 30, "result": "马贩子眼尖，出价爽快。"},
+        {"label": "放它自由", "effect_type": "nothing", "value": 0, "result": "战马嘶鸣一声，头也不回地跑远了。"}
+      ]
+    },
+    {
+      "event_id": "bandit_ambush",
+      "title": "伏击的响马",
+      "description": "林间突然跳出七八条黑影，为首的大汉掂着鬼头刀，索要过路钱。刀光雪亮，显然不是善茬。",
+      "options": [
+        {"label": "拔刀迎战：获得 60 金币", "effect_type": "gain_gold", "value": 60, "result": "一场恶战后，响马四散，你缴获不少。"},
+        {"label": "破财免灾：失去 40 金币", "effect_type": "lose_gold", "value": 40, "result": "你扔下钱袋，响马扬长而去。"},
+        {"label": "虚张声势吓退", "effect_type": "nothing", "value": 0, "result": "你一声断喝，响马疑心有埋伏，竟真跑了。"}
+      ]
+    },
+    {
+      "event_id": "mysterious_taoist",
+      "title": "神秘老道",
+      "description": "一个白须老道盘坐在青石上，面前摆着签筒与卦摊。他眯眼打量你，说你有兵戈之气，问你要不要算一卦。",
+      "options": [
+        {"label": "求一签：随机一张卡获得强化", "effect_type": "upgrade_random", "value": 0, "result": "老道看了签文，点头道：此战可期。"},
+        {"label": "求一道符：获得一张随机军令", "effect_type": "gain_order", "value": 0, "result": "老道画符一张，你贴身收好。"},
+        {"label": "拂袖而去", "effect_type": "nothing", "value": 0, "result": "老道也不恼，闭目继续打坐。"}
+      ]
+    },
+    {
+      "event_id": "battlefield_scavenge",
+      "title": "战场拾荒",
+      "description": "一片刚结束的战场上插满断戟残旗，鸦群盘旋。尸堆间隐约有甲胄与箭囊的反光。",
+      "options": [
+        {"label": "快速搜捡：获得一张随机卡牌", "effect_type": "gain_card", "value": 3, "result": "你捡到一把还算趁手的兵器。"},
+        {"label": "深入翻找：获得 50 金币", "effect_type": "gain_gold", "value": 50, "result": "你在尸堆下摸到一只沉甸甸的军饷袋。"},
+        {"label": "不忍打扰亡者", "effect_type": "nothing", "value": 0, "result": "你朝战场一拜，转身离去。"}
+      ]
+    },
+    {
+      "event_id": "frozen_ferry",
+      "title": "结冰的渡口",
+      "description": "渡口的船被冻在河中央，冰面闪着幽蓝的光。对岸有灯火，却不知深浅。艄公说冰已结了三尺。",
+      "options": [
+        {"label": "冒险踏冰：获得 45 金币", "effect_type": "gain_gold", "value": 45, "result": "你顺利过河，在岸边拾到一袋货钱。"},
+        {"label": "凿冰开道：花 20 金币买柴火", "effect_type": "lose_gold", "value": 20, "result": "火烤冰开，你帮着艄公把船拖了出来。"},
+        {"label": "沿河绕行", "effect_type": "nothing", "value": 0, "result": "你多走了半天路，倒也不算吃亏。"}
+      ]
+    },
+    {
+      "event_id": "wounded_courier",
+      "title": "负伤的信使",
+      "description": "一个信使倒在路边，箭伤染红了衣甲，怀里死死抱着竹筒信囊。他见你靠近，挣扎着伸出手。",
+      "options": [
+        {"label": "救治信使：获得一张随机军令", "effect_type": "gain_order", "value": 0, "result": "信使感激，将军报抄了一份送你。"},
+        {"label": "取走信囊：获得 40 金币", "effect_type": "gain_gold", "value": 40, "result": "信囊里没有银钱，但你从竹筒里摸出几枚赏钱。"},
+        {"label": "不予理会", "effect_type": "nothing", "value": 0, "result": "信使的眼神渐渐黯淡下去。"}
+      ]
+    },
+    {
+      "event_id": "dense_forest_tomb",
+      "title": "密林古墓",
+      "description": "密林深处露出一座半塌的石墓，墓门大开，甬道漆黑，隐约可见壁画上描绘着征战与封赏的场景。",
+      "options": [
+        {"label": "举火探索：获得一件文物", "effect_type": "gain_artifact", "value": 0, "result": "墓中陪葬的一件古物颇有灵气。"},
+        {"label": "谨慎掘金：获得 35 金币", "effect_type": "gain_gold", "value": 35, "result": "你在甬道角落摸到一罐铜钱。"},
+        {"label": "关门退走", "effect_type": "nothing", "value": 0, "result": "你替墓主人掩上石门，退了出来。"}
+      ]
+    },
+    {
+      "event_id": "recruiting_post",
+      "title": "义军募兵点",
+      "description": "村口立着「募」字旗，几个壮汉围在火堆旁磨刀。募兵官见你佩刀带甲，眼睛一亮，问你要不要搭伙。",
+      "options": [
+        {"label": "投军入伙：获得一张低级卡牌", "effect_type": "gain_low_card", "value": 0, "result": "几个刀客跟着你走了，队伍又壮了几分。"},
+        {"label": "资助军饷：花 30 金币获得一张高阶卡牌", "effect_type": "lose_gold", "value": 30, "result": "募兵官亲自挑了精锐编入你的麾下。"},
+        {"label": "婉言谢绝", "effect_type": "nothing", "value": 0, "result": "募兵官拱拱手，继续招呼别的路人。"}
+      ]
+    },
+    {
+      "event_id": "grain_cart",
+      "title": "运粮车队",
+      "description": "一支运粮车队陷在泥地里，粮袋压得车辙深陷。押车的军校满头大汗，见你过来忙招呼众人搭把手。",
+      "options": [
+        {"label": "帮忙推车：获得 30 金币", "effect_type": "gain_gold", "value": 30, "result": "粮车脱困，军校塞给你一袋粮钱。"},
+        {"label": "索要保护费：失去 20 金币", "effect_type": "lose_gold", "value": 20, "result": "你狮子大开口，反而被车夫们讹了一笔。"},
+        {"label": "扬长而去", "effect_type": "nothing", "value": 0, "result": "粮车继续陷在泥里，你头也不回。"}
+      ]
+    },
+    {
+      "event_id": "wild_village_altar",
+      "title": "荒村祭坛",
+      "description": "荒村的中央立着一座石祭坛，坛上摆着牲礼与血酒。村长说今年收成差，求的是「兵不犯境」。",
+      "options": [
+        {"label": "献上战利品：失去一张卡牌，获得 60 金币", "effect_type": "lose_card", "value": 0, "result": "祭坛显灵，村民凑出犒劳你的银钱。"},
+        {"label": "虔诚祈福：随机一张卡获得强化", "effect_type": "upgrade_random", "value": 0, "result": "烟雾中你仿佛看见了旗开得胜的预兆。"},
+        {"label": "绕过祭坛", "effect_type": "nothing", "value": 0, "result": "你不在祭坛前停留，径直穿村而过。"}
+      ]
+    },
+    {
+      "event_id": "iron_smith",
+      "title": "铁矿工匠",
+      "description": "镇上的铁匠铺炉火正旺，老铁匠赤着上身锻打一柄陌刀，火星四溅。他说手艺传了三代，专打军器。",
+      "options": [
+        {"label": "订做军器：花 30 金币，随机一张卡获得强化", "effect_type": "lose_gold", "value": 30, "result": "好刀配好兵，你的队伍战力更上一层。"},
+        {"label": "买现成甲胄：花 25 金币获得一张随机军令", "effect_type": "lose_gold", "value": 25, "result": "老铁匠还附赠了一条排兵布阵的锦囊。"},
+        {"label": "只看不买", "effect_type": "nothing", "value": 0, "result": "铁匠摇摇头，继续打他的铁。"}
+      ]
+    },
+    {
+      "event_id": "field_medic_tent",
+      "title": "军医帐",
+      "description": "伤兵营外支着几顶白布帐篷，军医正用烈酒给伤兵剜腐肉。药香与血腥气混在一起，火盆烧得通红。",
+      "options": [
+        {"label": "求一剂补药：获得一张随机军令", "effect_type": "gain_order", "value": 0, "result": "军医塞给你一卷伤兵营的军令文书。"},
+        {"label": "捐赠药材：花 25 金币获得一件文物", "effect_type": "lose_gold", "value": 25, "result": "军医感念你的慷慨，送了你一件护身旧物。"},
+        {"label": "转身离开", "effect_type": "nothing", "value": 0, "result": "伤兵的呻吟声渐渐被风吹散。"}
+      ]
+    },
+    {
+      "event_id": "sky_lantern",
+      "title": "飘来的孔明灯",
+      "description": "夜色中一盏孔明灯晃晃悠悠飘到营前，灯身糊着红纸，写着「平安」二字，火光将熄未熄。",
+      "options": [
+        {"label": "许愿祈福：获得 25 金币", "effect_type": "gain_gold", "value": 25, "result": "第二天清晨，你发现营门口多了袋铜钱。"},
+        {"label": "截下灯芯：获得一张随机军令", "effect_type": "gain_order", "value": 0, "result": "灯芯里卷着一张字条，写着一道行军口令。"},
+        {"label": "任它飘远", "effect_type": "nothing", "value": 0, "result": "孔明灯化作一点红星，消失在夜幕里。"}
+      ]
+    },
+    {
+      "event_id": "final_night_campfire",
+      "title": "决战前夜篝火",
+      "description": "决战前夜，士兵们围着篝火烤干粮。一个老兵慢悠悠讲起当年的战事，火光照着一张张年轻的脸。",
+      "options": [
+        {"label": "听老兵讲战事：随机一张卡获得强化", "effect_type": "upgrade_random", "value": 0, "result": "老兵的经验让你受用无穷。"},
+        {"label": "亲自操练：获得一张低级卡牌", "effect_type": "gain_low_card", "value": 0, "result": "新兵在篝火边跟你学了几手，第二天就能上阵。"},
+        {"label": "早歇养精蓄锐：获得 20 金币", "effect_type": "gain_gold", "value": 20, "result": "你睡了个好觉，顺手替伙夫算了笔粮账，省下二十金。"}
+      ]
+    }
+  ]
+}

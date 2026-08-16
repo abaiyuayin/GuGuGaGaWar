@@ -1,0 +1,19 @@
+[gd_scene load_steps=2 format=3 uid="uid://countdown"]
+
+[ext_resource type="Script" path="res://scenes/ui/countdown_timer.gd" id="1_timer"]
+
+[node name="CountdownTimer" type="PanelContainer"]
+script = ExtResource("1_timer")
+
+[node name="HBox" type="HBoxContainer" parent="."]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="RoundLabel" type="Label" parent="HBox"]
+layout_mode = 2
+text = "回合 1"
+
+[node name="TimerLabel" type="Label" parent="HBox"]
+layout_mode = 2
+horizontal_alignment = 2
+text = "30"

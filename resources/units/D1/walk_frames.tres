@@ -1,0 +1,164 @@
+[gd_resource type="SpriteFrames" load_steps=21 format=3 uid="uid://d1_walk_frames"]
+
+[ext_resource type="Texture2D" path="res://resources/units/D1/walk_sheet.png" id="1_walk_sheet"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_walk_0"]
+atlas = ExtResource("1_walk_sheet")
+region = Rect2(0, 0, 400, 400)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_walk_1"]
+atlas = ExtResource("1_walk_sheet")
+region = Rect2(400, 0, 400, 400)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_walk_2"]
+atlas = ExtResource("1_walk_sheet")
+region = Rect2(800, 0, 400, 400)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_walk_3"]
+atlas = ExtResource("1_walk_sheet")
+region = Rect2(1200, 0, 400, 400)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_walk_4"]
+atlas = ExtResource("1_walk_sheet")
+region = Rect2(1600, 0, 400, 400)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_walk_5"]
+atlas = ExtResource("1_walk_sheet")
+region = Rect2(2000, 0, 400, 400)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_walk_6"]
+atlas = ExtResource("1_walk_sheet")
+region = Rect2(2400, 0, 400, 400)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_walk_7"]
+atlas = ExtResource("1_walk_sheet")
+region = Rect2(2800, 0, 400, 400)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_walk_8"]
+atlas = ExtResource("1_walk_sheet")
+region = Rect2(3200, 0, 400, 400)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_walk_9"]
+atlas = ExtResource("1_walk_sheet")
+region = Rect2(3600, 0, 400, 400)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_walk_10"]
+atlas = ExtResource("1_walk_sheet")
+region = Rect2(0, 400, 400, 400)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_walk_11"]
+atlas = ExtResource("1_walk_sheet")
+region = Rect2(400, 400, 400, 400)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_walk_12"]
+atlas = ExtResource("1_walk_sheet")
+region = Rect2(800, 400, 400, 400)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_walk_13"]
+atlas = ExtResource("1_walk_sheet")
+region = Rect2(1200, 400, 400, 400)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_walk_14"]
+atlas = ExtResource("1_walk_sheet")
+region = Rect2(1600, 400, 400, 400)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_walk_15"]
+atlas = ExtResource("1_walk_sheet")
+region = Rect2(2000, 400, 400, 400)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_walk_16"]
+atlas = ExtResource("1_walk_sheet")
+region = Rect2(2400, 400, 400, 400)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_walk_17"]
+atlas = ExtResource("1_walk_sheet")
+region = Rect2(2800, 400, 400, 400)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_walk_18"]
+atlas = ExtResource("1_walk_sheet")
+region = Rect2(3200, 400, 400, 400)
+
+[resource]
+animations = [{
+"frames": [
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_walk_0")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_walk_1")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_walk_2")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_walk_3")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_walk_4")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_walk_5")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_walk_6")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_walk_7")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_walk_8")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_walk_9")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_walk_10")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_walk_11")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_walk_12")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_walk_13")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_walk_14")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_walk_15")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_walk_16")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_walk_17")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_walk_18")
+}
+],
+"loop": true,
+"name": &"walk",
+"speed": 10
+}]

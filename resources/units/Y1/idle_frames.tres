@@ -1,0 +1,43 @@
+[gd_resource type="SpriteFrames" load_steps=9 format=3]
+
+[ext_resource type="Texture2D" path="res://resources/units/Y1/idle_sheet.png" id="1_sheet"]
+
+[sub_resource type="AtlasTexture" id="atlas_0"]
+atlas = ExtResource("1_sheet")
+region = Rect2(0, 0, 140, 93)
+
+[sub_resource type="AtlasTexture" id="atlas_1"]
+atlas = ExtResource("1_sheet")
+region = Rect2(140, 0, 140, 93)
+
+[sub_resource type="AtlasTexture" id="atlas_2"]
+atlas = ExtResource("1_sheet")
+region = Rect2(280, 0, 140, 93)
+
+[sub_resource type="AtlasTexture" id="atlas_3"]
+atlas = ExtResource("1_sheet")
+region = Rect2(420, 0, 140, 93)
+
+[sub_resource type="AtlasTexture" id="atlas_4"]
+atlas = ExtResource("1_sheet")
+region = Rect2(560, 0, 140, 93)
+
+[sub_resource type="AtlasTexture" id="atlas_5"]
+atlas = ExtResource("1_sheet")
+region = Rect2(700, 0, 140, 93)
+
+[sub_resource type="AtlasTexture" id="atlas_6"]
+atlas = ExtResource("1_sheet")
+region = Rect2(840, 0, 140, 93)
+
+[sub_resource type="AtlasTexture" id="atlas_7"]
+atlas = ExtResource("1_sheet")
+region = Rect2(980, 0, 140, 93)
+
+[resource]
+animations = [{
+"frames": [SubResource("atlas_0"), SubResource("atlas_1"), SubResource("atlas_2"), SubResource("atlas_3"), SubResource("atlas_4"), SubResource("atlas_5"), SubResource("atlas_6"), SubResource("atlas_7")],
+"loop": true,
+"name": "idle",
+"speed": 10.0
+}]

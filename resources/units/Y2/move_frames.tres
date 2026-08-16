@@ -1,0 +1,196 @@
+[gd_resource type="SpriteFrames" load_steps=24 format=3]
+
+[ext_resource type="Texture2D" path="res://resources/units/Y2/move_sheet.png" id="1_move_sheet"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_move_0"]
+atlas = ExtResource("1_move_sheet")
+region = Rect2(0, 0, 512, 512)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_move_1"]
+atlas = ExtResource("1_move_sheet")
+region = Rect2(512, 0, 512, 512)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_move_2"]
+atlas = ExtResource("1_move_sheet")
+region = Rect2(1024, 0, 512, 512)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_move_3"]
+atlas = ExtResource("1_move_sheet")
+region = Rect2(1536, 0, 512, 512)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_move_4"]
+atlas = ExtResource("1_move_sheet")
+region = Rect2(2048, 0, 512, 512)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_move_5"]
+atlas = ExtResource("1_move_sheet")
+region = Rect2(2560, 0, 512, 512)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_move_6"]
+atlas = ExtResource("1_move_sheet")
+region = Rect2(3072, 0, 512, 512)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_move_7"]
+atlas = ExtResource("1_move_sheet")
+region = Rect2(3584, 0, 512, 512)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_move_8"]
+atlas = ExtResource("1_move_sheet")
+region = Rect2(4096, 0, 512, 512)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_move_9"]
+atlas = ExtResource("1_move_sheet")
+region = Rect2(4608, 0, 512, 512)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_move_10"]
+atlas = ExtResource("1_move_sheet")
+region = Rect2(0, 512, 512, 512)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_move_11"]
+atlas = ExtResource("1_move_sheet")
+region = Rect2(512, 512, 512, 512)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_move_12"]
+atlas = ExtResource("1_move_sheet")
+region = Rect2(1024, 512, 512, 512)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_move_13"]
+atlas = ExtResource("1_move_sheet")
+region = Rect2(1536, 512, 512, 512)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_move_14"]
+atlas = ExtResource("1_move_sheet")
+region = Rect2(2048, 512, 512, 512)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_move_15"]
+atlas = ExtResource("1_move_sheet")
+region = Rect2(2560, 512, 512, 512)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_move_16"]
+atlas = ExtResource("1_move_sheet")
+region = Rect2(3072, 512, 512, 512)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_move_17"]
+atlas = ExtResource("1_move_sheet")
+region = Rect2(3584, 512, 512, 512)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_move_18"]
+atlas = ExtResource("1_move_sheet")
+region = Rect2(4096, 512, 512, 512)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_move_19"]
+atlas = ExtResource("1_move_sheet")
+region = Rect2(4608, 512, 512, 512)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_move_20"]
+atlas = ExtResource("1_move_sheet")
+region = Rect2(0, 1024, 512, 512)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_move_21"]
+atlas = ExtResource("1_move_sheet")
+region = Rect2(512, 1024, 512, 512)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_move_22"]
+atlas = ExtResource("1_move_sheet")
+region = Rect2(1024, 1024, 512, 512)
+
+[resource]
+animations = [{
+"frames": [
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_move_0")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_move_1")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_move_2")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_move_3")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_move_4")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_move_5")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_move_6")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_move_7")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_move_8")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_move_9")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_move_10")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_move_11")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_move_12")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_move_13")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_move_14")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_move_15")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_move_16")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_move_17")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_move_18")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_move_19")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_move_20")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_move_21")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_move_22")
+}
+],
+"loop": true,
+"name": &"move",
+"speed": 10.0
+}]
