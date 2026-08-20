@@ -222,8 +222,8 @@ func _on_map_pressed() -> void:
 	AudioManager.play_menu_bgm()
 	## 取消暂停
 	get_tree().paused = false
-	## 返回战役地图
-	get_tree().change_scene_to_file("res://scenes/ui/campaign_map.tscn")
+	## 返回战役地图（带加载遮罩）
+	GameManager.change_scene_with_loading("res://scenes/ui/campaign_map.tscn")
 
 ## 返回主菜单按钮回调
 func _on_menu_pressed() -> void:

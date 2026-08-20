@@ -59,6 +59,9 @@ var diff_btn: Button = null
 @onready var left_panel: PanelContainer = $LeftSidePanel
 @onready var right_panel: PanelContainer = $RightSidePanel
 
+## 快速出兵（开发者模式专属，全面战争/双人模式）：左右信息面板旁的下拉+数量+确认
+var _quick_spawn_ui: Array[Control] = []  ## 创建的所有快速出兵控件（红/蓝），用于统一显隐
+
 ## 调整面板（实时调节信�?��板位�?尺�?、各数据行位�?�����?时位�?��
 var _adjust_panel: Control = null
 ## 信息面板（左/右经济面板）当前应用的位�?��移，按侧�?���?10）：索引 0=左侧�?=右侧
@@ -95,6 +98,22 @@ var _battle_elapsed: float = 0.0
 var unit_buttons: Array[TextureButton] = []
 ## 敌人侧兵种按�?��组（TextureButton，非 Button�?
 var enemy_buttons: Array[TextureButton] = []
+## 战场模式：当前选中的出兵兵种与阵营（不写入 BattleManager.selected_units，避免自动出兵循环）
+## battlefield_spawn_team: 0=红方/左列(G/D/Hero)，1=蓝方/右列(F/N/S/Y)，由战场控制器读取用于落点布兵
+var battlefield_spawn_res: Resource = null
+var battlefield_spawn_team: int = 0
+## 战场模式：网格显隐切换按钮（G 键同效），普通模式不创建
+var grid_toggle_btn: Button = null
+
+## 战场模式：阵容控制（多阵营）按钮组
+var team_selector_bar: HBoxContainer = null
+var team_buttons: Array[Button] = []
+var team_add_btn: Button = null
+## 战场模式：和平/战争 + 开战控制按钮
+var combat_peace_btn: Button = null
+var combat_start_btn: Button = null
+## 战场模式：出兵范围编辑按钮
+var deploy_zone_btn: Button = null
 
 ## 当前打开的游戏内设置对话框引�?
 var _settings_dialog: AcceptDialog = null
@@ -161,10 +180,23 @@ const DEV_INCOME_STEP: int = 200
 ## 水晶下方扣�?日志条最多保留的行数
 const MAX_LOG_LINES: int = 3
 
-## 各玩家��中兵�?按钮缓存（key=player_id, value=BaseButton�?
+## 各玩家选中兵种按钮缓存（key=player_id, value=BaseButton）
+## 2026-08-18：选中效果从红蓝边框改为「水平垂直居中缩小到 1/5 宽高」（scale=1/5）
 var _selection_borders: Dictionary = {}
-## 各玩家出兵闪烁动�?Tween 缓存（key=player_id, value=Tween�?
+## 各玩家出兵闪烁动画 Tween 缓存（key=player_id, value=Tween）
 var _flash_tweens: Dictionary = {}
+## 各玩家出兵抖动状态（key=player_id, value=bool）：true=当前在 1/4 缩放位（1/4），false=在 1/5 位（1/5）
+var _pulse_wide: Dictionary = {}
+## 各玩家出兵停止回落检测 Timer（key=player_id, value=Timer）
+var _flash_reset_timers: Dictionary = {}
+## 选中按钮缩放（缩小到 1/5 宽高，2026-08-18 用户拍板）
+const SEL_SCALE: float = 1.0 / 5.0
+## 出兵抖动缩放（缩小到 1/4 宽高，2026-08-18 用户拍板）
+const PULSE_SCALE: float = 1.0 / 4.0
+## 出兵抖动切换周期（秒）：出兵期间选中态(1/5)↔出兵态(1/4) 每 0.3s 切换一次（2026-08-18 用户拍板）
+const PULSE_INTERVAL: float = 0.3
+## 出兵停止回落检测窗口（秒）：连续 0.6s（两个切换周期）无新出兵 → 回落到选中态 1/5
+const PULSE_RESET_AFTER: float = 0.6
 ## #3：玩�?敌人侧按�?��的拖拽滚动�?理器（_setup_drag_scroll 返回，按�?��按滚动共�?��
 var _player_drag_handler: Dictionary = {}
 var _enemy_drag_handler: Dictionary = {}
@@ -294,6 +326,11 @@ func _ready() -> void:
 	_apply_saved_info_panel_offset()
 	## 窗口尺�?变化时重新做边界约束，保证信�?��板永远留在可视区内（#1�?
 	get_viewport().size_changed.connect(_on_viewport_resized)
+	## 战场模式：调整 HUD 布局（隐藏经济面板/重建加高的两列兵种栏）
+	if GameManager.is_battlefield_mode:
+		apply_battlefield_layout()
+	## 快速出兵（开发者模式，全面战争/双人模式）：在左右信息面板旁创建
+	_create_quick_spawn_controls()
 
 ## 肉鸽模式布局：隐藏与金币经济、基地水晶��固定兵种��择相关的控�?
 ## 常�?模式下�?函数不做任何事，保证对既有战�?双人流程零影�?
@@ -315,6 +352,194 @@ func _apply_roguelike_layout() -> void:
 	if bottom_panel != null:
 		bottom_panel.visible = false
 
+## 战场模式布局：隐藏左右经济面板/计时标签/难度标签/中央预览，
+## 清空并重建底部两列兵种按钮（左列=G/D/Hero 红方、右列=F/N/S/Y 蓝方，无视解锁全放开，按钮 160×160）
+## 仅 GameManager.is_battlefield_mode 下生效；其余模式本函数直接返回，零影响
+func apply_battlefield_layout() -> void:
+	if not GameManager.is_battlefield_mode:
+		return
+	## 隐藏两侧金币/人口/收入经济面板
+	var left_panel := get_node_or_null("LeftSidePanel") as Control
+	if left_panel != null:
+		left_panel.visible = false
+	var right_panel := get_node_or_null("RightSidePanel") as Control
+	if right_panel != null:
+		right_panel.visible = false
+	## 隐藏顶部计时/回合标签（沙盒无回合）与难度标签
+	if timer_label != null:
+		timer_label.visible = false
+	if diff_btn != null:
+		diff_btn.visible = false
+	## 隐藏中央选中兵种预览（沙盒不需要）
+	if center_preview != null:
+		center_preview.visible = false
+	## 清空并重建两列兵种按钮（_create_unit_buttons 已在 _ready 内设置好拖拽滚动 handler）
+	_build_battlefield_buttons()
+	## 网格显隐切换按钮（右上角，G 键同效）
+	_create_battlefield_grid_toggle()
+	## 阵容控制条（多阵营选择器，顶部信息面板处）
+	_create_team_selector()
+	## 和平/战争 + 开战控制（顶部居中）
+	_create_combat_controls()
+	## 出兵范围编辑按钮（网格按钮左侧）
+	_create_deploy_zone_button()
+
+## ── 快速出兵（开发者模式专属，全面战争/双人模式）──────────────
+## 只在 DevMode 开启时创建；红方控件放左信息面板右侧，蓝方放右信息面板左侧（仅双人模式）。
+## 点击确认：在己方水晶前方按网格错开排布，免费刷出指定数量兵种（不扣金币/人口）。
+func _create_quick_spawn_controls() -> void:
+	if _quick_spawn_ui.size() > 0:
+		return
+	if not DevMode.enabled:
+		return
+	## 仅全面战争（非战役/非双人/非肉鸽）与双人模式生效；战役/肉鸽/竞技场沙盒不创建
+	if GameManager.is_battlefield_mode or GameManager.is_campaign_mode or RoguelikeManager.is_active:
+		return
+	## 红方控件组：左信息面板右侧（面板右缘外，垂直居中）
+	_create_quick_spawn_panel(0)
+	## 蓝方控件组：右信息面板左侧，仅双人模式（蓝方由玩家控制）
+	if BattleManager.is_two_player:
+		_create_quick_spawn_panel(1)
+
+## 为指定阵营创建快速出兵控件组（红 0 / 蓝 1）
+func _create_quick_spawn_panel(player_id: int) -> void:
+	var units: Array = UnitDatabase.unit_list.duplicate()
+	if units.is_empty():
+		return
+	## 下拉列表：所有兵种（unit_id 文本）
+	var opt := OptionButton.new()
+	opt.name = "QuickSpawnOpt%d" % player_id
+	opt.custom_minimum_size = Vector2(110, 34)
+	for u in units:
+		if u != null and u.has_method("get") and u.get("unit_id") != null:
+			opt.add_item(str(u.get("unit_id")), opt.item_count)
+	## 数量输入：纯数字 1-100，默认 10
+	var spin := SpinBox.new()
+	spin.name = "QuickSpawnSpin%d" % player_id
+	spin.custom_minimum_size = Vector2(70, 34)
+	spin.min_value = 1
+	spin.max_value = 100
+	spin.step = 1
+	spin.value = 10
+	spin.allow_greater = false
+	spin.allow_lesser = false
+	## 确认按钮
+	var confirm := Button.new()
+	confirm.name = "QuickSpawnBtn%d" % player_id
+	confirm.text = "快速出兵"
+	confirm.custom_minimum_size = Vector2(76, 34)
+	confirm.pressed.connect(_on_quick_spawn_pressed.bind(player_id, opt, spin))
+	## 布局：红方 [下拉][数量][确认]（面板右侧向外）；蓝方 [确认][数量][下拉]（镜像）
+	var bar := HBoxContainer.new()
+	bar.name = "QuickSpawnBar%d" % player_id
+	bar.add_theme_constant_override("separation", 4)
+	if player_id == 0:
+		bar.add_child(opt)
+		bar.add_child(spin)
+		bar.add_child(confirm)
+		## 左信息面板右侧（面板右缘 194 再往右 8px）
+		bar.anchors_preset = Control.PRESET_BOTTOM_LEFT
+		bar.anchor_left = 0.0
+		bar.anchor_top = 1.0
+		bar.anchor_right = 0.0
+		bar.anchor_bottom = 1.0
+		bar.offset_left = 202.0
+		bar.offset_top = -150.0
+		bar.offset_right = 202.0 + 262.0
+		bar.offset_bottom = -116.0
+	else:
+		bar.add_child(confirm)
+		bar.add_child(spin)
+		bar.add_child(opt)
+		## 右信息面板左侧（面板左缘 -194 再往左 8px，向右排布）
+		bar.anchors_preset = Control.PRESET_BOTTOM_RIGHT
+		bar.anchor_left = 1.0
+		bar.anchor_top = 1.0
+		bar.anchor_right = 1.0
+		bar.anchor_bottom = 1.0
+		bar.offset_left = -202.0 - 262.0
+		bar.offset_top = -150.0
+		bar.offset_right = -202.0
+		bar.offset_bottom = -116.0
+	## 默认选中第一个兵种
+	if opt.item_count > 0:
+		opt.select(0)
+	add_child(bar)
+	_quick_spawn_ui.append(bar)
+
+## 快速出兵确认：与正常出兵完全一致的出生逻辑（不传位置 → 水晶前土路随机 Y + 正常 AI 寻路）
+## 2026-08-18 用户拍板：快速出兵只改出生位置与寻路，与正常出兵一致；保持免费刷兵（调试工具）
+## 分帧出兵（2026-08-18 性能优化）：每帧最多刷 SPAWN_BATCH 只，大量刷兵时不卡主线程
+const QUICK_SPAWN_BATCH: int = 10
+
+func _on_quick_spawn_pressed(player_id: int, opt: OptionButton, spin: SpinBox) -> void:
+	if opt == null or spin == null or opt.selected < 0 or opt.selected >= UnitDatabase.unit_list.size():
+		_show_toast("快速出兵：未选择兵种")
+		return
+	var res: UnitResource = UnitDatabase.unit_list[opt.selected]
+	var count: int = int(spin.value)
+	if res == null or count <= 0:
+		return
+	_show_toast("快速出兵：%s × %d（%s方）" % [res.unit_id, count, "红" if player_id == 0 else "蓝"])
+	## 与正常出兵一致：不传 at_position → spawn_unit 使用默认出生点（基地前方 + 土路随机 Y），
+	## 单位出生后按正常 AI 寻路逻辑行动。分帧刷出，避免一帧创建大量单位卡顿。
+	_spawn_quick_in_batches(res, player_id, count)
+
+## 分帧刷兵：每帧一批（QUICK_SPAWN_BATCH 只），直到刷完
+func _spawn_quick_in_batches(res: UnitResource, player_id: int, count: int) -> void:
+	var remaining: int = count
+	while remaining > 0:
+		var batch: int = mini(remaining, QUICK_SPAWN_BATCH)
+		for i in range(batch):
+			BattleManager.spawn_unit(res, player_id)
+		remaining -= batch
+		## 非最后一批：让出一帧，避免同帧大量 add_child 卡主线程
+		if remaining > 0:
+			await get_tree().process_frame
+
+## 清空现有兵种按钮并重建战场模式专用的两列布局
+func _build_battlefield_buttons() -> void:
+	## 释放旧按钮节点并清空引用数组
+	for grid in [player_grid, enemy_grid]:
+		for child in grid.get_children():
+			child.queue_free()
+	unit_buttons.clear()
+	enemy_buttons.clear()
+	_player_row_sizes.clear()
+	_enemy_row_sizes.clear()
+
+	var button_bg_tex: Texture2D = load("res://assets/ui/unit_button_bg.png")
+	var units = UnitDatabase.unit_list.duplicate()
+	## 左列阵营前缀（红方）：G / D / Hero；右列阵营前缀（蓝方）：F / N / S / Y
+	var left_units: Array = []
+	var right_units: Array = []
+	for u in units:
+		var uid: String = u.unit_id
+		if uid.begins_with("G") or uid.begins_with("D") or uid.begins_with("Hero"):
+			left_units.append(u)
+		elif uid.begins_with("F") or uid.begins_with("N") or uid.begins_with("S") or uid.begins_with("Y"):
+			right_units.append(u)
+	left_units.sort_custom(func(a, b): return _unit_sort_key(a.unit_id) < _unit_sort_key(b.unit_id))
+	right_units.sort_custom(func(a, b): return _unit_sort_key(a.unit_id) < _unit_sort_key(b.unit_id))
+
+	_create_battlefield_column(left_units, player_grid, button_bg_tex, 0, unit_buttons, _player_drag_handler, Vector2(160, 160))
+	_create_battlefield_column(right_units, enemy_grid, button_bg_tex, 1, enemy_buttons, _enemy_drag_handler, Vector2(160, 160))
+
+## 按给定兵种列表在指定容器中创建单行兵种按钮（战场模式专用）
+func _create_battlefield_column(units: Array, container: VBoxContainer, bg_tex: Texture2D, team_id: int, buttons_array: Array, drag_handler: Dictionary, btn_size: Vector2) -> void:
+	if units.is_empty():
+		return
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 1)
+	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	container.add_child(row)
+	var idx := 0
+	for res in units:
+		var btn = _create_unit_button(res, bg_tex, team_id, idx, drag_handler, btn_size)
+		row.add_child(btn)
+		buttons_array.append(btn)
+		idx += 1
+
 ## 给两侧金�?人口/收入标�?应用黑色粗体�?14：三行统丢�黑色�?
 func _apply_bold_black_to_gold_labels() -> void:
 	var bold_font := _make_bold_font()
@@ -327,14 +552,18 @@ func _apply_bold_black_to_gold_labels() -> void:
 			lbl.add_theme_font_override("font", bold_font)
 
 func _setup_hp_bars() -> void:
+	## 战场模式下水晶血条颜色交换：左条(红方基地)蓝填充、右条(蓝方基地)红填充（沙盒美术风格）
+	## 非战场模式保持常规：左红右蓝
+	var red_fill_color: Color = COLOR_BLUE if GameManager.is_battlefield_mode else COLOR_RED
+	var blue_fill_color: Color = COLOR_RED if GameManager.is_battlefield_mode else COLOR_BLUE
 	## 红方水晶衢�条填充（�?��样式必须挂在 ProgressBar 节点�?��，��非外层 VBox，否则显示默认灰�?
 	var red_fill = StyleBoxFlat.new()
-	red_fill.bg_color = COLOR_RED
+	red_fill.bg_color = red_fill_color
 	red_hp_bar.add_theme_stylebox_override("fill", red_fill)
 
 	## 蓝方水晶衢�条填�?
 	var blue_fill = StyleBoxFlat.new()
-	blue_fill.bg_color = COLOR_BLUE
+	blue_fill.bg_color = blue_fill_color
 	blue_hp_bar.add_theme_stylebox_override("fill", blue_fill)
 
 	## #1：在衢�条上叠加衢�量数�?Label（居�?��示��当前�?/满�?」）
@@ -531,12 +760,19 @@ func _on_diff_btn_pressed() -> void:
 		return
 	if diff_btn == null or not is_instance_valid(diff_btn):
 		return
-	var dlg := ConfirmationDialog.new()  ## �?ConfirmationDialog：Godot 4.7 �?AcceptDialog 已无取消按钮/�?cancel_button_text
+	var dlg := ConfirmationDialog.new()  ## 确认弹窗：暖米色风格与详情弹框统一
 	dlg.title = "编辑模式/难度提示"
 	dlg.dialog_text = ""
 	dlg.ok_button_text = "保存"
 	dlg.cancel_button_text = "取消"
 	dlg.process_mode = Node.PROCESS_MODE_ALWAYS
+	var dlg_style := StyleBoxFlat.new()
+	dlg_style.bg_color = Color(0.93, 0.86, 0.70, 0.98)
+	dlg_style.border_color = Color(0.35, 0.25, 0.13, 1.0)
+	dlg_style.set_border_width_all(3)
+	dlg_style.set_corner_radius_all(8)
+	dlg_style.set_content_margin_all(14)
+	dlg.add_theme_stylebox_override("panel", dlg_style)
 	add_child(dlg)
 	var edit := TextEdit.new()
 	edit.custom_minimum_size = Vector2(360, 120)
@@ -551,21 +787,30 @@ func _on_diff_btn_pressed() -> void:
 	)
 	dlg.popup_centered()
 
-## 顶部居中轻提示（�?�� toast�? 秒后�?��消失；暂停场�?��能显示，process_mode=ALWAYS�?
-## #7�?026-08-11）：加自动换行与朢�大�?度，长文�?��如帮助�?文）也能完整展示
+## 顶部居中轻提示（toast，2 秒后自动消失；暂停场景也能显示）
+## 风格与兵种详情弹框统一：暖米色底 + 深棕文字 + 圆角
 func _show_toast(text: String) -> void:
-	var toast := Label.new()
-	toast.text = text
-	toast.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	toast.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	var toast := PanelContainer.new()
+	toast.name = "ToastPanel"
+	var st := StyleBoxFlat.new()
+	st.bg_color = Color(0.93, 0.86, 0.70, 0.95)
+	st.border_color = Color(0.35, 0.25, 0.13, 0.8)
+	st.set_border_width_all(2)
+	st.set_corner_radius_all(6)
+	st.set_content_margin_all(10)
+	toast.add_theme_stylebox_override("panel", st)
 	toast.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
-	toast.offset_left = -400.0
-	toast.offset_top = 120.0
-	toast.offset_right = 400.0
-	toast.offset_bottom = 240.0
-	toast.add_theme_color_override("font_color", Color(1, 0.9, 0.5))
-	toast.add_theme_color_override("font_outline_color", Color(0, 0, 0, 1))
-	toast.add_theme_constant_override("outline_size", 2)
+	toast.offset_left = -200.0
+	toast.offset_top = 100.0
+	toast.offset_right = 200.0
+	toast.offset_bottom = 170.0
+	var lbl := Label.new()
+	lbl.text = text
+	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	lbl.add_theme_font_size_override("font_size", 16)
+	lbl.add_theme_color_override("font_color", Color(0.35, 0.12, 0.08, 1.0))
+	toast.add_child(lbl)
 	add_child(toast)
 	var t := Timer.new()
 	t.wait_time = 2.0
@@ -897,9 +1142,9 @@ func _unit_sort_key(unit_id: String) -> Array:
 ## index: 按钮索引
 ## drag_handler: _setup_drag_scroll 返回的滚动�?理器�?3：长按拖动滚动按�?��，不拖动按钮�?���?
 ## 返回�? 配置好的 TextureButton
-func _create_unit_button(res: UnitResource, bg_tex: Texture2D, team_id: int, index: int, drag_handler: Dictionary) -> TextureButton:
+func _create_unit_button(res: UnitResource, bg_tex: Texture2D, team_id: int, index: int, drag_handler: Dictionary, btn_size: Vector2 = Vector2(80, 80)) -> TextureButton:
 	var btn = TextureButton.new()
-	btn.custom_minimum_size = Vector2(80, 80)
+	btn.custom_minimum_size = btn_size
 	## 设置背景纹理（normal/pressed/hover 都用同一张空白按�?���?��
 	btn.texture_normal = bg_tex
 	btn.texture_pressed = bg_tex
@@ -950,10 +1195,11 @@ func _create_unit_button(res: UnitResource, bg_tex: Texture2D, team_id: int, ind
 	## 绑定兵�?资源与索引元数据
 	btn.set_meta("unit_resource", res)
 	btn.set_meta("index", index)
+	btn.set_meta("team_id", team_id)
 	## #3（2026-08-14）：记下所属网格，供 _on_unit_pressed 读取「手势抑制选中」标记
 	btn.set_meta("drag_grid", drag_handler["grid"])
-	## 非双人模式下禁用敌人侧按�?
-	if team_id == 1 and not BattleManager.is_two_player:
+	## 非双人模式下禁用敌人侧按�?（战场模式例外：右列蓝方按钮允许玩家自由布兵）
+	if team_id == 1 and not BattleManager.is_two_player and not GameManager.is_battlefield_mode:
 		btn.disabled = true
 	## 连接点击事件
 	btn.pressed.connect(_on_unit_pressed.bind(btn, team_id))
@@ -965,7 +1211,17 @@ func _create_unit_button(res: UnitResource, bg_tex: Texture2D, team_id: int, ind
 	)
 	btn.button_up.connect(func():
 		if is_instance_valid(btn):
-			btn.scale = Vector2(1.0, 1.0)
+			## 若该按钮仍是当前选中按钮，松手后回到选中缩放（2/3），否则恢复原样
+			var still_selected: bool = false
+			for pid in _selection_borders:
+				if _selection_borders[pid] == btn:
+					still_selected = true
+					break
+			if still_selected:
+				btn.pivot_offset = btn.size / 2.0
+				btn.scale = Vector2(SEL_SCALE, SEL_SCALE)
+			else:
+				btn.scale = Vector2(1.0, 1.0)
 	)
 	## #3：长按拖动按�?�?滚动整个按钮集（不再�??觉拖动按�?���?��
 	## 拖动位移超过 8px 视为滚动手势，松手时屏蔽�?��发的「出兵��点�?
@@ -1184,6 +1440,23 @@ func _on_unit_pressed(btn: BaseButton, player_id: int) -> void:
 					_unit_detail_popup = null
 				_gr.set_meta("_detail_open", false)
 				return
+	## ── 战场模式分支：不写 BattleManager.selected_units，改用本地选择状态通知战场控制器 ──
+	if GameManager.is_battlefield_mode:
+		var bf_res: UnitResource = btn.get_meta("unit_resource")
+		var ctrl = get_parent()
+		var sel_team: int = 0
+		if ctrl != null and ctrl.has_method("select_team"):
+			sel_team = ctrl.selected_team
+		## 再次点击已选兵种则取消选择
+		if battlefield_spawn_res == bf_res and battlefield_spawn_team == sel_team:
+			battlefield_spawn_res = null
+			_refresh_battlefield_selection()
+			return
+		battlefield_spawn_res = bf_res
+		battlefield_spawn_team = sel_team
+		AudioManager.play_unit_click_sound(bf_res.unit_id)
+		_refresh_battlefield_selection()
+		return
 	## 获取按钮对应兵�?资源
 	var res: UnitResource = btn.get_meta("unit_resource")
 	## 获取当前已��中的兵�?
@@ -1318,52 +1591,252 @@ func _add_detail_stat_row(grid: GridContainer, label_text: String, value_text: S
 	grid.add_child(val)
 
 func _highlight_buttons(player_id: int) -> void:
-	## 获取当前玩�?按钮数组
+	## 获取当前玩家按钮数组
 	var buttons = unit_buttons if player_id == 0 else enemy_buttons
-	## 获取当前选中的兵种资�?
+	## 获取当前选中的兵种资源
 	var selected_res = BattleManager.selected_units[player_id]
-	## 先清除旧的��中边�?（移�?Panel 并停止闪烁动画）
+	## 先清除旧选中（恢复按钮缩放）
 	_clear_selection_border(player_id)
-	## 没有选中兵�?则直接返回，按钮保持原样
+	## 没有选中兵种则直接返回，按钮保持原样
 	if selected_res == null:
 		return
-	## 边�?颜色：己方（player_id=0）红色，对方（player_id=1）蓝�?
-	var border_color: Color = Color(1, 0, 0, 1) if player_id == 0 else Color(0.2, 0.4, 1, 1)
-	## 遍历按钮找到选中项，添加静��边框（Panel + StyleBoxFlat�?
+	## 选中效果：水平垂直居中缩小 1/3 宽高（scale=2/3，pivot 居中）
+	## 2026-08-18 用户拍板：取消红蓝边框闪烁，改按钮缩放
 	for b in buttons:
 		if b.get_meta("unit_resource") == selected_res:
-			var border = Panel.new()
-			border.name = "SelectionBorder"
-			border.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			border.set_process_input(false)
-			border.set_process_unhandled_input(false)
-			border.set_anchors_preset(Control.PRESET_FULL_RECT)
-			var style = StyleBoxFlat.new()
-			style.bg_color = Color(0, 0, 0, 0)
-			style.border_color = border_color
-			style.set_border_width_all(3)
-			style.set_corner_radius_all(4)
-			border.add_theme_stylebox_override("panel", style)
-			b.add_child(border)
-			_selection_borders[player_id] = border
+			b.pivot_offset = b.size / 2.0
+			b.scale = Vector2(SEL_SCALE, SEL_SCALE)
+			_selection_borders[player_id] = b
+			break
+
+## 竞技场模式：根据当前选中的出兵兵种/阵营刷新两列按钮的选中效果（不依赖 BattleManager.selected_units）
+func _refresh_battlefield_selection() -> void:
+	## 先清除两列旧选中（恢复按钮缩放）
+	_clear_selection_border(0)
+	_clear_selection_border(1)
+	if battlefield_spawn_res == null:
+		return
+	## 选中兵种可能位于任一列，遍历两列查找
+	var buttons = unit_buttons + enemy_buttons
+	## 选中效果：水平垂直居中缩小 1/3 宽高（scale=2/3，pivot 居中）
+	for b in buttons:
+		if b.get_meta("unit_resource") == battlefield_spawn_res:
+			b.pivot_offset = b.size / 2.0
+			b.scale = Vector2(SEL_SCALE, SEL_SCALE)
+			_selection_borders[battlefield_spawn_team] = b
 			break
 
 ## 清除指定玩�?的��中边�?（释�?Panel 并停止闪烁动画）
+## 战场模式：右上角「网格」切换按钮（G 键同效），仅战场布局创建一次
+func _create_battlefield_grid_toggle() -> void:
+	if grid_toggle_btn != null:
+		return
+	var btn := Button.new()
+	btn.name = "GridToggleBtn"
+	btn.text = "网格: 开"
+	btn.custom_minimum_size = Vector2(100, 36)
+	btn.anchors_preset = Control.PRESET_TOP_RIGHT
+	btn.anchor_left = 1.0
+	btn.anchor_top = 0.0
+	btn.anchor_right = 1.0
+	btn.anchor_bottom = 0.0
+	btn.offset_left = -110.0
+	btn.offset_top = 12.0
+	btn.offset_right = -12.0
+	btn.offset_bottom = 48.0
+	btn.pressed.connect(_on_grid_toggle_pressed)
+	add_child(btn)
+	grid_toggle_btn = btn
+	_refresh_grid_btn_label()
+
+func _on_grid_toggle_pressed() -> void:
+	var ctrl = get_parent()
+	if ctrl != null and ctrl.has_method("toggle_grid"):
+		ctrl.toggle_grid()
+	_refresh_grid_btn_label()
+
+## 同步网格按钮文案（读战场控制器的 show_grid 标志）
+func _refresh_grid_btn_label() -> void:
+	if grid_toggle_btn == null:
+		return
+	var ctrl = get_parent()
+	var on: bool = true
+	if ctrl != null and ctrl.has_method("toggle_grid"):
+		on = ctrl.show_grid
+	grid_toggle_btn.text = "网格: 开" if on else "网格: 关"
+
+## ── 战场模式：阵容控制（多阵营）────────────────────────────
+## 位置：兵种按钮集（BottomPanel）上方水平居中（2026-08-18 用户确认）
+func _create_team_selector() -> void:
+	if team_selector_bar != null:
+		return
+	var bar := HBoxContainer.new()
+	bar.name = "TeamSelector"
+	bar.anchors_preset = Control.PRESET_BOTTOM_WIDE
+	bar.anchor_left = 0.0
+	bar.anchor_top = 1.0
+	bar.anchor_right = 1.0
+	bar.anchor_bottom = 1.0
+	bar.offset_top = -140.0
+	bar.offset_bottom = -102.0
+	bar.offset_left = 0.0
+	bar.offset_right = 0.0
+	bar.add_theme_constant_override("separation", 6)
+	bar.alignment = BoxContainer.ALIGNMENT_CENTER
+	add_child(bar)
+	team_selector_bar = bar
+	_build_team_selector_buttons()
+
+func _build_team_selector_buttons() -> void:
+	if team_selector_bar == null:
+		return
+	for child in team_selector_bar.get_children():
+		child.queue_free()
+	team_buttons.clear()
+	var ctrl = get_parent()
+	if ctrl == null or not ctrl.has_method("select_team"):
+		return
+	for t in range(ctrl.team_count):
+		var btn := Button.new()
+		btn.name = "TeamBtn%d" % t
+		btn.text = "阵营%d" % (t + 1)
+		btn.custom_minimum_size = Vector2(90, 34)
+		var col: Color = Unit.team_color(t)
+		btn.add_theme_color_override("font_color", col)
+		if t == ctrl.selected_team:
+			var st := StyleBoxFlat.new()
+			st.bg_color = Color(col.r, col.g, col.b, 0.25)
+			st.border_color = col
+			st.set_border_width_all(2)
+			btn.add_theme_stylebox_override("normal", st)
+		btn.pressed.connect(_on_team_selected.bind(t))
+		team_selector_bar.add_child(btn)
+		team_buttons.append(btn)
+	if ctrl.team_count < ctrl.MAX_TEAMS:
+		var add := Button.new()
+		add.name = "TeamAddBtn"
+		add.text = "添加阵营"
+		add.custom_minimum_size = Vector2(90, 34)
+		add.pressed.connect(_on_add_team)
+		team_selector_bar.add_child(add)
+		team_add_btn = add
+
+func _on_team_selected(t: int) -> void:
+	var ctrl = get_parent()
+	if ctrl != null and ctrl.has_method("select_team"):
+		ctrl.select_team(t)
+	_build_team_selector_buttons()
+
+func _on_add_team() -> void:
+	var ctrl = get_parent()
+	if ctrl != null and ctrl.has_method("add_team"):
+		if ctrl.add_team():
+			_build_team_selector_buttons()
+
+## ── 战场模式：和平/战争 + 开战控制 ────────────────────────
+## 位置：页面正中央水平居中（2026-08-18 用户确认）
+func _create_combat_controls() -> void:
+	if combat_peace_btn != null:
+		return
+	var bar := HBoxContainer.new()
+	bar.name = "CombatControls"
+	bar.anchors_preset = Control.PRESET_CENTER
+	bar.anchor_left = 0.5
+	bar.anchor_top = 0.5
+	bar.anchor_right = 0.5
+	bar.anchor_bottom = 0.5
+	bar.offset_left = -128.0
+	bar.offset_top = -20.0
+	bar.offset_right = 128.0
+	bar.offset_bottom = 14.0
+	bar.add_theme_constant_override("separation", 8)
+	bar.alignment = BoxContainer.ALIGNMENT_CENTER
+	add_child(bar)
+	var peace := Button.new()
+	peace.name = "PeaceToggleBtn"
+	peace.custom_minimum_size = Vector2(120, 34)
+	peace.pressed.connect(_on_peace_toggle)
+	bar.add_child(peace)
+	combat_peace_btn = peace
+	var start := Button.new()
+	start.name = "WarStartBtn"
+	start.custom_minimum_size = Vector2(120, 34)
+	start.pressed.connect(_on_war_toggle)
+	bar.add_child(start)
+	combat_start_btn = start
+	_refresh_combat_btn_labels()
+
+func _on_peace_toggle() -> void:
+	var ctrl = get_parent()
+	if ctrl != null and ctrl.has_method("toggle_peace"):
+		ctrl.toggle_peace()
+	_refresh_combat_btn_labels()
+
+func _on_war_toggle() -> void:
+	var ctrl = get_parent()
+	if ctrl != null and ctrl.has_method("toggle_war_started"):
+		ctrl.toggle_war_started()
+	_refresh_combat_btn_labels()
+
+func _refresh_combat_btn_labels() -> void:
+	var ctrl = get_parent()
+	if combat_peace_btn == null or ctrl == null or not ctrl.has_method("is_combat_active"):
+		return
+	combat_peace_btn.text = "和平模式" if ctrl.peace_mode else "战争模式"
+	if combat_start_btn != null:
+		combat_start_btn.text = "开始战斗" if not ctrl.war_started else "停止战争"
+		combat_start_btn.disabled = ctrl.peace_mode
+
+## ── 战场模式：出兵范围编辑按钮（网格按钮左侧）──────────────
+func _create_deploy_zone_button() -> void:
+	if deploy_zone_btn != null:
+		return
+	var btn := Button.new()
+	btn.name = "DeployZoneBtn"
+	btn.text = "出兵范围: 关"
+	btn.custom_minimum_size = Vector2(110, 36)
+	btn.anchors_preset = Control.PRESET_TOP_RIGHT
+	btn.anchor_left = 1.0
+	btn.anchor_top = 0.0
+	btn.anchor_right = 1.0
+	btn.anchor_bottom = 0.0
+	btn.offset_left = -218.0
+	btn.offset_top = 12.0
+	btn.offset_right = -118.0
+	btn.offset_bottom = 48.0
+	btn.pressed.connect(_on_deploy_zone_toggle)
+	add_child(btn)
+	deploy_zone_btn = btn
+
+func _on_deploy_zone_toggle() -> void:
+	var ctrl = get_parent()
+	if ctrl != null and ctrl.has_method("toggle_deploy_zone"):
+		ctrl.toggle_deploy_zone()
+	_refresh_deploy_btn_label()
+
+func _refresh_deploy_btn_label() -> void:
+	if deploy_zone_btn == null:
+		return
+	var ctrl = get_parent()
+	var on: bool = false
+	if ctrl != null and ctrl.has_method("toggle_deploy_zone"):
+		on = ctrl.deploy_zone_enabled
+	deploy_zone_btn.text = "出兵范围: 开" if on else "出兵范围: 关"
+
 func _clear_selection_border(player_id: int) -> void:
-	## 先停止�?在进行的�?��动画，避�?tween 访问已释放的节点
+	## 先停止正在进行的出兵抖动动画，避免 tween 访问已释放的节点
 	if _flash_tweens.has(player_id):
 		var tw = _flash_tweens[player_id]
 		if tw != null and tw.is_valid():
 			tw.kill()
 		_flash_tweens.erase(player_id)
-	## 移除旧的边�? Panel
+	_pulse_wide.erase(player_id)
+	## 恢复选中按钮的缩放（取消选中态）
 	if _selection_borders.has(player_id):
-		var border = _selection_borders[player_id]
-		if border != null and is_instance_valid(border):
-			border.set_process_input(false)
-			border.set_process_unhandled_input(false)
-			border.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			border.queue_free()
+		var btn = _selection_borders[player_id]
+		if btn != null and is_instance_valid(btn):
+			btn.pivot_offset = btn.size / 2.0
+			btn.scale = Vector2(1.0, 1.0)
 		_selection_borders.erase(player_id)
 
 func _update_gold_display(pid: int, gold: int, income: int) -> void:
@@ -1700,30 +2173,79 @@ func _on_unit_removed(_player_id: int) -> void:
 	_update_population_display()
 
 func _flash_selection_border(player_id: int) -> void:
-	## 出兵时�?选中兵�?按钮的边框做两�?透明度闪烁（1�?.1�?�?.1�?�?
-	## 边�?颜色�?_highlight_buttons �?��设置（己方红，�?方蓝�?
+	## 出兵反馈：选中按钮在「缩小到 1/5（scale 1/5）」与「缩小到 1/4（scale 1/4）」之间
+	## 每 PULSE_INTERVAL（0.3s）切换一次，直到停止出兵（0.6s 无新出兵）回落选中态 1/5。
+	## 2026-08-18 用户拍板：取消红蓝边框透明度闪烁，改按钮缩放抖动；切换节奏固定 0.3s。
 	if not _selection_borders.has(player_id):
 		return
-	var border = _selection_borders[player_id]
-	if border == null or not is_instance_valid(border) or not border.is_inside_tree():
+	var btn = _selection_borders[player_id]
+	if btn == null or not is_instance_valid(btn) or not btn.is_inside_tree():
 		return
-	## 先终�?��丢�次未完成的闪烁动画，避免多个 tween 叠加
+	## 已有循环切换 Timer：出兵仍在继续，重置停止检测计时即可（保持当前缩放位）
 	if _flash_tweens.has(player_id):
-		var old_tw = _flash_tweens[player_id]
-		if old_tw != null and old_tw.is_valid():
-			old_tw.kill()
+		if _flash_reset_timers.has(player_id):
+			_flash_reset_timers[player_id].start()
+		return
+	## 首次出兵：立即切到出兵态（1/4），并启动 0.3s 循环切换
+	_pulse_wide[player_id] = false
+	btn.pivot_offset = btn.size / 2.0
+	btn.scale = Vector2(PULSE_SCALE, PULSE_SCALE)
+	_start_pulse_loop(player_id)
+	## 出兵停止检测：PULSE_RESET_AFTER 内无新出兵则回落到选中态（1/5）
+	if not _flash_reset_timers.has(player_id):
+		var t := Timer.new()
+		t.one_shot = true
+		t.wait_time = PULSE_RESET_AFTER
+		t.name = "FlashResetTimer"
+		add_child(t)
+		t.timeout.connect(func() -> void:
+			_flash_reset_timers.erase(player_id)
+			_stop_pulse_loop(player_id)
+		)
+		_flash_reset_timers[player_id] = t
+	else:
+		_flash_reset_timers[player_id].start()  ## 已有 timer 则重置计时
+
+## 启动 0.3s 循环切换：1/5 ↔ 1/4 来回切换（Timer 驱动，不依赖出兵频率）
+func _start_pulse_loop(player_id: int) -> void:
+	if _flash_tweens.has(player_id):
+		return
+	var t := Timer.new()
+	t.one_shot = false
+	t.wait_time = PULSE_INTERVAL
+	t.name = "PulseLoopTimer"
+	add_child(t)
+	t.timeout.connect(func() -> void:
+		if not _selection_borders.has(player_id):
+			_stop_pulse_loop(player_id)
+			return
+		var b = _selection_borders[player_id]
+		if b == null or not is_instance_valid(b):
+			_stop_pulse_loop(player_id)
+			return
+		## 切换缩放位：当前在 1/5 则跳到 1/4，反之回 1/5
+		var target: float = PULSE_SCALE if not _pulse_wide.get(player_id, false) else SEL_SCALE
+		_pulse_wide[player_id] = not _pulse_wide.get(player_id, false)
+		b.pivot_offset = b.size / 2.0
+		b.scale = Vector2(target, target)
+	)
+	t.start()
+	_flash_tweens[player_id] = t
+
+## 停止出兵抖动：终止循环切换，回落选中态（1/5）
+func _stop_pulse_loop(player_id: int) -> void:
+	if _flash_tweens.has(player_id):
+		var t = _flash_tweens[player_id]
+		if t != null and is_instance_valid(t):
+			t.stop()
+			t.queue_free()
 		_flash_tweens.erase(player_id)
-	## 重置透明度，�?���?��从可见状态开�?
-	border.modulate.a = 1.0
-	## �?��动画绑定到边框本�?��边�?锢�毁时 tween �?��失效，避免�?�?��释放节点
-	var tw = border.create_tween()
-	_flash_tweens[player_id] = tw
-	tw.tween_property(border, "modulate:a", 0.1, 0.08)
-	tw.tween_property(border, "modulate:a", 1.0, 0.08)
-	tw.tween_property(border, "modulate:a", 0.1, 0.08)
-	tw.tween_property(border, "modulate:a", 1.0, 0.08)
-	## 动画完成后从缓存�?��除引�?
-	tw.tween_callback(func(): _flash_tweens.erase(player_id))
+	_pulse_wide.erase(player_id)
+	if _selection_borders.has(player_id):
+		var b = _selection_borders[player_id]
+		if b != null and is_instance_valid(b):
+			b.pivot_offset = b.size / 2.0
+			b.scale = Vector2(SEL_SCALE, SEL_SCALE)
 
 func _on_selection_changed(player_id: int, _unit_res: Resource) -> void:
 	## 选中变化时重新高�?���?
@@ -1783,8 +2305,16 @@ func _on_help_pressed() -> void:
 	dlg.title = tr("HELP")
 	dlg.dialog_text = ""
 	dlg.ok_button_text = tr("SAVE")
-	## 游戏暂停时场�?��停转，弹窗必须无视暂停才能响应交�?
+	## 游戏暂停时场景树停转，弹窗必须无视暂停才能响应交互
 	dlg.process_mode = Node.PROCESS_MODE_ALWAYS
+	## 暖米色风格与详情弹框统一
+	var help_style := StyleBoxFlat.new()
+	help_style.bg_color = Color(0.93, 0.86, 0.70, 0.98)
+	help_style.border_color = Color(0.35, 0.25, 0.13, 1.0)
+	help_style.set_border_width_all(3)
+	help_style.set_corner_radius_all(8)
+	help_style.set_content_margin_all(14)
+	dlg.add_theme_stylebox_override("panel", help_style)
 	## 编辑态下清空 tooltip，避�?hover 弹层�?��编辑；弹窗关�?��恢�?
 	help_btn.tooltip_text = ""
 	var edit := TextEdit.new()
@@ -2048,6 +2578,14 @@ func _on_exit_pressed() -> void:
 	confirm.get_cancel_button().text = tr("CANCEL")
 	## ESC 打开设置会暂停场景树，确认框必须无视暂停才能继续响应输入
 	confirm.process_mode = Node.PROCESS_MODE_ALWAYS
+	## 暖米色风格与详情弹框统一
+	var exit_style := StyleBoxFlat.new()
+	exit_style.bg_color = Color(0.93, 0.86, 0.70, 0.98)
+	exit_style.border_color = Color(0.35, 0.25, 0.13, 1.0)
+	exit_style.set_border_width_all(3)
+	exit_style.set_corner_radius_all(8)
+	exit_style.set_content_margin_all(14)
+	confirm.add_theme_stylebox_override("panel", exit_style)
 	## 公共清理：结束战斗状态 / 双人模式 / 肉鸽 run，恢复暂停（避免状态残留）
 	var cleanup_battle := func() -> void:
 		BattleManager.is_battle_active = false
@@ -2060,7 +2598,7 @@ func _on_exit_pressed() -> void:
 	btn_map.pressed.connect(func() -> void:
 		cleanup_battle.call()
 		AudioManager.play_menu_bgm()
-		get_tree().change_scene_to_file("res://scenes/ui/campaign_map.tscn")
+		GameManager.change_scene_with_loading("res://scenes/ui/campaign_map.tscn")
 	)
 	## ② 返回主菜单
 	var btn_menu := confirm.add_button(tr("MAIN_MENU"))
@@ -2420,7 +2958,11 @@ func _on_adjust_pressed() -> void:
 	panel.position = Vector2(40, 80)
 	panel.custom_minimum_size = Vector2(330, 520)
 	var bg := StyleBoxFlat.new()
-	bg.bg_color = Color(0.1, 0.1, 0.15, 0.92)
+	bg.bg_color = Color(0.93, 0.86, 0.70, 0.95)
+	bg.border_color = Color(0.35, 0.25, 0.13, 0.8)
+	bg.set_border_width_all(2)
+	bg.set_corner_radius_all(8)
+	bg.set_content_margin_all(12)
 	panel.add_theme_stylebox_override("panel", bg)
 	add_child(panel)
 	_adjust_panel = panel

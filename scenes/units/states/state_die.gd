@@ -33,11 +33,11 @@ func enter() -> void:  ## 重写进入状态方法
 	## is_dead 时提前 return，state_die.update() 实际已不可达；一旦上方死亡补间被打断
 	##（场景切回 / 节点被移出树等），单位就会卡成「已死亡 + 精灵透明」的僵尸（变虚卡死）。
 	## 这里用挂在场景树上的定时器做与物理帧无关的强制回收：无论补间是否完成、单位是否仍在树中，
-	## 超时后只要实例仍有效且尚未入销毁队列就强制 queue_free。
+	## 超时后只要实例仍有效且尚未入销毁队列就回收进对象池（2026-08-18 性能优化：替代 queue_free）。
 	var cleanup_timer := unit.get_tree().create_timer(2.0)
 	cleanup_timer.timeout.connect(func() -> void:
 		if is_instance_valid(unit) and not unit.is_queued_for_deletion():
-			unit.queue_free()
+			BattleManager.recycle_unit(unit)
 	)
 
 ## 播放兵种专属死亡动画（#9）
@@ -58,7 +58,11 @@ func _play_legacy_fall_tween() -> void:  ## 旧跳落补间
 	var tween = unit.create_tween()  ## 创建补间动画
 	tween.tween_property(unit, "position:y", start_y - 40.0, 0.2)  ## 先向上跳 40 像素
 	tween.tween_property(unit, "position:y", start_y + 900.0, 0.6)  ## 再向下掉出屏幕
-	tween.tween_callback(unit.queue_free)  ## 动画结束后销毁节点
+	tween.tween_callback(func() -> void:
+		## 回收到对象池（2026-08-18 性能优化：替代 queue_free）
+		if is_instance_valid(unit) and not unit.is_queued_for_deletion():
+			BattleManager.recycle_unit(unit)
+	)
 
 	## 兼容旧的淡出效果（如有 Sprite2D）
 	var sprite = unit.get_node_or_null("Sprite2D")  ## 获取精灵节点

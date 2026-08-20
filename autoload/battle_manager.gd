@@ -65,6 +65,24 @@ var unit_scene: PackedScene
 var player_units: Array = []
 ## 敌方单位列表
 var enemy_units: Array = []
+## 单位对象池（2026-08-18 新增，性能优化）：复用死亡单位的实例，避免反复 instantiate/free
+## 池上限：超出上限的回收实例直接销毁，防止内存无限膨胀
+## 2026-08-19 改造：改为「进入局内时预热」——不再等选中兵种出兵时才创建，
+## 而是进局前读取红蓝双方兵种、去重、按价格（cost）从低到高排序，逐个串行预热。
+## 池本身仍是无类型空壳池（取用时 setup 决定兵种身份），预热同时预加载各兵种动画缓存。
+var _unit_pool: Array = []
+const POOL_MAX_SIZE: int = 256
+## 每个兵种预热的实例数量（用户拍板：每种 3 个）
+const PREWARM_PER_UNIT: int = 3
+## 预热让帧粒度：每创建这么多实例后让出一帧。
+## 实例本身仍严格逐个创建+入池（不并发），此值仅控制让帧频率：
+## 每个都让帧会导致 81 实例耗时 3.4s，按 3 个一让可压到 ~0.5s 且仍不卡顿。
+const PREWARM_YIELD_EVERY: int = 3
+## 预热是否已完成（供 UI/调试查询）
+var is_pool_prewarmed: bool = false
+## 远程火力均衡分配节流（2026-08-18）：与单位索敌节流同步 0.1s，避免每帧 O(R×E) 距离计算
+var _ranged_distribute_accum: float = 0.0
+const RANGED_DISTRIBUTE_INTERVAL: float = 0.1
 ## 每个玩家独立的持续出兵计时器（控制出兵频率）
 ## 索引 0=红方, 1=蓝方；按各自剩余金币动态加速
 var spawn_timers: Array[float] = [0.0, 0.0]
@@ -131,7 +149,12 @@ func _process(delta: float) -> void:
 
 	## #19：远程火力均衡分配（仅常规模式：战役/双人/全面战争）
 	## 肉鸽模式守卫 AI 有独立的索敌/牵引体系（chase_range/leash），不干预。
-	_distribute_ranged_targets()
+	## 2026-08-18 性能优化：与单位索敌节流同步，每 0.1s 最多分配一次
+	## （_pathfind_accum 由各单位独立累积，这里用 BattleManager 自己的节流计时）
+	_ranged_distribute_accum += delta
+	if _ranged_distribute_accum >= RANGED_DISTRIBUTE_INTERVAL:
+		_ranged_distribute_accum = 0.0
+		_distribute_ranged_targets()
 
 	## 倒计时递减
 	countdown_timer -= delta
@@ -498,8 +521,17 @@ func spawn_unit(unit_res: Resource, player_id: int, at_position: Vector2 = Vecto
 	## #自由事件：仓鼠士兵 G1 替换（部署 G1 时 1% 触发，本局该方 G1 全部变仓鼠士兵）
 	unit_res = _maybe_apply_hamster_replacement(unit_res, player_id)
 	
-	var unit = unit_scene.instantiate()  ## 实例化单位节点
+	var unit = _unit_pool.pop_back() if not _unit_pool.is_empty() else unit_scene.instantiate()  ## 从对象池取，无则实例化
 	unit.setup(unit_res, player_id)  ## 调用单位的初始化方法，传入兵种资源与玩家 ID
+	## 对象池复用：复位实例状态（setup 重置了 HP/朝向/碰撞层等，这里补 UI 与物理残留）
+	unit.visible = true  ## 恢复可见
+	unit.modulate = Color.WHITE  ## 复位透明度（死亡淡出残留）
+	unit.velocity = Vector2.ZERO  ## 复位速度
+	unit.set_physics_process(true)  ## 恢复物理处理（回池时关闭）
+	unit.set_process(true)
+	## 确保从池复用后物理层正确（setup 已设 collision_layer/mask，检测区掩码需重新应用）
+	if unit.detection_area != null:
+		unit.detection_area.monitoring = true  ## 恢复检测区监控（死亡时关闭）
 	
 	## 设置出生位置（基地前方，使用实际 battlefield 坐标）
 	var spawn_x: float
@@ -617,6 +649,122 @@ func retreat_unit(unit: Node2D, player_id: int) -> void:
 	else:
 		enemy_units.erase(unit)
 	unit_retreated.emit(player_id)
+
+## 单位死亡动画播完后回收进对象池（替代 queue_free，2026-08-18 性能优化）
+## 复用实例避免反复 instantiate/free；池满则直接销毁防内存膨胀。
+## 注意：基地单位（is_base_unit）不占列表、由 battlefield 单独管理，不进池。
+func recycle_unit(unit: Node2D) -> void:
+	if unit == null or not is_instance_valid(unit):
+		return
+	## 防重入：死亡动画 tween 回调与 2s 兜底 timer 可能先后触发，已在池中则跳过；
+	## 已入销毁队列（清池/池满时 queue_free 的）也跳过
+	if unit.is_queued_for_deletion() or _unit_pool.has(unit):
+		return
+	## 从场景树摘除（回池后不再参与渲染/物理/碰撞）
+	if unit.get_parent() != null:
+		unit.get_parent().remove_child(unit)
+	## 复位为「休眠」状态：隐藏 + 停物理 + 复位显示残留
+	unit.visible = false
+	unit.modulate = Color.WHITE
+	unit.velocity = Vector2.ZERO
+	unit.set_physics_process(false)
+	unit.set_process(false)
+	## 池满则销毁，否则入池
+	if _unit_pool.size() >= POOL_MAX_SIZE:
+		unit.queue_free()
+	else:
+		_unit_pool.append(unit)
+
+## 清空对象池（2026-08-18）：离开战斗/战场场景时调用，释放池中休眠单位的
+## 纹理/碰撞体等 RID 内存。池中单位已 remove_child 且停物理，直接销毁即可。
+func clear_unit_pool() -> void:
+	for unit in _unit_pool:
+		if is_instance_valid(unit):
+			unit.queue_free()
+	_unit_pool.clear()
+	is_pool_prewarmed = false
+
+## 收集本局红蓝双方会用到的兵种，去重后按价格（cost）从低到高排序
+## （2026-08-19 对象池改造：预热顺序依据）
+## 战役模式：我方 = 已解锁兵种，敌方 = 本关固定编成；
+## 全面战争/双人：双方均为全部常规兵种（沿用 get_ai_affordable_units 的过滤口径）。
+## 返回值: 按 cost 升序排列的 UnitResource 数组（已去重）
+func collect_prewarm_units() -> Array:
+	var seen: Dictionary = {}
+	var result: Array = []
+	var candidates: Array = []
+	if GameManager.is_campaign_mode:
+		## 我方：已解锁兵种
+		for uid in CampaignProgress.get_player_unlocked_ids():
+			var res = UnitDatabase.get_unit(uid)
+			if res != null:
+				candidates.append(res)
+		## 敌方：本关固定编成
+		for uid in CampaignProgress.get_fixed_enemy_unit_ids(GameManager.selected_campaign_level):
+			var res = UnitDatabase.get_unit(uid)
+			if res != null:
+				candidates.append(res)
+	else:
+		## 全面战争/双人：双方可用全部常规兵种（unit_list 已排除隐藏兵种）
+		candidates = UnitDatabase.unit_list.duplicate()
+	## 去重（按 unit_id）
+	for res in candidates:
+		var uid: String = (res as UnitResource).unit_id
+		if seen.has(uid):
+			continue
+		seen[uid] = true
+		result.append(res)
+	## 按价格从低到高排序（价格相同则按 unit_id 稳定排序，避免每局顺序抖动）
+	result.sort_custom(func(a, b):
+		var ca: int = (a as UnitResource).cost
+		var cb: int = (b as UnitResource).cost
+		if ca == cb:
+			return (a as UnitResource).unit_id < (b as UnitResource).unit_id
+		return ca < cb
+	)
+	return result
+
+## 预热对象池（2026-08-19 改造，用户拍板）
+## 进入局内前调用：按 collect_prewarm_units() 的价格升序，从最便宜的兵种开始，
+## 逐个（串行）向池中添加实例 —— 增加完上一个才添加下一个，绝不并发批量创建。
+## 每个兵种预热 PREWARM_PER_UNIT 个空壳实例，并预加载该兵种的动画缓存。
+## on_step: 可选回调，每完成一个实例调用一次，参数 (已完成数, 总数)，供加载框刷新进度
+func prewarm_unit_pool(on_step: Callable = Callable()) -> void:
+	## 幂等保护：已预热过则跳过，避免「结算→返回地图→下一关」等未经 MAIN_MENU
+	## 的路径重复预热导致池无限累积（clear_unit_pool 会重置该标志）
+	if is_pool_prewarmed:
+		if on_step.is_valid():
+			on_step.call(1, 1)
+		return
+	if unit_scene == null:
+		unit_scene = load("res://scenes/units/unit_base.tscn")
+	var units: Array = collect_prewarm_units()
+	var total: int = units.size() * PREWARM_PER_UNIT
+	var done: int = 0
+	for res in units:
+		var unit_res := res as UnitResource
+		## 先预加载该兵种动画缓存（实测占预热总耗时 ~93%：69 个 .tres 约 2.5s，
+		## 而 instantiate 81 个空壳仅 9ms）。这部分开销原本分散在「每次首次出某兵种」
+		## 时造成局内卡顿，现集中到加载框内一次付清。
+		Unit.prewarm_sprite_frames(unit_res.unit_id, unit_res.attack_alt_frames)
+		## 每个兵种的动画加载完就让出一帧，保证加载框动画与进度条不冻结
+		await Engine.get_main_loop().process_frame
+		## 逐个添加实例：本个 append 完成后才进入下一次循环
+		for _i in range(PREWARM_PER_UNIT):
+			if _unit_pool.size() >= POOL_MAX_SIZE:
+				break
+			var unit = unit_scene.instantiate()
+			unit.visible = false
+			unit.set_physics_process(false)
+			unit.set_process(false)
+			_unit_pool.append(unit)
+			done += 1
+			if on_step.is_valid():
+				on_step.call(done, total)
+			## 串行让帧：每 PREWARM_YIELD_EVERY 个实例让出一帧，避免单帧内批量创建造成卡顿
+			if done % PREWARM_YIELD_EVERY == 0:
+				await Engine.get_main_loop().process_frame
+	is_pool_prewarmed = true
 
 ## 开发工具：清空场上所有普通兵种（双方）
 ## 只清 player_units / enemy_units 列表中的单位；基地单位（is_base_unit）不在列表中，自动保留，

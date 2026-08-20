@@ -16,17 +16,24 @@ extends Control
 @onready var btn_quit: TextureButton = $MenuPanel/BtnQuit
 ## 调试按钮（兵种尺寸调整）
 @onready var btn_debug: Button = $MenuPanel/BtnDebug
+## 战场模式按钮（RTS 沙盒）
+@onready var btn_battlefield: Button = $MenuPanel/BtnBattlefield
 ## B站原作者图标按钮（右下角，点击调用系统浏览器打开原作者空间）
 @onready var btn_bili: TextureButton = $BiliCredit/BtnBili
 ## QQ群图标按钮（右下角，B站图标左侧）
 @onready var btn_qq: TextureButton = $QQCredit/BtnQQ
 @onready var qq_label: Label = $QQCredit/QQLabel
+## GitHub 开源图标按钮（右下角，B站与QQ群之间）
+@onready var btn_github: TextureButton = $GitHubCredit/BtnGitHub
+@onready var github_label: Label = $GitHubCredit/GitHubLabel
 
 ## 原作者 B 站空间链接（阿白与阿银）
 const BILI_SPACE_URL: String = "https://space.bilibili.com/382838394"
 ## QQ群信息
 const QQ_GROUP_NUMBER: String = "939936934"
 const QQ_GROUP_URL: String = "https://qm.qq.com/q/H0BklLFTEK"
+## GitHub 开源仓库链接
+const GITHUB_URL: String = "https://github.com/abaiyuayin/GuGuGaGaWar"
 
 ## 当前打开的设置对话框引用
 var _settings_dialog: AcceptDialog = null
@@ -83,8 +90,8 @@ func _on_btn_campaign_pressed() -> void:
 	GameManager.is_campaign_mode = true
 	## 关闭双人模式
 	BattleManager.is_two_player = false
-	## 切换到战役地图场景
-	get_tree().change_scene_to_file("res://scenes/ui/campaign_map.tscn")
+	## 切换到战役地图场景（带加载遮罩）
+	GameManager.change_scene_with_loading("res://scenes/ui/campaign_map.tscn")
 
 ## 全面战争按钮回调：弹出难度选择
 func _on_btn_single_player_pressed() -> void:
@@ -106,7 +113,7 @@ func _on_btn_multiplayer_pressed() -> void:
 
 ## 游戏图鉴按钮回调：打开图鉴界面
 func _on_btn_guide_pressed() -> void:
-	get_tree().change_scene_to_file("res://scenes/ui/codex_screen.tscn")
+	GameManager.change_scene_with_loading("res://scenes/ui/codex_screen.tscn")
 
 ## 游戏设置按钮回调：弹出设置对话框
 func _on_btn_settings_pressed() -> void:
@@ -126,7 +133,11 @@ func _on_btn_quit_pressed() -> void:
 
 ## 调试按钮回调：进入兵种尺寸调试界面
 func _on_btn_debug_pressed() -> void:
-	get_tree().change_scene_to_file("res://scenes/ui/debug_units.tscn")
+	GameManager.change_scene_with_loading("res://scenes/ui/debug_units.tscn")
+
+## 战场模式按钮回调：进入 RTS 沙盒场景
+func _on_btn_battlefield_pressed() -> void:
+	GameManager.start_battlefield()
 
 ## B站原作者图标回调：调用系统浏览器打开原作者空间
 func _on_btn_bili_pressed() -> void:
@@ -139,6 +150,18 @@ func _on_btn_qq_pressed() -> void:
 	DisplayServer.clipboard_set(QQ_GROUP_NUMBER)
 	OS.shell_open(QQ_GROUP_URL)
 	_show_toast("已复制QQ群号码")
+
+## GitHub 图标按钮回调：复制仓库链接到剪贴板 + 调用系统浏览器打开
+func _on_btn_github_pressed() -> void:
+	AudioManager.play_ui_click()
+	DisplayServer.clipboard_set(GITHUB_URL)
+	OS.shell_open(GITHUB_URL)
+	_show_toast("已复制GitHub开源链接")
+
+## GitHub 标签点击回调：点击"游戏已经开源"文本同样触发复制+打开
+func _on_github_label_clicked(event: InputEvent) -> void:
+	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		_on_btn_github_pressed()
 
 ## 显示难度选择弹窗
 func _show_difficulty_dialog() -> void:
@@ -361,20 +384,37 @@ func _setup_button_hover() -> void:
 		btn_debug.modulate = Color(0.75, 0.75, 0.75, 1.0)
 		AudioManager.play_ui_click())
 	btn_debug.button_up.connect(func(): btn_debug.modulate = Color(1.25, 1.25, 1.25, 1.0))
-	## B站原作者图标：悬停变亮 + 按下变暗 + 点击音效（打开浏览器动作在回调里已播一次，这里不再重复播）
-	btn_bili.mouse_entered.connect(func(): btn_bili.modulate = Color(1.25, 1.25, 1.25, 1.0))
+	## 战场模式按钮（普通 Button，同 BtnDebug 样式）：悬停/按下反馈 + 点击音效
+	btn_battlefield.mouse_entered.connect(func(): btn_battlefield.modulate = Color(1.25, 1.25, 1.25, 1.0))
+	btn_battlefield.mouse_exited.connect(func(): btn_battlefield.modulate = Color(1.0, 1.0, 1.0, 1.0))
+	btn_battlefield.button_down.connect(func():
+		btn_battlefield.modulate = Color(0.75, 0.75, 0.75, 1.0)
+		AudioManager.play_ui_click())
+	btn_battlefield.button_up.connect(func(): btn_battlefield.modulate = Color(1.25, 1.25, 1.25, 1.0))
+	## B站原作者图标：悬停变亮 + 指针变手型（与 QQ/GitHub 一致，仅颜色变化不放大）
+	btn_bili.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	btn_bili.mouse_entered.connect(func(): btn_bili.modulate = Color(1.3, 1.3, 1.3, 1.0))
 	btn_bili.mouse_exited.connect(func(): btn_bili.modulate = Color(1.0, 1.0, 1.0, 1.0))
 	btn_bili.button_down.connect(func(): btn_bili.modulate = Color(0.75, 0.75, 0.75, 1.0))
-	btn_bili.button_up.connect(func(): btn_bili.modulate = Color(1.25, 1.25, 1.25, 1.0))
-	## QQ群图标：悬停时标签显示群号，离开恢复；悬停变亮+按下变暗
+	btn_bili.button_up.connect(func(): btn_bili.modulate = Color(1.3, 1.3, 1.3, 1.0))
+	## QQ群图标：悬停变亮 + 指针变手型（与 B站/GitHub 一致，仅颜色变化不放大），标签显示群号
+	btn_qq.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 	btn_qq.mouse_entered.connect(func():
-		btn_qq.modulate = Color(1.25, 1.25, 1.25, 1.0)
+		btn_qq.modulate = Color(1.3, 1.3, 1.3, 1.0)
 		qq_label.text = QQ_GROUP_NUMBER)
 	btn_qq.mouse_exited.connect(func():
 		btn_qq.modulate = Color(1.0, 1.0, 1.0, 1.0)
 		qq_label.text = "官方QQ群")
 	btn_qq.button_down.connect(func(): btn_qq.modulate = Color(0.75, 0.75, 0.75, 1.0))
-	btn_qq.button_up.connect(func(): btn_qq.modulate = Color(1.25, 1.25, 1.25, 1.0))
+	btn_qq.button_up.connect(func(): btn_qq.modulate = Color(1.3, 1.3, 1.3, 1.0))
+	## GitHub 开源图标：悬停变亮 + 指针变手型（与 B站/QQ群 一致，仅颜色变化不放大）
+	btn_github.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	btn_github.mouse_entered.connect(func(): btn_github.modulate = Color(1.3, 1.3, 1.3, 1.0))
+	btn_github.mouse_exited.connect(func(): btn_github.modulate = Color(1.0, 1.0, 1.0, 1.0))
+	btn_github.button_down.connect(func(): btn_github.modulate = Color(0.75, 0.75, 0.75, 1.0))
+	btn_github.button_up.connect(func(): btn_github.modulate = Color(1.3, 1.3, 1.3, 1.0))
+	## 点击下方"游戏已经开源"文本同样触发
+	github_label.gui_input.connect(_on_github_label_clicked)
 
 ## 简单 toast 提示（底部居中，2 秒自动消失）
 func _show_toast(msg: String) -> void:

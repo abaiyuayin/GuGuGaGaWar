@@ -25,6 +25,23 @@ func update(delta: float) -> void:  ## 重写每帧更新方法
 	## 将标准单位速度转换为像素速度（走 unit.get_move_speed_px，内含肉鸽文物/军令的移速加成）
 	var speed_px: float = unit.get_move_speed_px()  ## 计算像素速度
 
+	## ── 战场模式（RTS 沙盒）专属逻辑 ──────────────────────────────
+	## 移动令优先：order_pos 有效则朝其移动，到达后转站定（hold_position）
+	if unit.order_pos.is_finite():
+		_advance_to_order(delta, speed_px)
+		return
+	## 站定待命：hold_position 且无移动令时原地站住，仅敌人进入自身攻击范围才还击
+	if unit.hold_position:
+		if unit.combat_enabled:
+			var near: Unit = unit.find_nearest_enemy()
+			if near != null and unit.is_target_in_attack_range(near.global_position, 10.0):
+				unit.target = near
+				unit.change_state("attack")
+				return
+		unit.velocity = Vector2.ZERO
+		unit.play_anim("idle")
+		return
+
 	## 中远程单位的后撤已收拢到攻击状态的「恢复期」（#17），移动状态不再主动后撤，
 	## 避免与推进逻辑抢控制权；发现敌人进入射程即转入攻击状态，由攻击后摇触发后撤。
 
@@ -177,3 +194,27 @@ func _advance(delta: float, direction: float, speed_px: float) -> void:
 
 	## 强制更新 visual 位置（如果 Control 节点滞后）
 	unit.queue_redraw()  ## 请求重绘
+
+## 朝玩家下达的 order_pos 移动（战场模式专用）
+## 复用速度/分离/朝向逻辑；到达目标点（阈值内）后置 hold_position 转站定。
+## delta: 帧间隔（秒）；speed_px: 像素移速
+func _advance_to_order(delta: float, speed_px: float) -> void:
+	if unit == null or not is_instance_valid(unit):
+		return
+	var to_target: Vector2 = unit.order_pos - unit.global_position
+	var dist: float = to_target.length()
+	## 到达判定：距离小于一步或阈值即视为到达，避免抖动
+	if dist <= maxf(6.0, speed_px * delta):
+		unit.order_pos = Vector2.INF
+		unit.hold_position = true
+		unit.velocity = Vector2.ZERO
+		unit.play_anim("idle")
+		return
+	var dir: Vector2 = to_target / dist
+	var sep: Vector2 = unit._compute_ally_separation()
+	var desired: Vector2 = dir * speed_px + sep * 0.5
+	unit.velocity = unit.clamp_move_velocity(desired, speed_px)
+	unit.set_facing_hysteresis(unit.velocity.x, maxf(0.25, speed_px * 0.4))
+	unit.move_and_slide()
+	unit.play_anim("move")
+	unit.queue_redraw()

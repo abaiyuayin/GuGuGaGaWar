@@ -1085,4 +1085,4 @@ func _highlight_in_list(buttons: Array[Button], _kind: String) -> void:  ## 高�
 
 func _on_back_pressed() -> void:  ## 返回按钮回调
 	closed.emit()  ## 发出关闭信号
-	get_tree().change_scene_to_file("res://scenes/ui/main_menu.tscn")  ## 返回主菜�?
+	GameManager.change_scene_with_loading("res://scenes/ui/main_menu.tscn")  ## 返回主菜单（带加载遮罩）

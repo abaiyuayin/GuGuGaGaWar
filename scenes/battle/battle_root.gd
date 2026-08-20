@@ -145,21 +145,24 @@ func _ready() -> void:
 	## 播放战斗背景音乐（根据设置选择默认或自定义BGM）
 	AudioManager.play_battle_bgm()
 
-## 生成红色圆环纹理（用于选中单位脚下的红圈）
+## 生成选中单位脚下的椭圆环纹理（战场模式全局生效：红圈改为脚下椭圆）
 func _create_circle_texture() -> Texture2D:
-	var size := 128
-	var img := Image.create(size, size, false, Image.FORMAT_RGBA8)
+	var w := 96
+	var h := 48
+	var img := Image.create(w, h, false, Image.FORMAT_RGBA8)
 	img.fill(Color(0, 0, 0, 0))
-	var center := float(size) * 0.5
-	var radius := center - 4.0
+	var cx := float(w) * 0.5
+	var cy := float(h) * 0.5
+	var rx := cx - 4.0
+	var ry := cy - 4.0
 	var ring_width := 5.0
-	for y in range(size):
-		for x in range(size):
-			var dx := float(x) - center
-			var dy := float(y) - center
+	for y in range(h):
+		for x in range(w):
+			var dx := (float(x) - cx) / rx
+			var dy := (float(y) - cy) / ry
 			var d := sqrt(dx * dx + dy * dy)
-			if absf(d - radius) < ring_width:
-				var alpha: float = 1.0 - absf(d - radius) / ring_width
+			if absf(d - 1.0) < ring_width / maxf(rx, ry):
+				var alpha: float = 1.0 - absf(d - 1.0) / (ring_width / maxf(rx, ry))
 				img.set_pixel(x, y, Color(1.0, 0.15, 0.15, alpha))
 	return ImageTexture.create_from_image(img)
 
@@ -189,9 +192,9 @@ func _process(delta: float) -> void:
 		camera.global_position = _locked_unit.global_position
 		## 钳制摄像机位置，避免看到地图外区域
 		_clamp_camera()
-		## 更新红圈位置到单位脚下
+		## 更新红圈位置到单位脚下（椭圆标记偏移到脚下 +12px）
 		if _selection_circle:
-			_selection_circle.global_position = _locked_unit.global_position
+			_selection_circle.global_position = _locked_unit.global_position + Vector2(0.0, 12.0)
 		return
 	elif _locked_unit != null:
 		## 锁定单位已失效（死亡或销毁），自动解锁
@@ -470,6 +473,10 @@ func _on_unit_spawned(unit: Node2D, player_id: int) -> void:
 	battlefield.add_unit(unit)
 	## 连接单位死亡信号，统计战绩（成就系统数据源）
 	if unit is Unit:
+		## 对象池复用：单位可能已带上次的连接，先断开再连，避免重复连接累积
+		## （Godot 4 默认允许同一 Callable 重复连接，复用 N 次则死亡时回调 N 次）
+		if unit.unit_died.is_connected(_on_unit_died):
+			unit.unit_died.disconnect(_on_unit_died)
 		unit.unit_died.connect(_on_unit_died)
 		## #需求12：骑士精神 —— 记录玩家（红方 pid=0）本局部署过的兵种
 		if player_id == 0:

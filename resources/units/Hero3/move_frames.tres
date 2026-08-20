@@ -1,0 +1,137 @@
+[gd_resource type="SpriteFrames" load_steps=16 format=3]
+
+[ext_resource type="Texture2D" path="res://resources/units/Hero3/walk_sheet.png" id="1_move_sheet"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_move_0"]
+atlas = ExtResource("1_move_sheet")
+region = Rect2(0, 0, 724, 698)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_move_1"]
+atlas = ExtResource("1_move_sheet")
+region = Rect2(724, 0, 724, 698)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_move_2"]
+atlas = ExtResource("1_move_sheet")
+region = Rect2(1448, 0, 724, 698)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_move_3"]
+atlas = ExtResource("1_move_sheet")
+region = Rect2(2172, 0, 724, 698)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_move_4"]
+atlas = ExtResource("1_move_sheet")
+region = Rect2(2896, 0, 724, 698)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_move_5"]
+atlas = ExtResource("1_move_sheet")
+region = Rect2(3620, 0, 724, 698)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_move_6"]
+atlas = ExtResource("1_move_sheet")
+region = Rect2(4344, 0, 724, 698)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_move_7"]
+atlas = ExtResource("1_move_sheet")
+region = Rect2(5068, 0, 724, 698)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_move_8"]
+atlas = ExtResource("1_move_sheet")
+region = Rect2(5792, 0, 724, 698)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_move_9"]
+atlas = ExtResource("1_move_sheet")
+region = Rect2(0, 698, 724, 698)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_move_10"]
+atlas = ExtResource("1_move_sheet")
+region = Rect2(724, 698, 724, 698)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_move_11"]
+atlas = ExtResource("1_move_sheet")
+region = Rect2(1448, 698, 724, 698)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_move_12"]
+atlas = ExtResource("1_move_sheet")
+region = Rect2(2172, 698, 724, 698)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_move_13"]
+atlas = ExtResource("1_move_sheet")
+region = Rect2(2896, 698, 724, 698)
+
+[resource]
+animations = [{
+"frames": [
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_move_0")
+}
+,
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_move_1")
+}
+,
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_move_2")
+}
+,
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_move_3")
+}
+,
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_move_4")
+}
+,
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_move_5")
+}
+,
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_move_6")
+}
+,
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_move_7")
+}
+,
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_move_8")
+}
+,
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_move_9")
+}
+,
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_move_10")
+}
+,
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_move_11")
+}
+,
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_move_12")
+}
+,
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_move_13")
+}
+],
+"loop": true,
+"name": &"move",
+"speed": 10.0
+}]

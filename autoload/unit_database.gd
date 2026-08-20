@@ -14,6 +14,7 @@ const UNLOCK_ORDER: Array = [
 	"N1", "N2", "N3", "N4", "N5",  ## 糯糯阵营 5 个兵种
 	"Hero1",  ## 爱弥斯：特殊英雄，需累计 20 颗星解锁（见 CampaignProgress.STAR_UNLOCK）
 	"Hero2",  ## Doro勇士：隐藏成就「为了欧润橘！」解锁后入池，需 20 颗星（见 CampaignProgress）
+	"Hero3",  ## 菲比Hero：菲比阵营英雄，需累计 20 颗星解锁（见 CampaignProgress.STAR_UNLOCK）
 	"S1",  ## 蓝女巫：特殊阵营英雄
 	"Y1",  ## 死亡使者：异象阵营
 ]

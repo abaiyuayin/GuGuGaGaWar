@@ -11,6 +11,7 @@
 [ext_resource type="Texture2D" uid="uid://bxo5bi5q86g1u" path="res://assets/ui/title.png" id="9_title"]
 [ext_resource type="Texture2D" path="res://assets/ui/bilibili_icon.png" id="10_bili"]
 [ext_resource type="Texture2D" path="res://assets/ui/qq_group.jpg" id="11_qq"]
+[ext_resource type="Texture2D" path="res://assets/ui/github_icon.png" id="12_github"]
 
 [node name="MainMenu" type="Control" unique_id=123754915]
 layout_mode = 3
@@ -73,6 +74,12 @@ texture_hover = ExtResource("3_campaign")
 ignore_texture_size = true
 stretch_mode = 5
 
+[node name="BtnBattlefield" type="Button" parent="MenuPanel" unique_id=912345678]
+custom_minimum_size = Vector2(200, 60)
+layout_mode = 2
+tooltip_text = "RTS 沙盒：自由布兵、框选指挥、无胜负"
+text = "竞技场模式"
+
 [node name="BtnSinglePlayer" type="TextureButton" parent="MenuPanel" unique_id=1068749347]
 custom_minimum_size = Vector2(200, 60)
 layout_mode = 2
@@ -131,13 +138,13 @@ anchor_left = 1.0
 anchor_top = 1.0
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = -196.0
+offset_left = -288.0
 offset_top = -114.0
-offset_right = -108.0
+offset_right = -200.0
 offset_bottom = -14.0
 grow_horizontal = 0
 grow_vertical = 0
-visible = true
+visible = false
 theme_override_constants/separation = 3
 alignment = 1
 
@@ -157,6 +164,40 @@ size_flags_horizontal = 4
 text = "原作者 阿白与阿银"
 horizontal_alignment = 1
 
+[node name="GitHubCredit" type="VBoxContainer" parent="." unique_id=3684729103]
+layout_mode = 1
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -196.0
+offset_top = -114.0
+offset_right = -108.0
+offset_bottom = -14.0
+grow_horizontal = 0
+grow_vertical = 0
+visible = false
+theme_override_constants/separation = 3
+alignment = 1
+
+[node name="BtnGitHub" type="TextureButton" parent="GitHubCredit" unique_id=4738291056]
+custom_minimum_size = Vector2(80, 80)
+layout_mode = 2
+size_flags_horizontal = 4
+texture_normal = ExtResource("12_github")
+texture_pressed = ExtResource("12_github")
+texture_hover = ExtResource("12_github")
+ignore_texture_size = true
+stretch_mode = 5
+
+[node name="GitHubLabel" type="Label" parent="GitHubCredit" unique_id=5827360194]
+layout_mode = 2
+size_flags_horizontal = 4
+text = "游戏已经开源"
+horizontal_alignment = 1
+theme_override_font_sizes/font_size = 14
+
 [node name="QQCredit" type="VBoxContainer" parent="." unique_id=3156824102]
 layout_mode = 1
 anchors_preset = 3
@@ -164,13 +205,13 @@ anchor_left = 1.0
 anchor_top = 1.0
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = -108.0
+offset_left = -104.0
 offset_top = -114.0
-offset_right = -20.0
+offset_right = -16.0
 offset_bottom = -14.0
 grow_horizontal = 0
 grow_vertical = 0
-visible = true
+visible = false
 theme_override_constants/separation = 3
 alignment = 1
 clip_contents = true
@@ -194,8 +235,10 @@ text = "官方QQ群"
 horizontal_alignment = 1
 
 [connection signal="pressed" from="QQCredit/BtnQQ" to="." method="_on_btn_qq_pressed"]
+[connection signal="pressed" from="GitHubCredit/BtnGitHub" to="." method="_on_btn_github_pressed"]
 
 [connection signal="pressed" from="MenuPanel/BtnCampaign" to="." method="_on_btn_campaign_pressed"]
+[connection signal="pressed" from="MenuPanel/BtnBattlefield" to="." method="_on_btn_battlefield_pressed"]
 [connection signal="pressed" from="MenuPanel/BtnSinglePlayer" to="." method="_on_btn_single_player_pressed"]
 [connection signal="pressed" from="MenuPanel/BtnMultiplayer" to="." method="_on_btn_multiplayer_pressed"]
 [connection signal="pressed" from="MenuPanel/BtnGuide" to="." method="_on_btn_guide_pressed"]

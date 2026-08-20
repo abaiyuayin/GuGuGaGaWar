@@ -24,9 +24,9 @@ var master_volume: float = 0.8  ## 主音量（0.0~1.0），默认 0.8
 var music_volume: float = 0.7  ## 音乐音量（0.0~1.0），默认 0.7
 var sfx_volume: float = 0.5  ## 音效音量（0.0~1.0），默认 0.5（设置界面显示为 50）
 var show_damage_numbers: bool = true  ## 是否显示伤害量文本，默认开启
-var show_hp_armor_bar: bool = true  ## #16：是否在血条居中显示血量/护盾数值，默认开启
+var show_hp_armor_bar: bool = false  ## #16：是否在血条居中显示血量/护盾数值，默认关闭（玩家可在设置中打开；2026-08-18 用户拍板）
 var touch_controls: bool = false  ## 移动端触屏输入层开关：安卓/iOS 导出时由 OS.has_feature("mobile") 自动启用，桌面可手动开以便测试
-var audio_throttle: bool = true  ## #4：音频节流开关（默认开启）。开启=现在的并发限制播放方式；关闭=以前的触发即播、无限制
+var audio_throttle: bool = false  ## #4：音频节流开关（默认关闭）。开启=现在的并发限制播放方式；关闭=以前的触发即播、无限制（2026-08-18 用户拍板默认关闭）
 
 ## #17：单条音效文件音量表（res:// 音频路径 -> 0.0~1.0，缺省按 1.0 满音量）
 ## 由音效配置页「调整」视图的每个音效拖动条维护，播放时叠乘到 SFX 总线音量之上

@@ -322,7 +322,8 @@ func _attack_cycle(delta: float, res: UnitResource, dist_vec: Vector2) -> void: 
 			## 新逻辑硬后摇期间 update() 锁定移动与后撤，结束后才进入 #17 恢复期后撤窗口（风筝）。
 			## #需求2：时长改读兵种资源 attack_recovery_time（默认：近战 0.5s / 中远程 1s，可控制台调校）
 			_attack_started = false  ## 退出攻击周期
-			_hard_recovery_timer = res.get_attack_recovery_time()  ## 启动硬后摇（按兵种配置）
+			## #技能系统：骑射类技能（Hero5）生效期间取消攻击后摇
+			_hard_recovery_timer = 0.0 if unit.skill_no_recovery_timer > 0.0 else res.get_attack_recovery_time()  ## 启动硬后摇（按兵种配置）
 		else:  ## 目标超出范围
 			_attack_started = false  ## 重置攻击周期标志
 			unit.change_state(unit.get_idle_state_name())  ## 回到默认状态（推进 / 回防），不追击
@@ -330,7 +331,8 @@ func _attack_cycle(delta: float, res: UnitResource, dist_vec: Vector2) -> void: 
 		_attack_started = false  ## 允许下一帧重新判断移动或攻击
 		## #需求21：近战兵种同样进入攻击硬后摇（默认 0.5s）——攻击周期结束后短暂锁定，
 		## 与中远程保持一致的攻击节奏感；时长同样读兵种资源，可在控制台数值调整中调校
-		_hard_recovery_timer = res.get_attack_recovery_time()
+		## #技能系统：骑射类技能（Hero5）生效期间取消攻击后摇
+		_hard_recovery_timer = 0.0 if unit.skill_no_recovery_timer > 0.0 else res.get_attack_recovery_time()
 
 ## #后摇 2026-08-15（用户三连拍板）：攻击结束后的后摇段（含攻击周期内后摇 / 硬后摇 / 远程恢复期共用）：
 ##  - #2 近战：攻击范围内有敌人 → 停下不动（待机）；没敌人 → 奔跑动画追击；
@@ -349,18 +351,16 @@ func _backswing_update(delta: float, res: UnitResource) -> void:
 			return
 		unit.velocity = Vector2.ZERO  ## 停下不动
 		unit.move_and_slide()
-		## #14（2026-08-15）：攻击动画已完整播完（全局等动画末帧），后摇定格保持当前末帧，
-		## 不再强制重置回第 0 帧（旧逻辑每帧 force 重播 + frame=0 + pause，造成「动画闪回起手帧」；
-		## 远程打水晶时索敌跳过基地单位 → 看起来只播一次动画就定格站在原地，飞行物却照常飞出）。
-		if unit.unit_sprite != null and unit.unit_sprite.is_playing():
-			unit.unit_sprite.pause()  ## 动画仍在播则冻结当前帧，否则保持自然定格末帧
+		## 后摇站定优先级链（2026-08-17）：待机动画 > 后摇乒乓循环帧 > 冻结当前帧
+		## （原 #14「定格保持攻击末帧」行为保留为链的兜底分支）
+		unit.play_backswing_stand()
 	else:
 		## #2 近战：攻击范围内有敌人 → 停下不动；没敌人 → 奔跑追击
 		if not unit.is_target_out_of_attack_range(unit.target.global_position, 10.0):
 			unit.velocity = Vector2.ZERO  ## 停下不动（等冷却结束再挥）
 			unit.move_and_slide()
 			unit.set_facing_hysteresis(hr_dist_vec.x, Constants.ATTACK_FACING_DEADBAND_PX)  ## 保持面向目标
-			unit.play_anim("idle")  ## 待机
+			unit.play_backswing_stand()  ## 后摇站定优先级链（原 play_anim("idle")）
 		else:
 			_move_towards_target(delta, res, hr_dist_vec)  ## 没敌人（超射程）：奔跑追击
 

@@ -546,7 +546,7 @@ func _after_noncombat() -> void:
 
 func _on_return_pressed() -> void:
 	RoguelikeManager.end_run()
-	get_tree().change_scene_to_file("res://scenes/ui/campaign_map.tscn")
+	GameManager.change_scene_with_loading("res://scenes/ui/campaign_map.tscn")
 
 func _on_exit_pressed() -> void:
 	RoguelikeManager.end_run()

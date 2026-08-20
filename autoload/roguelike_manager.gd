@@ -69,7 +69,7 @@ var selected_hero: String = ""
 const HERO_DEFS: Array[Dictionary] = [
 	{"id": "Hero1", "name": "爱弥斯", "locked": false, "army": "四兵种随机军队", "special": "全军 +30% 攻击与攻速"},
 	{"id": "Hero2", "name": "Doro勇士", "locked": true, "army": "Doro 系随机军队", "special": ""},
-	{"id": "Hero3", "name": "？？？", "locked": true, "army": "", "special": ""},
+	{"id": "Hero3", "name": "菲比Hero", "locked": true, "army": "菲比系随机军队", "special": ""},
 	{"id": "Hero4", "name": "？？？", "locked": true, "army": "", "special": ""},
 	{"id": "Hero5", "name": "？？？", "locked": true, "army": "", "special": ""},
 ]

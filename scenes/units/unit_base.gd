@@ -1,5 +1,18 @@
 class_name Unit  ## 定义全局类名 Unit，便于其他脚本引用
 extends CharacterBody2D  ## 继承 CharacterBody2D 物理角色节点
+
+## 战场模式多阵营配色：阵营1红 / 2蓝 / 3绿 / 4橙（HUD 阵容按钮、脚下光圈、血条一致）
+## 2026-08-18 用户确认：阵营1=红（默认阵营），阵营2=蓝，阵营3=绿，阵营4=橙
+static var TEAM_COLORS: Array[Color] = [
+	Color("#D93025"),  # 阵营1 红
+	Color("#1A73E8"),  # 阵营2 蓝
+	Color("#34A853"),  # 阵营3 绿
+	Color("#F29900"),  # 阵营4 橙
+]
+static func team_color(t: int) -> Color:
+	if t >= 0 and t < TEAM_COLORS.size():
+		return TEAM_COLORS[t]
+	return Color("#D93025")
 ## 单位基础脚本
 ## 管理单位的属性、状态机、攻击和死亡
 ## 所有战斗单位都基于此脚本，通过 setup() 方法初始化不同兵种
@@ -74,18 +87,20 @@ var anim_sprint_frames: SpriteFrames = null  ## 冲刺动画帧资源
 var anim_idle_frames: SpriteFrames = null  ## 待机动画帧资源
 var anim_charge_frames: SpriteFrames = null  ## 出场动画帧资源（charge，蓝女巫等）
 var anim_death_frames: SpriteFrames = null  ## 死亡动画帧资源
+var anim_skill_frames: SpriteFrames = null  ## 技能动画帧资源（#技能系统：吟唱/蓄力专属动画，null 时回退攻击动画）
 ## S1 蓝女巫攻击逐帧偏移补偿（#S1attack-drift）
 ## 切片工具给每帧加了不等边距，角色在 104x46 画布里位置逐帧不同 → 整画布居中后角色漂移。
 ## 仅在 unit_id=="S1" 的攻击动画上，把每帧角色内容中心钉到画布中心，消除漂移，不动任何图片。
 var _s1_attack_offsets: Array[Vector2] = []  ## 每帧「画布中心-内容中心」偏移（纹理像素）
 var _s1_attack_compensate: bool = false  ## S1 攻击是否启用补偿
 var _frame_signal_connected: bool = false  ## frame_changed 是否已连接
-## 攻击后摇末段循环（2026-08-14）：硬后摇期间循环播放攻击动画最后若干帧，
-## 替代原 play_anim("idle") 切待机，让后摇保持攻击收尾姿态。_process 手动驱动帧区间。
-var _recovery_playing: bool = false  ## 是否正在播放后摇末段循环
-var _recovery_frame_start: int = 0  ## 末段起始帧（含）
-var _recovery_frame_end: int = 0  ## 末段结束帧（含）
-var _recovery_frame_accum: float = 0.0  ## 末段帧推进时间累加器
+## 攻击后摇站定动画（2026-08-17）：后摇站定时段按优先级 待机动画 > 后摇乒乓循环帧 > 冻结当前帧。
+## 循环帧在攻击帧集上手动驱动（_process），按配置顺序到达两端折返：1 2 3 4 5 4 3 2 1...
+var _recovery_playing: bool = false  ## 是否正在播放后摇循环帧
+var _recovery_seq: Array[int] = []  ## 后摇循环帧序列（按配置顺序的帧索引）
+var _recovery_pos: int = 0  ## 当前在序列中的位置索引
+var _recovery_dir: int = 1  ## 乒乓方向（+1 正放 / -1 倒放）
+var _recovery_frame_accum: float = 0.0  ## 帧推进时间累加器
 ## 攻击动画身体锚点补偿（#G2-offset 2026-08-14）：move 与 attack 画布尺寸/角色居中不一致时，
 ## 切换动画会让单位整块横移（G2 attack 703x470 角色偏右 ~129px，move 400x400 居中）。
 ## 计算「攻击首帧角色内容中心」相对「move 首帧角色内容中心」的常量偏移（已折算两套动画缩放比），
@@ -122,6 +137,11 @@ var _info_armor_label: Label = null
 var _info_static_label: Label = null
 ## 是否被选中（选中时显示属性面板）
 var _is_selected: bool = false
+## 血条/护盾数值 Label 引用（用于 zoom 放大同步字号防模糊）
+var _hp_value_label: Label = null
+var _armor_value_label: Label = null
+## 上次应用的相机 zoom（避免每帧重复设置）
+var _last_hp_label_zoom: float = -1.0
 ## 基础动画缩放比例
 const ANIM_BASE_SCALE: float = 0.05  ## 基础动画缩放（调小一半）
 ## 统一显示高度（像素），所有兵种（动画/静态精灵）都按此高度缩放
@@ -135,6 +155,12 @@ const ANIM_SPRINT_FILE := "sprint_frames.tres"  ## 冲刺动画帧文件名
 const ANIM_IDLE_FILE := "idle_frames.tres"  ## 待机动画帧文件名
 const ANIM_CHARGE_FILE := "charge_frames.tres"  ## 出场动画帧文件名（蓝女巫等特殊兵种）
 const ANIM_DEATH_FILE := "death_frames.tres"  ## 死亡动画帧文件名（#9：死亡使者等有独立死亡演出的兵种）
+const ANIM_SKILL_FILE := "skill_frames.tres"  ## 技能动画帧文件名（#技能系统：吟唱/蓄力等技能专属动画，缺失则回退攻击动画）
+
+## #技能系统：显式 preload 技能数据表与组件脚本
+## 不依赖 class_name 全局类缓存（新脚本需重开编辑器才注册），preload 在任何情况下都能解析
+const SKILL_DB := preload("res://scripts/skills/unit_skill_database.gd")
+const SKILL_COMPONENT_SCRIPT := preload("res://scripts/skills/unit_skill_component.gd")
 
 ## 玩家方单位阵亡时对周围敌人的爆炸半径（军令「断后令」death_explosion_damage 用）
 const DEATH_EXPLOSION_RADIUS: float = 120.0
@@ -168,6 +194,7 @@ var state_map: Dictionary = {  ## 状态映射字典
 	"base_defense": preload("res://scenes/units/states/state_base_defense.gd"), ## 基地防御状态（G5/D3 替代水晶）
 	"guard": preload("res://scenes/units/states/state_guard.gd"), ## 守卫状态（肉鸽护晶，#210）
 	"stun": preload("res://scenes/units/states/state_stun.gd"), ## 晕眩状态（#需求6：击退累计满 3 层触发）
+	"skill": preload("res://scenes/units/states/state_skill.gd"), ## 技能状态（#技能系统：标准模式英雄技能前摇/结算/后摇）
 	"die": preload("res://scenes/units/states/state_die.gd")      ## 死亡状态
 }
 ## 待应用的检测掩码（在进入场景树后应用）
@@ -175,6 +202,13 @@ var pending_detection_mask: int = -1  ## 待应用的检测掩码
 
 ## 是否为基地单位（G5/D3 替代水晶，原地不动防御，HP=BASE_HP，死亡时触发基地摧毁）
 var is_base_unit: bool = false  ## 基地单位标志
+## 战场模式（RTS 沙盒）玩家指挥字段：
+## order_pos：玩家右键下达的移动令目标点（Vector2.INF 表示无移动令）
+## hold_position：站定待命——不出移动令时原地站住，不向敌方基地推进
+## 两者由 battlefield_mode.gd 写入、state_move 消费；常规模式永不为真，零影响
+var order_pos: Vector2 = Vector2.INF  ## 玩家移动令目标（世界坐标）
+var hold_position: bool = false  ## 是否站定待命（战场模式专用）
+var combat_enabled: bool = true  ## 战场模式：是否允许交战（和平/停战=false → 完全不攻击）
 ## AI 禁用标志（用于调试模拟，true 时单位不自动切换状态）
 var ai_disabled: bool = false
 ## 出生阵线 Y 坐标（在 _ready 时记录），单位被碰撞挤压后会缓慢回归这条阵线
@@ -197,6 +231,18 @@ var _dot_timer: float = 0.0  ## 持续伤害每秒结算计时器（跨过 1 秒
 ## #6：冰霜词条 — 受击时攻速降低 30%（攻击间隔 × 1/0.7 ≈ ×1.4286）持续 1 秒
 ## 不可叠加，重复施加刷新计时；死亡时清零
 var _frost_timer: float = 0.0  ## 冰霜剩余秒（>0 表示被减速中）
+
+## #技能系统：技能减速（独立于冰霜词条，避免污染现有词条逻辑）
+## 与冰霜的区别：冰霜固定 -30% 攻速持续 1s；技能减速的幅度与时长由技能定义给出，
+## 且同时作用于「移速」与「攻速」。重复施加取「幅度更大者」并刷新计时。
+var skill_slow_percent: float = 0.0  ## 技能减速幅度（0.4 = 移速/攻速各 -40%）
+var skill_slow_timer: float = 0.0  ## 技能减速剩余秒（>0 表示生效中）
+
+## #技能系统：骑射类技能的「取消攻击后摇」计时（>0 期间攻击后摇为 0）
+var skill_no_recovery_timer: float = 0.0
+
+## #技能系统：待释放的技能定义（由 UnitSkillComponent 写入，state_skill 读取后清空）
+var pending_skill_def: Dictionary = {}
 
 ## #6：侵蚀词条 — 受击时伤害 -10%/层，最多 3 层（共 -30%）
 ## 持续到兵种死亡（不走 _active_affixes 的计时，独立 stack 计数）
@@ -248,6 +294,11 @@ func _ready() -> void:  ## 重写 _ready 生命周期方法
 ## res: 兵种资源对象
 ## team_id: 阵营编号（0=红方, 1=蓝方）
 func setup(res: UnitResource, team_id: int) -> void:  ## 定义初始化单位的方法
+	## ── 对象池复用复位（2026-08-18）：新实例这些字段本就是初值，幂等无副作用 ──
+	_setup_finalized = false  ## 允许 _finalize_setup 重新执行（血条/精灵/缩放重配）
+	is_dead = false  ## 重置死亡标志
+	current_state = null  ## 清空状态机，_physics_process 走 _fallback_move 兜底直到状态就绪
+	_clear_pool_residue()  ## 清理对象池残留（tween/词条/定时器/可见性）
 	## #26：肉鸽模式复制兵种资源并应用控制台覆盖层，只影响肉鸽单位不污染全局 .tres
 	if RoguelikeManager.is_active and not is_base_unit and res != null:
 		var dup: UnitResource = res.duplicate(true)
@@ -341,7 +392,9 @@ func get_max_hp() -> int:
 func get_move_speed_px() -> float:
 	if unit_resource == null:
 		return 0.0
-	return unit_resource.move_speed * Constants.UNIT_TO_PIXELS * buff_move_mult
+	## #技能系统：技能减速期间移速按 (1 - skill_slow_percent) 折算
+	var slow_mult: float = (1.0 - skill_slow_percent) if skill_slow_timer > 0.0 else 1.0
+	return unit_resource.move_speed * Constants.UNIT_TO_PIXELS * buff_move_mult * maxf(slow_mult, 0.1)
 
 ## 把合成后的移动速度限幅到该单位的真实移速上限（方向不变，只削大小）
 ## 背景：友军分离推力 _compute_ally_separation() 与绕步侧向速度都是「叠加量」，
@@ -361,7 +414,11 @@ func get_attack_interval() -> float:
 		return 1.0
 	## #6：冰霜词条期间攻速 -30% → 攻击间隔 × 1/0.7 ≈ ×1.4286（其他加成不变）
 	var frost_mult: float = 1.0 / (1.0 - _frost_mult()) if _frost_timer > 0.0 else 1.0
-	return maxf(unit_resource.attack_speed * buff_attack_interval_mult * frost_mult, 0.05)
+	## #技能系统：技能减速期间攻击间隔同样放大（与冰霜相乘叠加）
+	var slow_mult: float = 1.0
+	if skill_slow_timer > 0.0 and skill_slow_percent > 0.0:
+		slow_mult = 1.0 / maxf(1.0 - skill_slow_percent, 0.1)
+	return maxf(unit_resource.attack_speed * buff_attack_interval_mult * frost_mult * slow_mult, 0.05)
 
 ## #6：当前冰霜减攻速乘数（基础 0.3；非冰霜期返回 0 表示无效果）
 ## 单位是「value_percent」：FROST .value_percent=0.3 表示攻速 -30%
@@ -389,6 +446,7 @@ func load_animation_frames() -> void:  ## 定义加载动画帧的方法
 	anim_idle_frames = _load_cached_frames(unit_id, "idle")  ## 加载待机动画帧
 	anim_charge_frames = _load_cached_frames(unit_id, "charge")  ## 加载出场动画帧
 	anim_death_frames = _load_cached_frames(unit_id, "death")  ## 加载死亡动画帧（#9）
+	anim_skill_frames = _load_cached_frames(unit_id, "skill")  ## 加载技能动画帧（#技能系统，无此文件则为 null 并回退攻击动画）
 	_compute_attack_anchor_offset()  ## 计算攻击态身体锚点常量偏移（解决 move/attack 画布居中不一致导致的横移）
 	if unit_sprite:  ## 如果精灵节点存在
 		## 有出场动画先播放出场（charge 播完后切 idle 或 move）
@@ -516,6 +574,7 @@ func _load_cached_frames(unit_id: String, anim_name: String) -> SpriteFrames:  #
 		"idle": ANIM_IDLE_FILE,
 		"charge": ANIM_CHARGE_FILE,
 		"death": ANIM_DEATH_FILE,
+		"skill": ANIM_SKILL_FILE,
 	}
 	var file_name: String = file_map.get(anim_name, "")  ## 获取文件名
 	if anim_name == "attack_alt":
@@ -616,36 +675,56 @@ func play_anim(anim_name: String, force: bool = false) -> void:  ## 定义播放
 	## 导致红方攻击时朝左（倒着攻击）。move→attack 切换时尤其明显。
 	_apply_anim_flip()
 
-## 攻击后摇末段循环（#后摇 2026-08-14）
-## 硬后摇期间循环播放攻击动画最后 tail_frames 帧，替代原 play_anim("idle") 切待机，
-## 后摇期间循环播放攻击动画的某段帧（#后摇 2026-08-14）
-## start_frame: 起始帧索引（0 起）；frame_count: 循环帧数。例如 play_attack_tail(0, 2) = 循环第 1、2 帧。
-## 让后摇保持攻击姿态而非突兀跳到待机。无攻击帧的兵种回退到 idle。
-## 幂等：后摇期间（state_attack 每帧调用）只初始化一次，不会每帧把帧重置回起始帧。
-func play_attack_tail(start_frame: int, frame_count: int) -> void:
+## 后摇站定动画（2026-08-17 用户拍板）：后摇站定时段（近战范围内站定 / 远程原地不动）按优先级切换：
+##   1. 有待机动画 → 播待机（play_anim 同名守卫幂等）
+##   2. 配了后摇循环帧 → 在攻击帧集上乒乓循环（按配置顺序 1 2 3 4 5 4 3 2 1...，_process 驱动）
+##   3. 都没有 → 冻结当前帧原地站定（保持攻击收尾姿势）
+## 双攻击兵种按 attack_anim_toggle 跟随刚播的那套攻击动画取对应循环帧配置。
+## 幂等：后摇期间（state_attack 每帧调用）只在状态变化时切换，不重置已播进度。
+func play_backswing_stand() -> void:
 	if unit_sprite == null:
 		return
-	if anim_attack_frames == null or anim_attack_frames.get_frame_count("attack") <= 0:
-		if not _recovery_playing:
-			play_anim("idle")
+	if anim_idle_frames != null:
+		play_anim("idle")  ## 优先级1：待机动画（同名守卫下重复调用不重播）
 		return
-	if _recovery_playing and unit_sprite.sprite_frames == anim_attack_frames:
-		return  ## 已在播放该段，不重复初始化
-	unit_sprite.sprite_frames = anim_attack_frames
-	_apply_anim_scale(anim_attack_frames, "attack")
+	var use_alt: bool = attack_anim_toggle and anim_attack_frames_alt != null
+	var frames: SpriteFrames = anim_attack_frames_alt if use_alt else anim_attack_frames
+	var seq: Array[int] = []
+	if unit_resource != null:
+		seq = unit_resource.attack_recovery_frames_alt if use_alt else unit_resource.attack_recovery_frames
+	if frames == null or not frames.has_animation("attack") or frames.get_frame_count("attack") <= 0 or seq.is_empty():
+		unit_sprite.stop()  ## 优先级3：没配后摇帧 → 冻结当前帧原地站定
+		_recovery_playing = false
+		return
+	if _recovery_playing and unit_sprite.sprite_frames == frames:
+		return  ## 优先级2：已在循环该帧集，不重复初始化
+	unit_sprite.sprite_frames = frames
+	_apply_anim_scale(frames, "attack")
 	_apply_attack_speed_scale()
 	unit_sprite.offset = Vector2.ZERO
-	var _fc: int = anim_attack_frames.get_frame_count("attack")
-	var _cnt: int = maxi(1, frame_count)
-	var _s: int = clampi(start_frame, 0, maxi(0, _fc - 1))
-	_recovery_frame_start = _s
-	_recovery_frame_end = mini(_s + _cnt - 1, maxi(0, _fc - 1))
-	if _recovery_frame_end < _recovery_frame_start:
-		_recovery_frame_end = _recovery_frame_start
+	_recovery_seq = seq
+	_recovery_pos = 0
+	_recovery_dir = 1
 	_recovery_playing = true
 	_recovery_frame_accum = 0.0
-	unit_sprite.stop()  ## 关闭自动播放，改由 _process 手动驱动末段循环
-	unit_sprite.set_frame(_recovery_frame_start)
+	unit_sprite.stop()  ## 关闭自动播放，改由 _process 手动驱动乒乓循环
+	unit_sprite.set_frame(clampi(seq[0], 0, frames.get_frame_count("attack") - 1))
+
+## 后摇乒乓步进（纯函数，tests/backswing_loop_test.gd 回归覆盖）：
+## 在 [0, n-1] 内按 dir 前进，撞到两端折返（端点只播一次：0 1 2 3 4 3 2 1 0 1...）；n<=1 原地不动
+## 返回 Vector2i(新位置, 新方向)
+static func pp_step(pos: int, dir: int, n: int) -> Vector2i:
+	if n <= 1:
+		return Vector2i(pos, 1)
+	var p: int = pos + dir
+	var d: int = dir
+	if p >= n:
+		p = n - 2
+		d = -1
+	elif p < 0:
+		p = 1
+		d = 1
+	return Vector2i(p, d)
 
 ## 停止后摇末段循环（硬后摇结束 / 状态切换时由 play_anim 自动处理）
 func stop_recovery_tail() -> void:
@@ -660,6 +739,41 @@ static func clear_anim_scale_cache() -> void:  ## 定义清空缩放缓存的方
 ## 仍指向旧实例（编辑器同进程运行），不清缓存则战斗中 load 到旧帧 → 调整不生效（#6）
 static func clear_sprite_frames_cache() -> void:
 	_sprite_frames_cache.clear()
+
+## 预热指定兵种的 SpriteFrames 缓存（2026-08-19 对象池改造）
+## 进入局内前把该兵种各动画的 .tres 预先 load 进 _sprite_frames_cache，
+## 使首次出兵时 _load_cached_frames 直接命中缓存，消除首次出兵卡顿。
+## 与实例方法 _load_cached_frames 共用同一份静态缓存与键格式（unit_id + "_" + anim_name）。
+## unit_id: 兵种 ID
+## attack_alt_file: 该兵种的备用攻击动画文件名（来自 UnitResource.attack_alt_frames，无则空串）
+## 返回值: 本次新加载（未命中缓存）的动画数量，供调用方统计预热进度
+static func prewarm_sprite_frames(unit_id: String, attack_alt_file: String = "") -> int:
+	var file_map: Dictionary = {
+		"move": ANIM_MOVE_FILE,
+		"attack": ANIM_ATTACK_FILE,
+		"sprint": ANIM_SPRINT_FILE,
+		"idle": ANIM_IDLE_FILE,
+		"charge": ANIM_CHARGE_FILE,
+		"death": ANIM_DEATH_FILE,
+	}
+	if not attack_alt_file.is_empty():
+		file_map["attack_alt"] = attack_alt_file
+	var loaded: int = 0
+	for anim_name in file_map:
+		var cache_key: String = unit_id + "_" + anim_name
+		if _sprite_frames_cache.has(cache_key):
+			continue
+		var file_name: String = file_map[anim_name]
+		if file_name.is_empty():
+			continue
+		var path := "%s/%s/%s" % [ANIM_ROOT_DIR, unit_id, file_name]
+		if not ResourceLoader.exists(path):
+			continue
+		var frames: SpriteFrames = load(path)
+		if frames != null:
+			_sprite_frames_cache[cache_key] = frames
+			loaded += 1
+	return loaded
 
 ## 根据纹理尺寸，动态计算并设置当前动画的 scale
 ## 完全复刻控制台（debug_units.gd::_apply_preview_scale）的算法：
@@ -920,8 +1034,10 @@ func _setup_armor_bar_style() -> void:  ## 定义应用护甲条样式的方法
 	armor_bar.add_theme_stylebox_override("background", bg_style)  ## 应用背景样式
 	armor_bar.add_theme_stylebox_override("fill", fill_style)  ## 应用填充样式
 
-## 设置血条的纯白色样式（背景深灰，填充纯白）
+## 设置血条的阵营色样式（背景深灰，红方红填充 / 蓝方蓝填充）
 ## 血条位于护盾条下方
+## #战场模式（2026-08-17 用户拍板全局生效）：纯白填充改为按阵营着色，
+## 红方（team=0）#D93025 / 蓝方（team=1）#1A73E8，与 HUD 水晶条配色一致
 func _setup_health_bar_style() -> void:  ## 定义应用血条样式的方法
 	if health_bar == null:  ## 如果血条节点不存在
 		return  ## 直接返回
@@ -932,7 +1048,7 @@ func _setup_health_bar_style() -> void:  ## 定义应用血条样式的方法
 	bg_style.corner_radius_bottom_left = 1  ## 圆角
 	bg_style.corner_radius_bottom_right = 1  ## 圆角
 	var fill_style = StyleBoxFlat.new()  ## 创建填充样式
-	fill_style.bg_color = Color(1.0, 1.0, 1.0, 1.0)  ## 纯白色不透明填充
+	fill_style.bg_color = Unit.team_color(team) if GameManager.is_battlefield_mode else (Color("#D93025") if team == 0 else Color("#1A73E8"))  ## 红方红 / 蓝方蓝
 	fill_style.corner_radius_top_left = 1  ## 圆角
 	fill_style.corner_radius_top_right = 1  ## 圆角
 	fill_style.corner_radius_bottom_left = 1  ## 圆角
@@ -956,17 +1072,21 @@ func _setup_hp_bar_value_label() -> void:
 	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	lbl.add_theme_font_override("font", ThemeDB.fallback_font)
-	lbl.add_theme_font_size_override("font_size", 8)
+	## 竞技场模式相机可非整数缩放（0.9~4.0），8px 小字号放大后模糊 → 字号提至 12（光栅化更精细）
+	lbl.add_theme_font_size_override("font_size", 12 if GameManager.is_battlefield_mode else 8)
 	lbl.add_theme_color_override("font_color", Color(1, 1, 1, 1))
 	lbl.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.85))
 	lbl.add_theme_constant_override("shadow_offset_x", 1)
 	lbl.add_theme_constant_override("shadow_offset_y", 1)
 	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	lbl.set_anchors_preset(Control.PRESET_FULL_RECT)
-	lbl.offset_top = -3.0
-	lbl.offset_bottom = -3.0
 	lbl.visible = SettingsManager.show_hp_armor_bar
 	health_bar.add_child(lbl)
+	## 2026-08-18 修复：add_child 后再设 FULL_RECT + 垂直居中（此前 add_child 前设 anchors 可能不生效），
+	## 并保留 1px 上下内缩，使数值严格居中于血条内（不偏上）
+	lbl.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	lbl.offset_top = 1
+	lbl.offset_bottom = -1
+	_hp_value_label = lbl
 	## 护盾条独立数值 Label（仅当护盾条节点存在时创建）
 	if armor_bar != null:
 		var armor_lbl := Label.new()
@@ -974,17 +1094,19 @@ func _setup_hp_bar_value_label() -> void:
 		armor_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		armor_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		armor_lbl.add_theme_font_override("font", ThemeDB.fallback_font)
-		armor_lbl.add_theme_font_size_override("font_size", 8)
+		armor_lbl.add_theme_font_size_override("font_size", 12 if GameManager.is_battlefield_mode else 8)
 		armor_lbl.add_theme_color_override("font_color", Color(0.85, 0.85, 0.85, 1.0))
 		armor_lbl.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.85))
 		armor_lbl.add_theme_constant_override("shadow_offset_x", 1)
 		armor_lbl.add_theme_constant_override("shadow_offset_y", 1)
 		armor_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		armor_lbl.set_anchors_preset(Control.PRESET_FULL_RECT)
-		armor_lbl.offset_top = -3.0
-		armor_lbl.offset_bottom = -3.0
 		armor_lbl.visible = SettingsManager.show_hp_armor_bar
 		armor_bar.add_child(armor_lbl)
+		## 2026-08-18 修复：add_child 后设 FULL_RECT + 1px 内缩居中
+		armor_lbl.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		armor_lbl.offset_top = 1
+		armor_lbl.offset_bottom = -1
+		_armor_value_label = armor_lbl
 	## 血条数值变化时自动刷新文本；护甲变化不一定伴随血量变化，受击结算末尾会再补刷一次
 	health_bar.value_changed.connect(_update_hp_bar_value_label)
 	_update_hp_bar_value_label()
@@ -993,12 +1115,42 @@ func _setup_hp_bar_value_label() -> void:
 func _update_hp_bar_value_label(_v: float = 0.0) -> void:
 	if health_bar == null or not health_bar.has_meta("hp_value_label_created"):
 		return
-	var lbl: Label = health_bar.get_node_or_null("HpValueLabel")
+	## 优先用缓存引用；兜底按节点名查找（兼容旧存档场景）
+	var lbl: Label = _hp_value_label
+	if lbl == null or not is_instance_valid(lbl):
+		lbl = health_bar.get_node_or_null("HpValueLabel") as Label
+		_hp_value_label = lbl
 	if lbl != null:
 		lbl.text = "%d/%d" % [current_hp, get_max_hp()]
-	var armor_lbl: Label = armor_bar.get_node_or_null("ArmorValueLabel") if armor_bar != null else null
+	var armor_lbl: Label = _armor_value_label
+	if armor_lbl == null or not is_instance_valid(armor_lbl):
+		armor_lbl = armor_bar.get_node_or_null("ArmorValueLabel") as Label if armor_bar != null else null
+		_armor_value_label = armor_lbl
 	if armor_lbl != null:
 		armor_lbl.text = str(current_armor)
+
+## 2026-08-18：血条/护盾数值 Label 随相机 zoom 同步放大（文字跟随血条变大且保持清晰）
+## 原理：zoom 放大时字号同步 ×zoom（光栅化分辨率同步提高 → 不模糊），
+## 同时 scale = 1/zoom 抵消节点自身的场景缩放（血条仍在场景空间被相机放大，
+## 但文字通过字号放大 + 反向缩放达到「屏幕上同比例变大且 1:1 光栅化」）。
+## pivot 居中使缩放围绕文字中心，位置不偏移。
+func _update_hp_label_zoom() -> void:
+	var cam := get_viewport().get_camera_2d()
+	if cam == null:
+		return
+	var z: float = cam.zoom.x
+	if z <= 0.0 or is_equal_approx(z, _last_hp_label_zoom):
+		return
+	_last_hp_label_zoom = z
+	## 基准字号（与 _setup_hp_bar_value_label 创建时一致）
+	var base_size: int = 12 if GameManager.is_battlefield_mode else 8
+	## 目标屏幕字号 = 基准 × zoom（clamp 防过大过小）
+	var target: int = clampi(int(round(base_size * z)), 6, 48)
+	for lbl in [_hp_value_label, _armor_value_label]:
+		if lbl != null and is_instance_valid(lbl) and lbl.is_inside_tree():
+			lbl.add_theme_font_size_override("font_size", target)
+			lbl.pivot_offset = lbl.size / 2.0
+			lbl.scale = Vector2(1.0 / z, 1.0 / z)
 
 ## #1（2026-08-09）：血条/护盾数值 Label 字号固定，不随镜头 zoom 放大（放大遮挡视野）。
 ## 血条数值 Label 保持创建时的固定字号，由 _setup_hp_bar_value_label 统一设置。
@@ -1126,6 +1278,28 @@ func _finalize_setup() -> void:  ## 定义完成初始化的方法
 		change_state("base_defense")  ## 切换到基地防御状态（原地不动）
 	else:  ## 普通单位
 		change_state(get_idle_state_name())  ## 肉鸽玩家单位进 guard 护晶，其余进 move 推进
+	## #技能系统：挂载兵种技能组件（标准模式）
+	## 组件内部会查表，无技能的兵种立即自我移除，因此 30+ 普通兵种无额外开销
+	_setup_skill_component()
+
+## #技能系统：为拥有技能的兵种挂载技能组件
+## 只在非肉鸽模式、非基地单位、且该兵种在 UnitSkillDatabase 中有启用技能时才挂载。
+## 技能绑定兵种而非玩家/AI，故红蓝双方同一兵种都会挂载，行为一致。
+func _setup_skill_component() -> void:
+	if is_base_unit:
+		return
+	if RoguelikeManager.is_active:
+		return  ## 肉鸽模式走 HeroSkillManager 的波次技能，不启用本系统
+	if unit_resource == null:
+		return
+	if not SKILL_DB.has_skill(unit_resource.unit_id):
+		return
+	if get_node_or_null("UnitSkillComponent") != null:
+		return  ## 避免重复挂载
+	var comp := Node.new()
+	comp.name = "UnitSkillComponent"
+	comp.set_script(SKILL_COMPONENT_SCRIPT)
+	add_child(comp)
 
 ## 设置碰撞体为精灵图显示尺寸的 1/3，居中放置
 ## 精灵图显示尺寸 = 纹理帧尺寸 × scale，碰撞体直径 = 显示尺寸 / 3
@@ -1161,6 +1335,8 @@ func _setup_collision_body() -> void:
 ## 普通帧处理，用于检测攻击动画命中帧
 func _process(delta: float) -> void:  ## 重写 _process 方法
 	_check_attack_hit_frame()  ## 检查攻击动画命中帧
+	## 血条/护盾数值 Label：放大时同步字号 + 反向缩放（文字跟随变大且保持清晰，2026-08-18）
+	_update_hp_label_zoom()
 	## #1（2026-08-09）：血条/护盾数值 Label 字号固定，不再随镜头 zoom 变化（避免放大遮挡视野）
 	## 选中时每帧更新属性面板（血量、护盾动态变化）和位置
 	if _is_selected and _info_panel != null:
@@ -1180,20 +1356,24 @@ func _process(delta: float) -> void:  ## 重写 _process 方法
 	## 战斗结束后冻结（不结算 DoT），避免胜负已分后仍在持续掉血
 	if BattleManager.is_battle_active:
 		_update_active_affixes(delta)
-	## 攻击后摇末段循环（#后摇 2026-08-14）：手动驱动攻击动画最后若干帧循环播放
-	if _recovery_playing and unit_sprite != null and anim_attack_frames != null \
-			and unit_sprite.sprite_frames == anim_attack_frames:
-		var _rfps: float = anim_attack_frames.get_animation_speed("attack") * maxf(unit_sprite.speed_scale, 0.0001)
-		if _rfps <= 0.0:
-			_rfps = 12.0
-		_recovery_frame_accum += delta
-		var _rfd: float = 1.0 / _rfps
-		while _recovery_frame_accum >= _rfd:
-			_recovery_frame_accum -= _rfd
-			var _f: int = unit_sprite.frame + 1
-			if _f > _recovery_frame_end:
-				_f = _recovery_frame_start
-			unit_sprite.set_frame(_f)
+	## 后摇循环帧（2026-08-17）：手动驱动攻击帧集上的乒乓循环（按配置顺序 1 2 3 4 5 4 3 2 1...）
+	if _recovery_playing and unit_sprite != null:
+		var _rframes: SpriteFrames = unit_sprite.sprite_frames
+		if _rframes == null or not _rframes.has_animation("attack") or _recovery_seq.is_empty():
+			_recovery_playing = false  ## 帧集被外部换掉/序列异常，终止循环防卡死
+		else:
+			var _rfps: float = _rframes.get_animation_speed("attack") * maxf(unit_sprite.speed_scale, 0.0001)
+			if _rfps <= 0.0:
+				_rfps = 12.0
+			_recovery_frame_accum += delta
+			var _rfd: float = 1.0 / _rfps
+			var _rfc: int = maxi(1, _rframes.get_frame_count("attack"))
+			while _recovery_frame_accum >= _rfd:
+				_recovery_frame_accum -= _rfd
+				var _st: Vector2i = pp_step(_recovery_pos, _recovery_dir, _recovery_seq.size())
+				_recovery_pos = _st.x
+				_recovery_dir = _st.y
+				unit_sprite.set_frame(clampi(_recovery_seq[_recovery_pos], 0, _rfc - 1))
 
 ## 更新信息面板位置（CanvasLayer 中需手动将世界坐标转换为屏幕坐标）
 ## #1（2026-08-09）：面板在屏幕上保持固定大小（scale=1、字号/尺寸固定），不随镜头 zoom 缩放
@@ -1771,9 +1951,15 @@ func _fallback_move(delta: float) -> void:  ## 定义备用移动方法
 func _compute_ally_separation() -> Vector2:  ## 定义友军分离计算方法
 	if not is_instance_valid(self):  ## 单位可能已被释放，直接返回避免 Nil 访问
 		return Vector2.ZERO  ## 直接返回零向量
+	## 分离推力节流（2026-08-18）：与索敌共用 0.1s 窗口，中间帧返回缓存推力。
+	## 分离是软性防重叠（物理碰撞仍每帧兜底），0.1s 推力滞后在密集阵型下无感知差异，
+	## 但能把「每帧全扫友军 O(N)」降到 10 次/秒，大量单位时显著降 CPU。
+	if not _pathfind_ready():
+		return _cached_separation  ## 返回缓存推力
 	var container: Node = get_parent()  ## 单位容器（同阵营单位互为兄弟节点）
 	if container == null:  ## 容器不存在（未入树/已被移除）
-		return Vector2.ZERO  ## 直接返回零向量
+		_cached_separation = Vector2.ZERO
+		return _cached_separation  ## 直接返回零向量
 	var push := Vector2.ZERO  ## 累计推力（带距离权重，未归一化）
 	for body in container.get_children():  ## 遍历同容器兄弟节点
 		## 跳过自身、非单位、已销毁、已死亡、非同阵营的单位
@@ -1786,6 +1972,7 @@ func _compute_ally_separation() -> Vector2:  ## 定义友军分离计算方法
 	if push.length() > 0.0:  ## 有推力时归一化并按权重强度限幅（不超单倍强度，防分离力把合速度顶飞）
 		## 单侧较远友军（weight 小）→ 推力小；多侧近距围堵 → 封顶 SEPARATION_STRENGTH
 		push = push.normalized() * minf(SEPARATION_STRENGTH, push.length() * SEPARATION_STRENGTH)  ## 限幅
+	_cached_separation = push  ## 缓存本次推力（节流窗口内复用）
 	return push  ## 返回分离推力向量
 
 ## 缓慢将单位拉回出生阵线（抵消 move_and_slide 在密集人堆里的 Y 轴挤压漂移）
@@ -1882,14 +2069,36 @@ func is_target_in_attack_range(target_pos: Vector2, tolerance_px: float = 0.0) -
 func is_target_out_of_attack_range(target_pos: Vector2, tolerance_px: float = 0.0) -> bool:
 	return not is_target_in_attack_range(target_pos, tolerance_px)
 
+## 索敌节流间隔（秒）：奔跑/后摇期间每 0.1s 最多真正扫描一次敌方列表（2026-08-18 用户拍板 0.1s）
+const PATHFIND_INTERVAL: float = 0.1
+## 索敌节流累计计时器
+var _pathfind_accum: float = 0.0
+## 友军分离推力缓存（节流窗口内复用，2026-08-18）
+var _cached_separation: Vector2 = Vector2.ZERO
+
+## 索敌节流判定：物理帧累计达 PATHFIND_INTERVAL 才放行一次真实扫描
+## 攻击动画周期（_attack_started 段）不索敌，由 state_attack 不调用本函数保证；
+## 这里统一节流，覆盖所有索敌调用点（move / attack 后摇 / 守卫等）。
+func _pathfind_ready() -> bool:
+	_pathfind_accum += get_physics_process_delta_time()
+	if _pathfind_accum >= PATHFIND_INTERVAL:
+		_pathfind_accum = 0.0
+		return true
+	return false
+
 ## 在指定半径内查找最近的敌方单位
 ## 直接扫描 UnitContainer 中的所有单位，不依赖 Area2D 物理检测（更可靠）
 ## 使用 2D 真实距离（等视角多线战场需要考虑 Y 轴）
 ## max_range_px: 索敌半径上限（像素），传 INF 表示全场索敌
 ## 返回值: 半径内最近的敌方单位，如果没有则返回 null
+## 2026-08-18 性能优化：索敌节流 —— 每 PATHFIND_INTERVAL 秒最多真正扫描一次，
+## 节流窗口内返回上次扫描结果（target 缓存），避免大量单位每帧 O(N) 遍历。
 func find_nearest_enemy_in_range(max_range_px: float) -> Unit:  ## 定义限定半径索敌的方法
 	if not is_instance_valid(self):  ## 单位可能已被释放，直接返回避免 Nil 访问
 		return null  ## 返回 null
+	## 索敌节流：窗口内返回缓存目标（仍有效则用，否则返回 null 让调用方走兜底推进）
+	if not _pathfind_ready():
+		return target if (target != null and is_instance_valid(target) and not target.is_dead) else null
 	## 获取战场节点（单位在 UnitContainer 下，UnitContainer 在 Battlefield 下）
 	var unit_container = get_parent()  ## 获取父节点（UnitContainer）
 	if unit_container == null:  ## 如果父节点不存在
@@ -1926,6 +2135,10 @@ func find_nearest_enemy_in_range(max_range_px: float) -> Unit:  ## 定义限定�
 func find_best_distributed_target(attack_range_px: float) -> Unit:  ## 定义射程内平分索敌方法
 	if not is_instance_valid(self):  ## 单位可能已被释放，直接返回避免 Nil 访问
 		return null
+	## 索敌节流（2026-08-18）：与 find_nearest_enemy_in_range 共用同一节流窗口，
+	## 避免 move 状态内两种索敌在同一物理帧各扫一遍。
+	if not _pathfind_ready():
+		return target if (target != null and is_instance_valid(target) and not target.is_dead) else null
 	## 获取战场节点（单位在 UnitContainer 下）
 	var unit_container = get_parent()  ## 获取父节点（UnitContainer）
 	if unit_container == null:  ## 如果父节点不存在
@@ -2493,6 +2706,13 @@ func _update_active_affixes(delta: float) -> void:
 	## #6 冰霜计时递减（独立于 _active_affixes，每帧减）
 	if _frost_timer > 0.0:
 		_frost_timer = maxf(_frost_timer - delta, 0.0)
+	## #技能系统：技能减速与骑射计时递减（同样独立于 _active_affixes）
+	if skill_slow_timer > 0.0:
+		skill_slow_timer = maxf(skill_slow_timer - delta, 0.0)
+		if skill_slow_timer <= 0.0:
+			skill_slow_percent = 0.0  ## 减速结束即清空幅度，保证「timer>0 才有效」的不变量
+	if skill_no_recovery_timer > 0.0:
+		skill_no_recovery_timer = maxf(skill_no_recovery_timer - delta, 0.0)
 	if _active_affixes.is_empty():
 		return
 	## AI 禁用时不处理词条效果（用于调试模拟，停止按钮后不再持续掉血）
@@ -2629,6 +2849,9 @@ func apply_affix(affix: AffixResource, source: Unit = null) -> void:
 ## 清除所有活跃词条效果（死亡时调用）
 ## #需求6 顺带清空晕眩状态（晕眩计时/层数/免疫计时），保证死亡或重置后不残留
 ## #6：冰霜计时 + 侵蚀层数也一并清零
+## #技能系统：技能减速/骑射计时与待释放技能定义同样清零 ——
+##   本函数在「死亡」与「对象池复用前」（_clear_pool_residue）两处调用，
+##   不清会导致复用实例带着上一局的减速幅度或残留技能定义出场。
 func clear_all_affixes() -> void:
 	_active_affixes.clear()
 	stun_timer = 0.0
@@ -2636,6 +2859,75 @@ func clear_all_affixes() -> void:
 	stun_immune_timer = 0.0
 	_frost_timer = 0.0
 	erosion_stacks = 0
+	skill_slow_percent = 0.0
+	skill_slow_timer = 0.0
+	skill_no_recovery_timer = 0.0
+	pending_skill_def = {}
+
+## 对象池复用前的残留清理（2026-08-18）：清掉死亡/战斗遗留的 tween、词条、
+## 远程技能定时器、击退/突进位移，恢复血条护盾条与精灵可见性。新实例调此函数为幂等空操作。
+func _clear_pool_residue() -> void:
+	clear_all_affixes()
+	## 注：死亡 tween 由 state_die 创建，回池时机（死亡动画播完/2s 兜底）保证其已自然结束，
+	## 无需在此枚举清理（Tween 是 RefCounted 非 Node，无法从 get_children 获取）。
+	## 释放远程技能定时器（setup 会按需重建）
+	if _ranged_skill_timer != null:
+		if is_instance_valid(_ranged_skill_timer):
+			_ranged_skill_timer.queue_free()
+		_ranged_skill_timer = null
+	## #技能系统：移除技能组件（setup 会按新兵种重新按需挂载）
+	## 对象池是**无类型池**——同一实例可能上局是 Hero2、下局被复用为普通兵，
+	## 不移除会让普通兵带着 Hero2 的技能出场。
+	var old_skill_comp: Node = get_node_or_null("UnitSkillComponent")
+	if old_skill_comp != null:
+		old_skill_comp.queue_free()
+		## 立即改名，避免 queue_free 生效前 setup 里的重名检查误判为「已挂载」
+		old_skill_comp.name = "UnitSkillComponent_Freeing"
+	## 复位战斗位移残留
+	_knockback_velocity = Vector2.ZERO
+	_knockback_timer = 0.0
+	_attack_dash_time = -1.0
+	_attack_dash_dir = Vector2.ZERO
+	_attack_dash_triggered = false
+	## 复位寻路节流缓存
+	_pathfind_accum = 0.0
+	_cached_separation = Vector2.ZERO
+	## 复位显示：精灵/血条/护盾条恢复可见（死亡时被隐藏或淡出）
+	modulate = Color.WHITE
+	if unit_sprite != null:
+		unit_sprite.modulate = Color.WHITE
+		unit_sprite.visible = true
+	if health_bar != null:
+		health_bar.visible = true
+	if armor_bar != null:
+		armor_bar.visible = true
+
+## #技能系统：施加技能减速（移速与攻速同时按 percent 折减，持续 duration 秒）
+## 与冰霜词条完全独立：冰霜只影响攻速且固定 -30%/1s，本函数的幅度与时长由技能定义给出。
+## 重复施加时取「幅度更大者」并刷新计时，避免弱减速覆盖强减速。
+## percent: 减速幅度（0.4 = -40%）
+## duration: 持续秒数
+func apply_skill_slow(percent: float, duration: float) -> void:
+	if is_dead or is_base_unit or percent <= 0.0 or duration <= 0.0:
+		return
+	skill_slow_percent = maxf(skill_slow_percent, clampf(percent, 0.0, 0.9))
+	skill_slow_timer = maxf(skill_slow_timer, duration)
+
+## #技能系统：播放技能专属动画（skill_frames.tres）
+## speed: 播放速度倍率（<1 放慢，营造吟唱/蓄力感）
+func play_skill_anim(speed: float = 1.0) -> void:
+	if unit_sprite == null or anim_skill_frames == null:
+		return
+	_recovery_playing = false  ## 终止后摇末段循环，与 play_anim 行为一致
+	current_anim_state = "skill"
+	unit_sprite.offset = Vector2.ZERO
+	unit_sprite.sprite_frames = anim_skill_frames
+	_apply_anim_scale(anim_skill_frames, "skill")
+	unit_sprite.speed_scale = speed if speed > 0.0 else 1.0
+	## 取该 SpriteFrames 内的第一个动画名播放（切片工具生成的动画名可能是 skill/attack 等）
+	var names: PackedStringArray = anim_skill_frames.get_animation_names()
+	if names.size() > 0:
+		unit_sprite.play(names[0])
 
 ## #14 击退：把本单位沿「攻击者 → 自己」的方向推开一段距离
 ## 位移不是瞬移，而是在 KNOCKBACK_DURATION 秒内均匀完成，由 _apply_knockback_step 每物理帧消耗；

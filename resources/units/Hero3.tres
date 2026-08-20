@@ -1,0 +1,43 @@
+[gd_resource type="Resource" script_class="UnitResource" format=3]
+
+[ext_resource type="Script" path="res://resources/units/unit_base_resource.gd" id="1_base"]
+[ext_resource type="Script" path="res://resources/affixes/affix_resource.gd" id="1_ratjt"]
+
+[resource]
+script = ExtResource("1_base")
+unit_id = "Hero3"
+display_name = "菲比Hero"
+description = "菲比阵营英雄单位。挥剑四连击近战，身法灵动。仅于肉鸽模式作为固定首发卡登场，不参与常规战争的兵种解锁与编成。"
+cost = 300
+units_per_card = 1
+max_hp = 400
+armor_value = 200
+move_speed = 2.5
+damage = 30
+damage_types = Array[int]([0])
+damage_by_type = {
+0: 150
+}
+attack_range = 2.0
+attack_range_h = 0.6
+attack_range_v = 0.6
+attack_speed = 2.0
+attack_hit_types = Array[int]([0])
+damage_by_hit = [{
+0: 170
+}]
+attack_hit_frame_start = 10
+attack_hit_frame_end = 10
+attack_sound_frame = 10
+attack_wait_anim_end = true
+display_height = 64.0
+display_width = 64.0
+move_display_height = 58.0
+move_display_width = 58.0
+walk_display_height = 58.0
+walk_display_width = 58.0
+attack_display_height = 85.0
+attack_display_width = 85.0
+color_red = Color(0.6, 0.3, 0.9, 1)
+color_blue = Color(0.2, 0.8, 0.9, 1)
+aoe_radius = 20.0

@@ -3661,7 +3661,7 @@ func _on_reset_pressed() -> void:
 
 ## 返回主菜单
 func _on_back_pressed() -> void:
-	get_tree().change_scene_to_file("res://scenes/ui/main_menu.tscn")
+	GameManager.change_scene_with_loading("res://scenes/ui/main_menu.tscn")
 
 ## ============================================================
 ## Tab3: 帧图可视化与编辑
@@ -3703,12 +3703,15 @@ var _btn_hit_sound_apply: Button = null  ## 应用按钮
 var _frame_bar: Control = null  ## 帧条预览控件（绘制所有帧缩略图）
 var _btn_mode_hit: Button = null  ## 模式按钮：设置判定帧
 var _btn_mode_sound: Button = null  ## 模式按钮：设置音效帧
+var _btn_mode_recovery: Button = null  ## 模式按钮：设置后摇帧
 var _btn_clear_hit: Button = null  ## 清除判定帧按钮
 var _btn_clear_sound: Button = null  ## 清除音效帧按钮
-var _hit_sound_mode: String = "hit"  ## 当前选择模式："hit"=判定帧, "sound"=音效帧
+var _btn_clear_recovery: Button = null  ## 清除后摇帧按钮
+var _hit_sound_mode: String = "hit"  ## 当前选择模式："hit"=判定帧, "sound"=音效帧, "recovery"=后摇帧
 var _cur_hit_frame: int = -1  ## 当前编辑中的判定帧（-1=未设置）
 var _cur_hit_frames: Array[int] = []  ## 多段连击判定帧（按点击顺序对应第1击、第2击...）
 var _cur_sound_frame: int = -1  ## 当前编辑中的音效帧（-1=未设置）
+var _cur_recovery_frames: Array[int] = []  ## 后摇循环帧（按点击顺序乒乓循环，仅无待机动画兵种生效）
 var _hs_hint_label: Label = null  ## 配置栏提示标签（显示当前模式 + 已选帧）
 ## 帧条布局常量
 const FRAME_BAR_PAD: float = 8.0  ## 帧条内边距
@@ -3814,6 +3817,14 @@ func _build_frame_tab() -> void:
 	_btn_mode_sound.pressed.connect(_on_mode_sound_pressed)
 	hs_top_row.add_child(_btn_mode_sound)
 
+	_btn_mode_recovery = Button.new()
+	_btn_mode_recovery.text = "设置后摇帧"
+	_btn_mode_recovery.custom_minimum_size = Vector2(110, 28)
+	_btn_mode_recovery.tooltip_text = "点击后进入“后摇帧”模式：在下方帧条点击多个帧（再点一次取消），作为后摇站定时循环播放的动画。\n按点击顺序乒乓循环（如选前5帧：1 2 3 4 5 4 3 2 1...），双击帧清空全部。\n仅对无待机动画的兵种生效（有待机动画后摇优先播待机）；未配置则后摇站定冻结在攻击收尾姿势"
+	_btn_mode_recovery.toggle_mode = true
+	_btn_mode_recovery.pressed.connect(_on_mode_recovery_pressed)
+	hs_top_row.add_child(_btn_mode_recovery)
+
 	_btn_clear_hit = Button.new()
 	_btn_clear_hit.text = "清除判定"
 	_btn_clear_hit.custom_minimum_size = Vector2(80, 28)
@@ -3827,6 +3838,13 @@ func _build_frame_tab() -> void:
 	_btn_clear_sound.tooltip_text = "清除音效帧（恢复为 -1，使用 attack_sound_timing 比例播放）"
 	_btn_clear_sound.pressed.connect(_on_clear_sound_pressed)
 	hs_top_row.add_child(_btn_clear_sound)
+
+	_btn_clear_recovery = Button.new()
+	_btn_clear_recovery.text = "清除后摇"
+	_btn_clear_recovery.custom_minimum_size = Vector2(80, 28)
+	_btn_clear_recovery.tooltip_text = "清空后摇循环帧（后摇站定时冻结在攻击收尾姿势）"
+	_btn_clear_recovery.pressed.connect(_on_clear_recovery_pressed)
+	hs_top_row.add_child(_btn_clear_recovery)
 
 	_btn_hit_sound_apply = Button.new()
 	_btn_hit_sound_apply.text = "应用到 .tres"
@@ -3845,7 +3863,7 @@ func _build_frame_tab() -> void:
 
 	## 多段连击判定帧说明
 	var hs_combo_hint := Label.new()
-	hs_combo_hint.text = "连击兵种可点击多个帧设置多段判定（按点击顺序对应第1击、第2击...），双击帧可清空多段判定"
+	hs_combo_hint.text = "连击兵种可点击多个帧设置多段判定（按点击顺序对应第1击、第2击...），双击帧可清空多段判定\n后摇帧：点击多帧按点击顺序乒乓循环（仅无待机动画的兵种生效，有待机动画优先播待机）"
 	hs_combo_hint.add_theme_color_override("font_color", Color(0.6, 0.75, 1, 1))
 	hs_combo_hint.add_theme_font_size_override("font_size", 12)
 	_hit_sound_bar.add_child(hs_combo_hint)
@@ -4033,6 +4051,7 @@ func _update_hit_sound_bar() -> void:
 		_cur_hit_frame = -1
 		_cur_hit_frames.clear()
 		_cur_sound_frame = -1
+		_cur_recovery_frames.clear()
 	else:
 		## #18-5（2026-08-15）：attack2（备用攻击动画）用独立的判定/音效帧字段。
 		## 此前无条件读 attack_hit_frame_start / attack_sound_frame——在 attack2 下编辑时
@@ -4043,6 +4062,8 @@ func _update_hit_sound_bar() -> void:
 		## 加载多段连击判定帧
 		_cur_hit_frames = res.attack_hit_frames.duplicate()
 		_cur_sound_frame = res.attack_sound_frame_alt if is_alt else res.attack_sound_frame
+		## 加载后摇循环帧（attack2 独立一套）
+		_cur_recovery_frames = (res.attack_recovery_frames_alt if is_alt else res.attack_recovery_frames).duplicate()
 	## 默认进入"判定帧"模式
 	_hit_sound_mode = "hit"
 	_refresh_mode_buttons()
@@ -4087,15 +4108,21 @@ func _on_hit_sound_apply() -> void:
 		res.attack_sound_frame_alt = _cur_sound_frame
 	else:
 		res.attack_sound_frame = _cur_sound_frame
+	## 后摇循环帧（attack2 独立一套，按点击顺序乒乓循环）
+	if is_alt:
+		res.attack_recovery_frames_alt = _cur_recovery_frames.duplicate()
+	else:
+		res.attack_recovery_frames = _cur_recovery_frames.duplicate()
 	var path := "%s/%s.tres" % [ANIM_ROOT_DIR, _frame_unit_id]
 	var err := ResourceSaver.save(res, path)
 	if err != OK:
 		push_warning("保存失败，错误码: %d" % err)
 	else:
-		print("已应用 %s 的判定/音效帧配置（动画=%s）：单帧=%d, 音效帧=%d" % [
+		print("已应用 %s 的判定/音效/后摇帧配置（动画=%s）：单帧=%d, 音效帧=%d, 后摇帧=%s" % [
 			_frame_unit_id, _frame_anim_name,
 			res.attack_hit_frame_start_alt if is_alt else res.attack_hit_frame_start,
-			res.attack_sound_frame_alt if is_alt else res.attack_sound_frame])
+			res.attack_sound_frame_alt if is_alt else res.attack_sound_frame,
+			str(res.attack_recovery_frames_alt if is_alt else res.attack_recovery_frames)])
 
 ## ============================================================
 ## 攻击判定/音效帧 - 可视化帧条交互
@@ -4113,6 +4140,12 @@ func _on_mode_sound_pressed() -> void:
 	_refresh_mode_buttons()
 	_refresh_hs_hint()
 
+## 切换到"后摇帧"模式
+func _on_mode_recovery_pressed() -> void:
+	_hit_sound_mode = "recovery"
+	_refresh_mode_buttons()
+	_refresh_hs_hint()
+
 ## 清除判定帧
 func _on_clear_hit_pressed() -> void:
 	_cur_hit_frame = -1
@@ -4123,6 +4156,12 @@ func _on_clear_hit_pressed() -> void:
 ## 清除音效帧
 func _on_clear_sound_pressed() -> void:
 	_cur_sound_frame = -1
+	_refresh_hs_hint()
+	_frame_bar.queue_redraw()
+
+## 清除后摇帧
+func _on_clear_recovery_pressed() -> void:
+	_cur_recovery_frames.clear()
 	_refresh_hs_hint()
 	_frame_bar.queue_redraw()
 
@@ -4146,12 +4185,21 @@ func _refresh_mode_buttons() -> void:
 		else:
 			_btn_mode_sound.remove_theme_color_override("font_color")
 			_btn_mode_sound.remove_theme_color_override("font_hover_color")
+	if _btn_mode_recovery != null:
+		_btn_mode_recovery.button_pressed = (_hit_sound_mode == "recovery")
+		## 后摇帧模式 = 绿色高亮
+		if _hit_sound_mode == "recovery":
+			_btn_mode_recovery.add_theme_color_override("font_color", Color(0.4, 1.0, 0.5, 1))
+			_btn_mode_recovery.add_theme_color_override("font_hover_color", Color(0.55, 1.0, 0.6, 1))
+		else:
+			_btn_mode_recovery.remove_theme_color_override("font_color")
+			_btn_mode_recovery.remove_theme_color_override("font_hover_color")
 
 ## 刷新提示标签：显示当前模式 + 已选帧
 func _refresh_hs_hint() -> void:
 	if _hs_hint_label == null:
 		return
-	var mode_text: String = "判定帧" if _hit_sound_mode == "hit" else "音效帧"
+	var mode_text: String = "判定帧" if _hit_sound_mode == "hit" else ("音效帧" if _hit_sound_mode == "sound" else "后摇帧")
 	var hit_text: String
 	if not _cur_hit_frames.is_empty():
 		## 显示多段判定帧列表，如 [5, 15]
@@ -4161,7 +4209,8 @@ func _refresh_hs_hint() -> void:
 	else:
 		hit_text = "第 %d 帧" % _cur_hit_frame
 	var sound_text: String = "未设置（用 attack_sound_timing）" if _cur_sound_frame < 0 else "第 %d 帧" % _cur_sound_frame
-	_hs_hint_label.text = "当前模式: %s    |    判定帧: %s    |    音效帧: %s" % [mode_text, hit_text, sound_text]
+	var recovery_text: String = str(_cur_recovery_frames) + "（乒乓循环）" if not _cur_recovery_frames.is_empty() else "未设置（站定冻结）"
+	_hs_hint_label.text = "当前模式: %s    |    判定帧: %s    |    音效帧: %s    |    后摇帧: %s" % [mode_text, hit_text, sound_text, recovery_text]
 
 ## 计算第 idx 帧在帧条上的矩形区域（单元格）
 func _frame_bar_cell_rect(idx: int) -> Rect2:
@@ -4264,6 +4313,15 @@ func _on_frame_bar_draw() -> void:
 				Vector2(cell.position.x + FRAME_BAR_CELL_W - 9, cell.position.y + 8),
 			])
 			_frame_bar.draw_colored_polygon(tri2, Color(0.3, 0.7, 1, 1))
+		## 后摇帧标记（绿色三角[顶部中央] + 绿色边框）
+		if _cur_recovery_frames.has(i):
+			_frame_bar.draw_rect(cell, Color(0.4, 1.0, 0.5, 1), false, 2.0)
+			var tri3 := PackedVector2Array([
+				Vector2(cell.position.x + FRAME_BAR_CELL_W * 0.5 - 5, cell.position.y + FRAME_BAR_CELL_H + 2),
+				Vector2(cell.position.x + FRAME_BAR_CELL_W * 0.5 + 5, cell.position.y + FRAME_BAR_CELL_H + 2),
+				Vector2(cell.position.x + FRAME_BAR_CELL_W * 0.5, cell.position.y + FRAME_BAR_CELL_H - 8),
+			])
+			_frame_bar.draw_colored_polygon(tri3, Color(0.4, 1.0, 0.5, 1))
 
 ## 帧条点击：根据当前模式设置判定帧/音效帧
 func _on_frame_bar_input(event: InputEvent) -> void:
@@ -4285,6 +4343,8 @@ func _on_frame_bar_input(event: InputEvent) -> void:
 				_cur_hit_frame = -1
 		elif _hit_sound_mode == "sound" and _cur_sound_frame == idx:
 			_cur_sound_frame = -1
+		elif _hit_sound_mode == "recovery":
+			_cur_recovery_frames.clear()
 	else:
 		match _hit_sound_mode:
 			"hit":
@@ -4301,6 +4361,13 @@ func _on_frame_bar_input(event: InputEvent) -> void:
 					_cur_hit_frame = idx
 			"sound":
 				_cur_sound_frame = idx
+			"recovery":
+				## 后摇帧：点击加入（按点击顺序乒乓循环），再点同一帧取消
+				var r_idx := _cur_recovery_frames.find(idx)
+				if r_idx >= 0:
+					_cur_recovery_frames.remove_at(r_idx)
+				else:
+					_cur_recovery_frames.append(idx)
 	_refresh_hs_hint()
 	_frame_bar.queue_redraw()
 
