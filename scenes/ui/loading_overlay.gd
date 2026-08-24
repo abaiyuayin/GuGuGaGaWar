@@ -73,16 +73,8 @@ func _ready() -> void:
 	## 居中提示框（暖米色风格，与兵种详情弹框统一）
 	var panel := PanelContainer.new()
 	panel.name = "LoadingPanel"
-	var panel_style := StyleBoxFlat.new()
-	panel_style.bg_color = Color(0.93, 0.86, 0.70, 0.98)
-	panel_style.border_color = Color(0.35, 0.25, 0.13, 1.0)
-	panel_style.set_border_width_all(3)
-	panel_style.set_corner_radius_all(8)
-	panel_style.content_margin_left = 20.0
-	panel_style.content_margin_right = 20.0
-	panel_style.content_margin_top = 10.0
-	panel_style.content_margin_bottom = 10.0
-	panel.add_theme_stylebox_override("panel", panel_style)
+	## 样式取自 UIButtonHelper 的单一定义，与局内/局外设置弹框共用同一份
+	panel.add_theme_stylebox_override("panel", UIButtonHelper.get_loading_frame_style())
 	center.add_child(panel)
 
 	## 上下两半的容器（VBox，框内垂直排列；宽度减半以匹配紧凑提示框）
@@ -273,13 +265,16 @@ func _await_scene_loaded() -> void:
 		## 场景资源就绪 → 若目标是战斗场景，先在加载框内串行预热对象池
 		## （2026-08-19 对象池改造：进局前按价格升序逐个建实例，替代出兵时才创建）
 		await _prewarm_pool_if_battle()
-		## 再把进度条走满 100%（在停顿之前，保证「走满」肉眼可见）
+		## 再把进度条走满 100%（此刻真实加载「场景资源 + 对象池预热」均已全部完成）
 		_progress = 100.0
 		if _bar != null:
 			_bar.value = 100.0
-		## 加载完成后额外停留 0.5s（"走满100%"的停顿），再切场景并淡出
-		await get_tree().create_timer(0.5).timeout
+		## 进度满即切场景，不再额外停留（移除原先 0.5s 人为停顿）。
+		## 遮罩挂在 GameManager(autoload) 下会跨场景存活：切场景期间仍覆盖画面，
+		## 等新场景完成首帧渲染后再淡出，避免「进度满 → 白屏/空屏卡顿数秒」。
 		_do_switch()
+		await get_tree().process_frame
+		await get_tree().process_frame
 		_hide_overlay()
 	elif st == ResourceLoader.THREAD_LOAD_FAILED:
 		_pending_path = ""

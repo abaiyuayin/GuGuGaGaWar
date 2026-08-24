@@ -49,7 +49,7 @@ window/stretch/aspect="expand"
 
 [editor_plugins]
 
-enabled=PackedStringArray("godot_mcp", "res://addons/gdUnit4/plugin.cfg")
+enabled=PackedStringArray("godot_mcp")
 
 [gui]
 

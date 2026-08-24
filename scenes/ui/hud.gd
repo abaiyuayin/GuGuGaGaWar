@@ -54,13 +54,18 @@ var _center_preview_resize_cb: Callable = Callable()
 ## 顶部�?��弢�发工具按�?
 @onready var dev_btn: Button = $TopCenterButtons/DevBtn
 @onready var adjust_btn: Button = $TopCenterButtons/AdjustBtn
+## 顶部�?��撤回按钮（竞技场模式，开发工具按钮右侧）
+@onready var undo_deploy_btn: Button = $TopCenterButtons/UndoDeployBtn
 ## 顶部难度/模式显示按钮�?2：可点击编辑难度提示文本，由 _setup_difficulty_label 代码构建�?
 var diff_btn: Button = null
 @onready var left_panel: PanelContainer = $LeftSidePanel
 @onready var right_panel: PanelContainer = $RightSidePanel
 
-## 快速出兵（开发者模式专属，全面战争/双人模式）：左右信息面板旁的下拉+数量+确认
+## 快速出兵（开发者模式专属，全面战争/双人模式）：左右信息面板旁的阵营子菜单下拉 + 数量 + 确认
 var _quick_spawn_ui: Array[Control] = []  ## 创建的所有快速出兵控件（红/蓝），用于统一显隐
+## 当前选中的快速出兵兵种（按 player_id 存 UnitResource）。
+## 阵营子菜单模式下 OptionButton 的 selected 恒为 -1，故用字典记录选中，回调不依赖 opt.selected。
+var _quick_spawn_selected: Dictionary = {}
 
 ## 调整面板（实时调节信�?��板位�?尺�?、各数据行位�?�����?时位�?��
 var _adjust_panel: Control = null
@@ -117,6 +122,8 @@ var deploy_zone_btn: Button = null
 
 ## 当前打开的游戏内设置对话框引�?
 var _settings_dialog: AcceptDialog = null
+## 设置对话框框内标题 Label（窗口标题栏已隐藏，标题改在框内呈现，需随语言刷新）
+var _settings_title_label: Label = null
 ## #3�?026-08-11）：设置界面的全屏点击遮罩（半��明黑，点击空白处关�??�?���?
 ## 与�?话�?同时创建/锢�毁；位于对话框下层，对话框区域内点击�?Window 消费，区域�?落到�?���?
 var _settings_backdrop: ColorRect = null
@@ -181,22 +188,37 @@ const DEV_INCOME_STEP: int = 200
 const MAX_LOG_LINES: int = 3
 
 ## 各玩家选中兵种按钮缓存（key=player_id, value=BaseButton）
-## 2026-08-18：选中效果从红蓝边框改为「水平垂直居中缩小到 1/5 宽高」（scale=1/5）
+## 2026-08-18：选中效果从红蓝边框改为「水平垂直居中缩小宽高」；缩放档位见 SEL_SCALE
 var _selection_borders: Dictionary = {}
-## 各玩家出兵闪烁动画 Tween 缓存（key=player_id, value=Tween）
+## 各玩家出兵抖动循环 Timer 缓存（key=player_id, value=Timer）
+## 命名保留历史名 _flash_tweens，但 2026-08-18 起驱动方式已由 Tween 改为 Timer，
+## 存的是 Timer 节点。切勿对其调用 Tween 专有 API（is_valid/kill），否则运行时崩退。
 var _flash_tweens: Dictionary = {}
-## 各玩家出兵抖动状态（key=player_id, value=bool）：true=当前在 1/4 缩放位（1/4），false=在 1/5 位（1/5）
+## 各玩家出兵抖动状态（key=player_id, value=bool）：true=当前在出兵态(PULSE_SCALE)，false=在选中态(SEL_SCALE)
 var _pulse_wide: Dictionary = {}
 ## 各玩家出兵停止回落检测 Timer（key=player_id, value=Timer）
 var _flash_reset_timers: Dictionary = {}
-## 选中按钮缩放（缩小到 1/5 宽高，2026-08-18 用户拍板）
-const SEL_SCALE: float = 1.0 / 5.0
-## 出兵抖动缩放（缩小到 1/4 宽高，2026-08-18 用户拍板）
-const PULSE_SCALE: float = 1.0 / 4.0
-## 出兵抖动切换周期（秒）：出兵期间选中态(1/5)↔出兵态(1/4) 每 0.3s 切换一次（2026-08-18 用户拍板）
-const PULSE_INTERVAL: float = 0.3
-## 出兵停止回落检测窗口（秒）：连续 0.6s（两个切换周期）无新出兵 → 回落到选中态 1/5
-const PULSE_RESET_AFTER: float = 0.6
+## 选中按钮缩放：缩小为原大小的 9/10（2026-08-21 用户第二次订正）
+## 数值演进：1/5（初版误写，表现为「点击后按钮变得特别小」）→ 4/5 → 9/10（当前）。
+## 按 80×80 基础尺寸折算为 72×72，选中反馈克制但可辨。
+const SEL_SCALE: float = 9.0 / 10.0
+## 出兵抖动缩放：缩小为原大小的 8/10（2026-08-21 用户第二次订正）
+## 数值演进：1/4（初版误写）→ 3/5 → 8/10（当前）。
+## 出兵时在 SEL_SCALE(9/10) ↔ PULSE_SCALE(8/10) 之间反复切换，用宽高变化做出兵视觉反馈。
+## 两档相差 0.1，折算 80×80 按钮为 72↔64px（8 像素跳变），肉眼可见。
+const PULSE_SCALE: float = 8.0 / 10.0
+## 出兵抖动切换周期（秒）：出兵期间选中态(9/10)↔出兵态(8/10) 每 0.1s 切换一次
+## 2026-08-21 用户拍板：0.3s 节奏偏慢，提速到 0.1s（回落窗口同步 0.6→0.2 保持两个周期）
+const PULSE_INTERVAL: float = 0.1
+## 出兵停止回落检测窗口（秒）：连续 0.2s（两个切换周期）无新出兵 → 回落到选中态 9/10
+const PULSE_RESET_AFTER: float = 0.2
+## 按下瞬间的缩放系数（相对当前基准缩放再乘一档，2026-08-21）
+## 不写成绝对值，否则「按下已选中的按钮」会从 0.9 反而变大，手感被反向。
+const PRESS_SCALE: float = 0.92
+## 兵种按钮「滚动手势」判定阈值（像素，纵向位移）
+## #竞技场（2026-08-24 用户拍板）：原 8px 太灵敏，手抖即被判为滚动并静默吞掉点击
+## （表现为「点兵种按钮偶发没反应」），放宽到 16px。
+const BTN_DRAG_THRESHOLD: float = 16.0
 ## #3：玩�?敌人侧按�?��的拖拽滚动�?理器（_setup_drag_scroll 返回，按�?��按滚动共�?��
 var _player_drag_handler: Dictionary = {}
 var _enemy_drag_handler: Dictionary = {}
@@ -365,6 +387,11 @@ func apply_battlefield_layout() -> void:
 	var right_panel := get_node_or_null("RightSidePanel") as Control
 	if right_panel != null:
 		right_panel.visible = false
+	## #竞技场（2026-08-24）：沙盒无水晶 → 隐藏顶部双方水晶 HP 条
+	if red_hp != null:
+		red_hp.visible = false
+	if blue_hp != null:
+		blue_hp.visible = false
 	## 隐藏顶部计时/回合标签（沙盒无回合）与难度标签
 	if timer_label != null:
 		timer_label.visible = false
@@ -383,6 +410,11 @@ func apply_battlefield_layout() -> void:
 	_create_combat_controls()
 	## 出兵范围编辑按钮（网格按钮左侧）
 	_create_deploy_zone_button()
+	## 撤回出兵按钮（顶部开发工具按钮右侧，仅竞技场可见）
+	if undo_deploy_btn != null:
+		undo_deploy_btn.visible = true
+		undo_deploy_btn.pressed.connect(_on_undo_deploy_pressed)
+		_refresh_undo_btn_state()
 
 ## ── 快速出兵（开发者模式专属，全面战争/双人模式）──────────────
 ## 只在 DevMode 开启时创建；红方控件放左信息面板右侧，蓝方放右信息面板左侧（仅双人模式）。
@@ -401,19 +433,48 @@ func _create_quick_spawn_controls() -> void:
 	if BattleManager.is_two_player:
 		_create_quick_spawn_panel(1)
 
+## 快速出兵阵营顺序与名称翻译键（复用图鉴统一顺序：咕嘎/Doro/菲比/糯糯/英雄/特殊/异象）
+const QUICK_SPAWN_FACTION_ORDER: Array[String] = ["G", "D", "F", "N", "H", "S", "Y"]
+const QUICK_SPAWN_FACTION_KEYS: Dictionary = {
+	"G": "CODEX_FACTION_GUGA",
+	"D": "CODEX_FACTION_DORO",
+	"F": "CODEX_FACTION_PHOEBE",
+	"N": "CODEX_FACTION_NUONUO",
+	"H": "CODEX_HERO_SPECIAL",  ## 图鉴英雄阵营用此键，无 CODEX_FACTION_HERO
+	"S": "CODEX_FACTION_SPECIAL",
+	"Y": "CODEX_FACTION_ANOMALY",
+}
+
 ## 为指定阵营创建快速出兵控件组（红 0 / 蓝 1）
+## 二级菜单结构：主下拉为一/二军种类型（阵营）子菜单，二级菜单才是具体兵种。
 func _create_quick_spawn_panel(player_id: int) -> void:
-	var units: Array = UnitDatabase.unit_list.duplicate()
-	if units.is_empty():
+	var grouped: Dictionary = _quick_spawn_build_grouped()
+	if grouped.is_empty():
 		return
-	## 下拉列表：所有兵种（unit_id 文本）
+	## 主下拉：本身不直接列兵种，只承载阵营子菜单
 	var opt := OptionButton.new()
 	opt.name = "QuickSpawnOpt%d" % player_id
 	opt.custom_minimum_size = Vector2(110, 34)
-	for u in units:
-		if u != null and u.has_method("get") and u.get("unit_id") != null:
-			opt.add_item(str(u.get("unit_id")), opt.item_count)
-	## 数量输入：纯数字 1-100，默认 10
+	opt.text = "选择兵种"
+	var root_popup: PopupMenu = opt.get_popup()
+	root_popup.name = "QuickSpawnRoot%d" % player_id
+	## 为每个阵营建立子菜单并挂到主下拉
+	for prefix in QUICK_SPAWN_FACTION_ORDER:
+		if not grouped.has(prefix) or grouped[prefix].is_empty():
+			continue
+		var sub := PopupMenu.new()
+		sub.name = "QuickSpawnSub_%s%d" % [prefix, player_id]
+		var faction_label: String = tr(QUICK_SPAWN_FACTION_KEYS.get(prefix, ""))
+		for u in grouped[prefix]:
+			var label: String = "%s %s" % [str(u.get("unit_id")), str(u.get("display_name"))]
+			sub.add_item(label, sub.item_count)
+		root_popup.add_child(sub)
+		root_popup.add_submenu_item(faction_label, sub.name, root_popup.item_count)
+		## 说明：Callable.bind() 会把绑定参数追加在信号自带参数之后，故 id_pressed 发出 (id) 时
+		## 实际调用为 _on_quick_spawn_unit_selected(id, player_id, opt, prefix)，因此签名把 id 放第一个。
+		## prefix 是循环变量，lambda 按引用捕获会共享同一个值，故用 bind 在连接时拷贝一份。
+		sub.id_pressed.connect(_on_quick_spawn_unit_selected.bind(player_id, opt, prefix))
+	## 数量输入：纯数字 1-100，默认 10（2026-08-21 用户要求出兵数量默认从 15 改回 10）
 	var spin := SpinBox.new()
 	spin.name = "QuickSpawnSpin%d" % player_id
 	spin.custom_minimum_size = Vector2(70, 34)
@@ -461,24 +522,56 @@ func _create_quick_spawn_panel(player_id: int) -> void:
 		bar.offset_top = -150.0
 		bar.offset_right = -202.0
 		bar.offset_bottom = -116.0
-	## 默认选中第一个兵种
-	if opt.item_count > 0:
-		opt.select(0)
 	add_child(bar)
 	_quick_spawn_ui.append(bar)
+
+## 二级菜单选中回调：记录当前阵营内第 id 个兵种，并回显到主下拉
+## id 即该阵营子菜单内的 item 序号（add 时以 item_count 赋值）。
+## 签名按 id_pressed 触发顺序 (id, player_id, opt, prefix) 排列（Callable.bind 追加在信号参数后）。
+func _on_quick_spawn_unit_selected(id: int, player_id: int, opt: OptionButton, prefix: String) -> void:
+	var grouped: Dictionary = _quick_spawn_build_grouped()
+	if not grouped.has(prefix) or id < 0 or id >= grouped[prefix].size():
+		return
+	var res: UnitResource = grouped[prefix][id]
+	_quick_spawn_selected[player_id] = res
+	if opt != null:
+		opt.text = "%s %s" % [str(res.get("unit_id")), str(res.get("display_name"))]
+
+## 按阵营前缀分组全量兵种（常规 + 特殊英雄 + 隐藏事件），阵营内按兵种编号升序
+func _quick_spawn_build_grouped() -> Dictionary:
+	var grouped: Dictionary = {}
+	var all_units: Array = UnitDatabase.unit_list + UnitDatabase.special_units + UnitDatabase.hidden_units
+	for u in all_units:
+		if u == null or not u.has_method("get") or u.get("unit_id") == null:
+			continue
+		var pref: String = str(u.get("unit_id"))[0]
+		if not grouped.has(pref):
+			grouped[pref] = []
+		grouped[pref].append(u)
+	for pref in grouped:
+		grouped[pref].sort_custom(
+			func(a, b) -> bool: return _quick_spawn_unit_number(a.unit_id) < _quick_spawn_unit_number(b.unit_id))
+	return grouped
+
+func _quick_spawn_unit_number(unit_id: String) -> int:
+	var num_str: String = String(unit_id).substr(1)
+	if num_str.is_valid_int():
+		return int(num_str)
+	return 0
 
 ## 快速出兵确认：与正常出兵完全一致的出生逻辑（不传位置 → 水晶前土路随机 Y + 正常 AI 寻路）
 ## 2026-08-18 用户拍板：快速出兵只改出生位置与寻路，与正常出兵一致；保持免费刷兵（调试工具）
 ## 分帧出兵（2026-08-18 性能优化）：每帧最多刷 SPAWN_BATCH 只，大量刷兵时不卡主线程
-const QUICK_SPAWN_BATCH: int = 10
+## 2026-08-21 用户拍板 5 → 15：每帧刷 15 只，加快大批量刷兵速度
+const QUICK_SPAWN_BATCH: int = 15
 
-func _on_quick_spawn_pressed(player_id: int, opt: OptionButton, spin: SpinBox) -> void:
-	if opt == null or spin == null or opt.selected < 0 or opt.selected >= UnitDatabase.unit_list.size():
+func _on_quick_spawn_pressed(player_id: int, _opt: OptionButton, spin: SpinBox) -> void:
+	var res: UnitResource = _quick_spawn_selected.get(player_id, null)
+	if res == null:
 		_show_toast("快速出兵：未选择兵种")
 		return
-	var res: UnitResource = UnitDatabase.unit_list[opt.selected]
 	var count: int = int(spin.value)
-	if res == null or count <= 0:
+	if count <= 0:
 		return
 	_show_toast("快速出兵：%s × %d（%s方）" % [res.unit_id, count, "红" if player_id == 0 else "蓝"])
 	## 与正常出兵一致：不传 at_position → spawn_unit 使用默认出生点（基地前方 + 土路随机 Y），
@@ -522,8 +615,13 @@ func _build_battlefield_buttons() -> void:
 	left_units.sort_custom(func(a, b): return _unit_sort_key(a.unit_id) < _unit_sort_key(b.unit_id))
 	right_units.sort_custom(func(a, b): return _unit_sort_key(a.unit_id) < _unit_sort_key(b.unit_id))
 
-	_create_battlefield_column(left_units, player_grid, button_bg_tex, 0, unit_buttons, _player_drag_handler, Vector2(160, 160))
-	_create_battlefield_column(right_units, enemy_grid, button_bg_tex, 1, enemy_buttons, _enemy_drag_handler, Vector2(160, 160))
+	## #竞技场（2026-08-20 用户拍板「下方兵种按钮集改成和标准模式一样左右放在左右两边」）：
+	## 改为直接复用标准模式的 _create_faction_rows —— 它按阵营分多行、按钮走默认尺寸，
+	## 配合场景里本就左右分置的 LeftColumn / RightColumn 容器即可得到与标准模式一致的观感。
+	## 旧的 _create_battlefield_column 把整列挤成单行 + 160×160 大按钮（Scroll 最小高仅 110，
+	## 会被压缩并强制横向滚动），是「和标准模式不一样」的根源。
+	_create_faction_rows(left_units, player_grid, button_bg_tex, 0, unit_buttons, _player_row_sizes, _player_drag_handler)
+	_create_faction_rows(right_units, enemy_grid, button_bg_tex, 1, enemy_buttons, _enemy_row_sizes, _enemy_drag_handler)
 
 ## 按给定兵种列表在指定容器中创建单行兵种按钮（战场模式专用）
 func _create_battlefield_column(units: Array, container: VBoxContainer, bg_tex: Texture2D, team_id: int, buttons_array: Array, drag_handler: Dictionary, btn_size: Vector2) -> void:
@@ -766,14 +864,11 @@ func _on_diff_btn_pressed() -> void:
 	dlg.ok_button_text = "保存"
 	dlg.cancel_button_text = "取消"
 	dlg.process_mode = Node.PROCESS_MODE_ALWAYS
-	var dlg_style := StyleBoxFlat.new()
-	dlg_style.bg_color = Color(0.93, 0.86, 0.70, 0.98)
-	dlg_style.border_color = Color(0.35, 0.25, 0.13, 1.0)
-	dlg_style.set_border_width_all(3)
-	dlg_style.set_corner_radius_all(8)
-	dlg_style.set_content_margin_all(14)
-	dlg.add_theme_stylebox_override("panel", dlg_style)
+	## 2026-08-22：风格彻底统一为兵种详情框同款（一并压掉 Window 自带黑框/标题栏/关闭图标）
+	UIButtonHelper.setup_detail_frame_dialog(dlg)
 	add_child(dlg)
+	## 标题栏已隐藏，标题改在框内以 Label 呈现
+	dlg.add_child(UIButtonHelper.make_detail_frame_title("编辑模式/难度提示"))
 	var edit := TextEdit.new()
 	edit.custom_minimum_size = Vector2(360, 120)
 	edit.text = _get_hud_diff_tip()
@@ -1007,8 +1102,13 @@ func _create_unit_buttons() -> void:
 	_player_drag_handler = _setup_drag_scroll(player_scroll, player_grid)
 	_enemy_drag_handler = _setup_drag_scroll(enemy_scroll, enemy_grid)
 
-	## 获取扢�有兵种数�?��按解锁顺序）
+	## 获取??有兵种数??按解锁顺序）
 	var units = UnitDatabase.unit_list.duplicate()  ## 拷贝，避免 DevMode 追加隐藏兵种污染全局 unit_list
+	## #Hero4/Hero5（2026-08-21）：把特殊英雄并入候选资源池，由下方解锁过滤（player_ids/enemy_ids）决定是否上按钮。
+	## 既保证成就+星星解锁后能出现在出兵栏，又避免「无条件给双方追加」导致战役第一关就有英雄。
+	for hres in UnitDatabase.special_units:
+		if hres != null and hres.unit_id not in units.map(func(r): return r.unit_id if r else ""):
+			units.append(hres)
 
 	## 战役模式按固定编�?+ 难度过滤，非战役模式全部�?��
 	var player_ids: Array[String] = []
@@ -1040,6 +1140,11 @@ func _create_unit_buttons() -> void:
 				var hres: Resource = UnitDatabase.get_unit(hid)
 				if hres != null:
 					units.append(hres)
+
+	## #英雄（2026-08-21）：Hero4 咕咕嘎嘎Hero / Hero5 糯糯Hero 解锁走战役解锁池
+	## （campaign_progress.ACHIEVEMENT_GATED_UNITS），由成就解锁，不在此处手动追加进出兵栏。
+
+	## 玩
 
 	## 玩�?�?��兵�?（按 GDFN 顺序排序用于显示�?
 	var player_units: Array = []
@@ -1087,7 +1192,11 @@ func _create_faction_rows(units: Array, container: VBoxContainer, bg_tex: Textur
 		["F", "菲比丘比"],
 		["N", "糯糯"],
 	]
-	## DevMode 下追加特�?异象/英雄阵营行（这些兵�?不在常�? GDFN 分组�?��
+	## DevMode 下追加特殊/异象/英雄阵营行（这些兵种不在常规 GDFN 分组内）
+	## #竞技场（2026-08-21）：原条件为 `DevMode.enabled or GameManager.is_battlefield_mode`，
+	## 那个 or 是为「普通玩家不开 DevMode 也能进竞技场」这一前提兜底的（沙盒无解锁概念、
+	## 兵种应全放开）。本轮竞技场入口已改为 DevMode 专属，能进竞技场即意味着 DevMode 必为 true，
+	## 后半条件永不单独成立、属永真冗余，故删除以免误导后人「竞技场可绕过 DevMode」。
 	if DevMode.enabled:
 		var has_s := false
 		var has_y := false
@@ -1151,6 +1260,10 @@ func _create_unit_button(res: UnitResource, bg_tex: Texture2D, team_id: int, ind
 	btn.texture_hover = bg_tex
 	btn.ignore_texture_size = true
 	btn.stretch_mode = TextureButton.STRETCH_SCALE
+	## #竞技场（2026-08-24 需求6 修）：按下反馈会把按钮缩到 0.92（选中态更小），
+	## 鼠标在按钮边缘按下时，松开点会落在「缩小后的按钮框」之外 → pressed 信号永不触发，
+	## 表现为「点击偶发没反应」。keep_pressed_outside=true 让松开点在框外也照常触发。
+	btn.keep_pressed_outside = true
 
 	## tooltip 显示完整属��（鼠标�?��时显示）
 	btn.tooltip_text = "%s\n$%d\n%s:%d %s:%d %s:%d %s:%.1f %s:%.1f" % [
@@ -1203,25 +1316,21 @@ func _create_unit_button(res: UnitResource, bg_tex: Texture2D, team_id: int, ind
 		btn.disabled = true
 	## 连接点击事件
 	btn.pressed.connect(_on_unit_pressed.bind(btn, team_id))
-	## 按下时缩小按�?��松开时恢复（以中心为轴缩放）
+	## 按下时缩小按钮，松开时恢复（以中心为轴缩放）
+	## #按钮反馈（2026-08-21）：按下反馈改为**相对当前状态**再缩一档，而非固定 0.92。
+	## 原因是选中态从 1/5 订正为 9/10(0.9) 后，固定写 0.92 会让「按下已选中的按钮」
+	## 从 0.9 反而**变大**到 0.92，按下的手感被反向了。乘一个 PRESS_SCALE 系数后，
+	## 未选中(1.0→0.92)与已选中(0.9→0.828)两种情况都表现为「按下去缩一点」。
 	btn.button_down.connect(func():
 		if is_instance_valid(btn):
 			btn.pivot_offset = btn.size / 2.0
-			btn.scale = Vector2(0.92, 0.92)
+			btn.scale = _current_base_scale(btn) * PRESS_SCALE
 	)
 	btn.button_up.connect(func():
 		if is_instance_valid(btn):
-			## 若该按钮仍是当前选中按钮，松手后回到选中缩放（2/3），否则恢复原样
-			var still_selected: bool = false
-			for pid in _selection_borders:
-				if _selection_borders[pid] == btn:
-					still_selected = true
-					break
-			if still_selected:
-				btn.pivot_offset = btn.size / 2.0
-				btn.scale = Vector2(SEL_SCALE, SEL_SCALE)
-			else:
-				btn.scale = Vector2(1.0, 1.0)
+			## 松手后回到该按钮当前应有的基准缩放（选中态 9/10 或未选中 1.0）
+			btn.pivot_offset = btn.size / 2.0
+			btn.scale = _current_base_scale(btn)
 	)
 	## #3：长按拖动按�?�?滚动整个按钮集（不再�??觉拖动按�?���?��
 	## 拖动位移超过 8px 视为滚动手势，松手时屏蔽�?��发的「出兵��点�?
@@ -1276,7 +1385,7 @@ func _create_unit_button(res: UnitResource, bg_tex: Texture2D, team_id: int, ind
 				g.set_meta("_drag_active", false)
 				_long_press_timer.stop()
 		elif event is InputEventMouseMotion and Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) and bool(g.get_meta("_drag_active")):
-			if not _btn_dragged and absf(event.global_position.y - _btn_drag_y) > 8.0:
+			if not _btn_dragged and absf(event.global_position.y - _btn_drag_y) > BTN_DRAG_THRESHOLD:
 				_btn_dragged = true
 				_long_press_timer.stop()
 				## 一旦判定为拖动（滚动手势），立即标记抑制选中：解决「松开时 pressed 先于 dragging 置位」的时序问题
@@ -1484,7 +1593,7 @@ func _on_unit_pressed(btn: BaseButton, player_id: int) -> void:
 
 ## #2�?17�?026-08-11）：屢�内兵种按�?��按�?情面板（PopupPanel�?
 ## 图鉴式内容：名称 / 描述 / 属��表 / 动画预�?；点击�?部或 ESC �?��关闭（Popup 内建行为�?
-const UNIT_LONG_PRESS_MSEC: int = 500
+const UNIT_LONG_PRESS_MSEC: int = 800
 var _unit_detail_popup: PopupPanel = null
 
 func _show_unit_detail_popup(res: UnitResource, btn: BaseButton) -> void:
@@ -1600,8 +1709,8 @@ func _highlight_buttons(player_id: int) -> void:
 	## 没有选中兵种则直接返回，按钮保持原样
 	if selected_res == null:
 		return
-	## 选中效果：水平垂直居中缩小 1/3 宽高（scale=2/3，pivot 居中）
-	## 2026-08-18 用户拍板：取消红蓝边框闪烁，改按钮缩放
+	## 选中效果：以按钮中心为轴缩小为原大小的 9/10（SEL_SCALE，pivot 居中）
+	## 2026-08-18 取消红蓝边框闪烁改按钮缩放；2026-08-21 订正为 4/5 后再订正为 9/10
 	for b in buttons:
 		if b.get_meta("unit_resource") == selected_res:
 			b.pivot_offset = b.size / 2.0
@@ -1618,7 +1727,7 @@ func _refresh_battlefield_selection() -> void:
 		return
 	## 选中兵种可能位于任一列，遍历两列查找
 	var buttons = unit_buttons + enemy_buttons
-	## 选中效果：水平垂直居中缩小 1/3 宽高（scale=2/3，pivot 居中）
+	## 选中效果：以按钮中心为轴缩小为原大小的 9/10（SEL_SCALE，pivot 居中）
 	for b in buttons:
 		if b.get_meta("unit_resource") == battlefield_spawn_res:
 			b.pivot_offset = b.size / 2.0
@@ -1725,6 +1834,8 @@ func _on_team_selected(t: int) -> void:
 	var ctrl = get_parent()
 	if ctrl != null and ctrl.has_method("select_team"):
 		ctrl.select_team(t)
+	## #竞技场（2026-08-24）：切阵营时同步出兵归属，避免选中态与实际出兵阵营脱钩
+	battlefield_spawn_team = t
 	_build_team_selector_buttons()
 
 func _on_add_team() -> void:
@@ -1740,15 +1851,17 @@ func _create_combat_controls() -> void:
 		return
 	var bar := HBoxContainer.new()
 	bar.name = "CombatControls"
-	bar.anchors_preset = Control.PRESET_CENTER
-	bar.anchor_left = 0.5
-	bar.anchor_top = 0.5
-	bar.anchor_right = 0.5
-	bar.anchor_bottom = 0.5
-	bar.offset_left = -128.0
-	bar.offset_top = -20.0
-	bar.offset_right = 128.0
-	bar.offset_bottom = 14.0
+	## #竞技场（2026-08-20 用户拍板）：从屏幕正中央移到阵营选择器正上方。
+	## 阵营选择器占据距底 140~102，故本条取距底 180~146（上下各留 6px 间隙）。
+	bar.anchors_preset = Control.PRESET_BOTTOM_WIDE
+	bar.anchor_left = 0.0
+	bar.anchor_top = 1.0
+	bar.anchor_right = 1.0
+	bar.anchor_bottom = 1.0
+	bar.offset_left = 0.0
+	bar.offset_top = -180.0
+	bar.offset_right = 0.0
+	bar.offset_bottom = -146.0
 	bar.add_theme_constant_override("separation", 8)
 	bar.alignment = BoxContainer.ALIGNMENT_CENTER
 	add_child(bar)
@@ -1794,6 +1907,8 @@ func _create_deploy_zone_button() -> void:
 	var btn := Button.new()
 	btn.name = "DeployZoneBtn"
 	btn.text = "出兵范围: 关"
+	## #竞技场（2026-08-24）：按钮=编辑开关；关闭后限制保留并落盘 data/arena_deploy_zone.json
+	btn.tooltip_text = "出兵范围：设置哪些格子可以放兵。\n开启后左键框选刷亮格子（白格=可出兵）；退出编辑后限制继续生效并保存。\n右键点按钮可清空全部已刷格子。"
 	btn.custom_minimum_size = Vector2(110, 36)
 	btn.anchors_preset = Control.PRESET_TOP_RIGHT
 	btn.anchor_left = 1.0
@@ -1805,6 +1920,14 @@ func _create_deploy_zone_button() -> void:
 	btn.offset_right = -118.0
 	btn.offset_bottom = 48.0
 	btn.pressed.connect(_on_deploy_zone_toggle)
+	## 右键点按钮 = 清空全部已刷格子（2026-08-24，配合「关闭不清空」的持久化语义）
+	btn.gui_input.connect(func(event: InputEvent) -> void:
+		if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_RIGHT and event.pressed:
+			var ctrl := get_parent()
+			if ctrl != null and ctrl.has_method("clear_deploy_zone"):
+				ctrl.clear_deploy_zone()
+			_refresh_deploy_btn_label()
+	)
 	add_child(btn)
 	deploy_zone_btn = btn
 
@@ -1823,15 +1946,55 @@ func _refresh_deploy_btn_label() -> void:
 		on = ctrl.deploy_zone_enabled
 	deploy_zone_btn.text = "出兵范围: 开" if on else "出兵范围: 关"
 
+## ── 战场模式：撤回出兵按钮（顶部，开发工具右侧）──────────────
+func _on_undo_deploy_pressed() -> void:
+	var ctrl = get_parent()
+	if ctrl != null and ctrl.has_method("undo_last_deploy"):
+		ctrl.undo_last_deploy()
+	_refresh_undo_btn_state()
+
+func _refresh_undo_btn_state() -> void:
+	if undo_deploy_btn == null:
+		return
+	var ctrl = get_parent()
+	var can_undo: bool = false
+	if ctrl != null and ctrl.has_method("has_undoable_deploy"):
+		can_undo = ctrl.has_undoable_deploy()
+	undo_deploy_btn.disabled = not can_undo
+
+## 取按钮「当前应有的基准缩放」（2026-08-21）
+## 三态归一：出兵抖动中 → 当前抖动位；仅选中 → SEL_SCALE；未选中 → 1.0。
+## button_down / button_up 都基于本函数，保证按下反馈永远是「在当前状态上再缩一点」，
+## 松手后也一定回到正确状态，不会把抖动中的按钮错误地摁回静态选中态。
+func _current_base_scale(btn: BaseButton) -> Vector2:
+	for pid in _selection_borders:
+		if _selection_borders[pid] != btn:
+			continue
+		## 该按钮正在出兵抖动中：返回它当前所处的抖动位，避免松手时打断抖动节奏
+		if _flash_tweens.has(pid) and bool(_pulse_wide.get(pid, false)):
+			return Vector2(PULSE_SCALE, PULSE_SCALE)
+		return Vector2(SEL_SCALE, SEL_SCALE)
+	return Vector2.ONE
+
 func _clear_selection_border(player_id: int) -> void:
-	## 先停止正在进行的出兵抖动动画，避免 tween 访问已释放的节点
-	if _flash_tweens.has(player_id):
-		var tw = _flash_tweens[player_id]
-		if tw != null and tw.is_valid():
-			tw.kill()
-		_flash_tweens.erase(player_id)
-	_pulse_wide.erase(player_id)
-	## 恢复选中按钮的缩放（取消选中态）
+	## #按钮反馈（2026-08-21 修复「二次点击取消时游戏报错并卡退」）：
+	## 原实现残留了旧版 Tween 时代的代码 —— `_flash_tweens[player_id]` 在 2026-08-18
+	## 改为 Timer 驱动后存的已经是 **Timer 节点**，但这里仍按 Tween 调用
+	## `tw.is_valid()` / `tw.kill()`。Timer 没有这两个方法，一旦在「出兵抖动进行中」
+	## 点击取消选中，就必然抛出 Invalid call 并崩退。这也解释了为什么只在
+	## 出兵后取消才崩 —— 没出过兵时 _flash_tweens 是空的，压根走不到这里。
+	## 修法：直接复用 _stop_pulse_loop（它按 Timer 语义 stop() + queue_free()），
+	## 避免同一份 Timer 清理逻辑在两处各写一遍再次走偏。
+	_stop_pulse_loop(player_id)
+	## 同时停掉「出兵停止回落检测」Timer：原实现漏了这个字典，取消选中后它仍会
+	## 在 0.6s 后触发 _stop_pulse_loop，把已恢复原大小的按钮又拉回选中态缩放。
+	if _flash_reset_timers.has(player_id):
+		var rt = _flash_reset_timers[player_id]
+		if rt != null and is_instance_valid(rt):
+			rt.stop()
+			rt.queue_free()
+		_flash_reset_timers.erase(player_id)
+	## 恢复选中按钮的缩放（取消选中态 → 回到原始大小）
 	if _selection_borders.has(player_id):
 		var btn = _selection_borders[player_id]
 		if btn != null and is_instance_valid(btn):
@@ -2173,9 +2336,9 @@ func _on_unit_removed(_player_id: int) -> void:
 	_update_population_display()
 
 func _flash_selection_border(player_id: int) -> void:
-	## 出兵反馈：选中按钮在「缩小到 1/5（scale 1/5）」与「缩小到 1/4（scale 1/4）」之间
-	## 每 PULSE_INTERVAL（0.3s）切换一次，直到停止出兵（0.6s 无新出兵）回落选中态 1/5。
-	## 2026-08-18 用户拍板：取消红蓝边框透明度闪烁，改按钮缩放抖动；切换节奏固定 0.3s。
+	## 出兵反馈：选中按钮在「缩小到 9/10（SEL_SCALE）」与「缩小到 8/10（PULSE_SCALE）」之间
+	## 每 PULSE_INTERVAL（0.1s）切换一次，直到停止出兵（0.2s 无新出兵）回落选中态 9/10。
+	## 2026-08-18 用户拍板：取消红蓝边框透明度闪烁，改按钮缩放抖动；节奏 2026-08-21 提速到 0.1s。
 	if not _selection_borders.has(player_id):
 		return
 	var btn = _selection_borders[player_id]
@@ -2186,27 +2349,36 @@ func _flash_selection_border(player_id: int) -> void:
 		if _flash_reset_timers.has(player_id):
 			_flash_reset_timers[player_id].start()
 		return
-	## 首次出兵：立即切到出兵态（1/4），并启动 0.3s 循环切换
-	_pulse_wide[player_id] = false
+	## 首次出兵：立即切到出兵态（8/10），并启动 0.1s 循环切换
+	## #按钮反馈（2026-08-21 修复首个切换周期空转）：原实现把按钮设成 PULSE_SCALE
+	## 却把 _pulse_wide 记为 false，状态与实际显示对不上；于是第一次 timeout 算出的
+	## target 仍是 PULSE_SCALE，等于原地不动，第一个切换周期白白浪费，
+	## 出兵瞬间的第一下反馈被吞掉。这里改为 true，如实记录「当前在出兵位」。
+	_pulse_wide[player_id] = true
 	btn.pivot_offset = btn.size / 2.0
 	btn.scale = Vector2(PULSE_SCALE, PULSE_SCALE)
 	_start_pulse_loop(player_id)
-	## 出兵停止检测：PULSE_RESET_AFTER 内无新出兵则回落到选中态（1/5）
+	## 出兵停止检测：PULSE_RESET_AFTER 内无新出兵则回落到选中态（9/10）
 	if not _flash_reset_timers.has(player_id):
 		var t := Timer.new()
 		t.one_shot = true
 		t.wait_time = PULSE_RESET_AFTER
 		t.name = "FlashResetTimer"
 		add_child(t)
+		## #竞技场（2026-08-24 修）：回调里不再 erase 字典——Timer 一直挂在树上复用，
+		## 下次出兵走 else 分支 start() 重置即可。原实现 erase 后节点未回收，纯泄漏。
 		t.timeout.connect(func() -> void:
-			_flash_reset_timers.erase(player_id)
 			_stop_pulse_loop(player_id)
 		)
 		_flash_reset_timers[player_id] = t
+		## #竞技场（2026-08-24 修「停止出兵后按钮还在抖」）：原实现新建 Timer 后
+		## **忘了 start()**，首次出兵的回落检测永不触发，抖动循环无人停。
+		## 单发出兵（DevMode.single_spawn）只出一次兵 → 100% 卡在抖动态。
+		t.start()
 	else:
 		_flash_reset_timers[player_id].start()  ## 已有 timer 则重置计时
 
-## 启动 0.3s 循环切换：1/5 ↔ 1/4 来回切换（Timer 驱动，不依赖出兵频率）
+## 启动 0.1s 循环切换：选中态 9/10 ↔ 出兵态 8/10 来回切换（Timer 驱动，不依赖出兵频率）
 func _start_pulse_loop(player_id: int) -> void:
 	if _flash_tweens.has(player_id):
 		return
@@ -2223,7 +2395,7 @@ func _start_pulse_loop(player_id: int) -> void:
 		if b == null or not is_instance_valid(b):
 			_stop_pulse_loop(player_id)
 			return
-		## 切换缩放位：当前在 1/5 则跳到 1/4，反之回 1/5
+		## 切换缩放位：当前在选中态(9/10) 则跳到出兵态(8/10)，反之回选中态
 		var target: float = PULSE_SCALE if not _pulse_wide.get(player_id, false) else SEL_SCALE
 		_pulse_wide[player_id] = not _pulse_wide.get(player_id, false)
 		b.pivot_offset = b.size / 2.0
@@ -2232,7 +2404,7 @@ func _start_pulse_loop(player_id: int) -> void:
 	t.start()
 	_flash_tweens[player_id] = t
 
-## 停止出兵抖动：终止循环切换，回落选中态（1/5）
+## 停止出兵抖动：终止循环切换，回落选中态（9/10）
 func _stop_pulse_loop(player_id: int) -> void:
 	if _flash_tweens.has(player_id):
 		var t = _flash_tweens[player_id]
@@ -2307,14 +2479,10 @@ func _on_help_pressed() -> void:
 	dlg.ok_button_text = tr("SAVE")
 	## 游戏暂停时场景树停转，弹窗必须无视暂停才能响应交互
 	dlg.process_mode = Node.PROCESS_MODE_ALWAYS
-	## 暖米色风格与详情弹框统一
-	var help_style := StyleBoxFlat.new()
-	help_style.bg_color = Color(0.93, 0.86, 0.70, 0.98)
-	help_style.border_color = Color(0.35, 0.25, 0.13, 1.0)
-	help_style.set_border_width_all(3)
-	help_style.set_corner_radius_all(8)
-	help_style.set_content_margin_all(14)
-	dlg.add_theme_stylebox_override("panel", help_style)
+	## 2026-08-22：风格彻底统一为兵种详情框同款（一并压掉 Window 自带黑框/标题栏/关闭图标）
+	UIButtonHelper.setup_detail_frame_dialog(dlg)
+	## 标题栏已隐藏，标题改在框内以 Label 呈现
+	dlg.add_child(UIButtonHelper.make_detail_frame_title(tr("HELP")))
 	## 编辑态下清空 tooltip，避�?hover 弹层�?��编辑；弹窗关�?��恢�?
 	help_btn.tooltip_text = ""
 	var edit := TextEdit.new()
@@ -2403,8 +2571,10 @@ func _on_settings_pressed() -> void:
 	_settings_dialog.canceled.connect(_on_settings_dialog_closed)
 	## 游戏暂停时场�?��停转，�?�?��板必须无视暂停才能继�?��应交互（#186�?
 	_settings_dialog.process_mode = Node.PROCESS_MODE_ALWAYS
-	## 应用木质面板底图
-	UIButtonHelper.setup_wood_panel(_settings_dialog)
+	## 2026-08-22：弹框风格彻底统一为「长按兵种按钮 → 兵种详情框」同款
+	## Dialog 继承自 Window，那圈黑框来自 Window 的 embedded_border 而非 panel，
+	## 故用 setup_detail_frame_dialog 一并压掉边框/标题栏/关闭图标，标题改在框内以 Label 呈现。
+	UIButtonHelper.setup_detail_frame_dialog(_settings_dialog)
 	## #4�?026-08-09）：屢�内�?�??话�?同样设置朢�小尺寸（与主菜单丢�致）�?
 	## 否则设置项超出窗口最下方无法点击；配�?ScrollContainer 内�?�?��动查看��?
 	_settings_dialog.min_size = Vector2i(450, 600)
@@ -2416,13 +2586,21 @@ func _on_settings_pressed() -> void:
 	_settings_labels.clear()
 	_settings_buttons.clear()
 
+	## 框内标题（窗口标题栏已隐藏，标题在此呈现；与详情框首行同款深棕大字）
+	_settings_title_label = UIButtonHelper.make_detail_frame_title(tr("SETTINGS_TITLE"))
+	_settings_dialog.add_child(_settings_title_label)
+
 	## 创建滚动容器包裹�?��设置面板组件（全部�?�?��统一�?SettingsPanel 提供�?
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.custom_minimum_size = Vector2(430, 480)
 	_settings_dialog.add_child(scroll)
-	scroll.add_child(SettingsPanel.new())
+	## 弹框本身已是加载框同款米色底，面板内不再叠羊皮纸纹理，否则会盖掉底色
+	var settings_panel := SettingsPanel.new()
+	settings_panel.show_parchment_bg = false
+	settings_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(settings_panel)
 
 	## 居中弹出设置对话�?
 	_settings_dialog.popup_centered()
@@ -2435,7 +2613,8 @@ func _on_settings_dialog_closed() -> void:
 		_settings_dialog.hide()  ## 先隐藏，避免 queue_free 前的丢�帧仍能接收输�?
 		_settings_dialog.queue_free()
 	_settings_dialog = null
-	## #3：同时释放全屏点击遮�?
+	_settings_title_label = null
+	## #3：同时释放全屏点击遮罩
 	if _settings_backdrop != null and is_instance_valid(_settings_backdrop):
 		_settings_backdrop.queue_free()
 	_settings_backdrop = null
@@ -2472,7 +2651,10 @@ func _update_settings_dialog_localization() -> void:
 	## 更新标�?和关�?���?���?
 	_settings_dialog.title = tr("SETTINGS_TITLE")
 	_settings_dialog.ok_button_text = tr("CLOSE")
-	## 更新 Tab 标�?
+	## 标题栏已隐藏，框内标题 Label 需同步刷新
+	if _settings_title_label != null and is_instance_valid(_settings_title_label):
+		_settings_title_label.text = tr("SETTINGS_TITLE")
+	## 更新 Tab 标题
 	if _settings_tabs != null:
 		_settings_tabs.set_tab_title(0, tr("WINDOW_SETTINGS"))
 		_settings_tabs.set_tab_title(1, tr("LANGUAGE_SETTINGS"))
@@ -2573,19 +2755,24 @@ func _on_exit_pressed() -> void:
 	## 用 ConfirmationDialog：OK=退出游戏，Cancel=取消，add_button 追加「返回地图」「返回主菜单」
 	var confirm := ConfirmationDialog.new()
 	confirm.title = tr("TIP_TITLE")
-	confirm.dialog_text = tr("EXIT_CONFIRM")
+	## dialog_text 留空：它对应的内部 Label 是 internal 节点，固定排在自建子节点之前，
+	## move_child 无法把标题插到它上面（实测），故正文也改为自建 Label，顺序才可控。
+	confirm.dialog_text = ""
 	confirm.ok_button_text = tr("EXIT_GAME")
 	confirm.get_cancel_button().text = tr("CANCEL")
 	## ESC 打开设置会暂停场景树，确认框必须无视暂停才能继续响应输入
 	confirm.process_mode = Node.PROCESS_MODE_ALWAYS
-	## 暖米色风格与详情弹框统一
-	var exit_style := StyleBoxFlat.new()
-	exit_style.bg_color = Color(0.93, 0.86, 0.70, 0.98)
-	exit_style.border_color = Color(0.35, 0.25, 0.13, 1.0)
-	exit_style.set_border_width_all(3)
-	exit_style.set_corner_radius_all(8)
-	exit_style.set_content_margin_all(14)
-	confirm.add_theme_stylebox_override("panel", exit_style)
+	## 2026-08-22：风格彻底统一为兵种详情框同款（一并压掉 Window 自带黑框/标题栏/关闭图标）
+	UIButtonHelper.setup_detail_frame_dialog(confirm)
+	## 标题栏已隐藏，标题与正文都改在框内以 Label 呈现（顺序：标题 → 正文）
+	confirm.add_child(UIButtonHelper.make_detail_frame_title(tr("TIP_TITLE")))
+	var exit_text := Label.new()
+	exit_text.text = tr("EXIT_CONFIRM")
+	exit_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	exit_text.custom_minimum_size = Vector2(240, 0)
+	exit_text.add_theme_font_size_override("font_size", 14)
+	exit_text.add_theme_color_override("font_color", Color(0.30, 0.22, 0.12, 1.0))
+	confirm.add_child(exit_text)
 	## 公共清理：结束战斗状态 / 双人模式 / 肉鸽 run，恢复暂停（避免状态残留）
 	var cleanup_battle := func() -> void:
 		BattleManager.is_battle_active = false
@@ -2738,9 +2925,12 @@ func _on_dev_tool_pressed() -> void:
 	## #15：显示兵种攻击距离（全局静��开关，默�?关闭；切换后立即重绘全场兵�?�?
 	menu.add_check_item("显示兵种攻击距离", 20)
 	menu.set_item_checked(menu.get_item_index(20), Unit.show_attack_ranges)
-	## #霢��?1：水晶是否可攻击（战�?双人基地水晶；肉鸽水晶本就静态不受影响）
+	## #霢?1：水晶是否可攻击（战?双人基地水晶；肉鸽水晶本就静态不受影响）
 	menu.add_check_item("水晶可否攻击", 21)
 	menu.set_item_checked(menu.get_item_index(21), _get_battlefield_crystal_attack())
+	## #开发工具：水晶无敌（仅标准模式，2026-08-21 用户拍板）——开启后红蓝双方水晶都不掉血
+	menu.add_check_item("水晶无敌", 24)
+	menu.set_item_checked(menu.get_item_index(24), _get_battlefield_crystal_invincible())
 	## #12�?026-08-11）：攻击距�?显示改为真�?的开关������开发��模式默认开�?��下沉到
 	## _apply_dev_gating（进入开发��模式时�??�?��次），�?后玩家可�?��弢�关，不再每�?
 	## 打开菜单都�?强制拉回弢��?��旧��辑�?��次打弢�菜单强制打开，�?致��关不掉」）�?
@@ -2798,7 +2988,7 @@ func _on_dev_tool_pressed() -> void:
 			## #自由事件：直接触发凑企鹅异象（专召 Y2 凑企鹅入蓝方 + 5%/秒蓝女巫追踪）
 			BattleManager.dev_trigger_penguin_event()
 		elif id == 21:
-			## #霢��?1：切换水晶是否可攻击
+			## #霢?1：切换水晶是否可攻击
 			var bf: Node = _get_battlefield_node()
 			if bf != null:
 				bf.crystal_can_attack = not bf.crystal_can_attack
@@ -2806,6 +2996,15 @@ func _on_dev_tool_pressed() -> void:
 				print("[调试] 水晶攻击: ", "开" if bf.crystal_can_attack else "关")
 			else:
 				_show_toast("当前无战场（水晶开关仅在战斗中生效）")
+		elif id == 24:
+			## #开发工具：切换水晶无敌（仅标准模式）
+			var bfv: Node = _get_battlefield_node()
+			if bfv != null:
+				bfv.crystal_invincible = not bfv.crystal_invincible
+				menu.set_item_checked(menu.get_item_index(24), bfv.crystal_invincible)
+				_show_toast("水晶无敌：%s（仅标准模式）" % ("开" if bfv.crystal_invincible else "关"))
+			else:
+				_show_toast("当前无战场（水晶无敌仅在战斗中生效）")
 		## #8：菜单保持打弢�（不再手动重�?popup，由 hide_on_item_selection=false 保证�?
 	)
 	## ESC 关闭弢�发工具菜�?
@@ -2840,6 +3039,13 @@ func _get_battlefield_crystal_attack() -> bool:
 	if bf != null:
 		return bool(bf.crystal_can_attack)
 	return true
+
+## 读取当前战场的水晶无敌开关（#开发工具；无战场时默认关）
+func _get_battlefield_crystal_invincible() -> bool:
+	var bf: Node = _get_battlefield_node()
+	if bf != null:
+		return bool(bf.crystal_invincible)
+	return false
 
 ## 弢�发工具：给当前玩�?+1000 金币（肉鸽模式走 RoguelikeManager，常规模式走 EconomyManager�?
 func _dev_add_gold_1000() -> void:

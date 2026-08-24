@@ -121,6 +121,13 @@ custom_minimum_size = Vector2(80, 28)
 layout_mode = 2
 text = "开发工具"
 
+[node name="UndoDeployBtn" type="Button" parent="TopCenterButtons"]
+custom_minimum_size = Vector2(80, 28)
+layout_mode = 2
+text = "撤回"
+tooltip_text = "撤回上一次出兵（单击/一次框选算一次）"
+visible = false
+
 [node name="LeftSidePanel" type="PanelContainer" parent="."]
 anchors_preset = 9
 anchor_left = 0.0
