@@ -1,0 +1,47 @@
+[gd_resource type="Resource" script_class="UnitResource" format=3]
+
+[ext_resource type="Script" path="res://resources/units/unit_base_resource.gd" id="1_base"]
+[ext_resource type="Script" path="res://resources/affixes/affix_resource.gd" id="1_hero5a"]
+[ext_resource type="Texture2D" path="res://assets/projectiles/arrow.png" id="2_arrow"]
+
+[resource]
+script = ExtResource("1_base")
+unit_id = "Hero5"
+display_name = "糯糯Hero"
+description = "糯糯阵营英雄单位。骑乘黑豹的骑射手，一边驰骋一边开弓，来去如风。仅于肉鸽模式作为固定首发卡登场，不参与常规战争的兵种解锁与编成。"
+cost = 400
+units_per_card = 1
+max_hp = 400
+armor_value = 200
+move_speed = 4.0
+damage = 30
+damage_types = Array[int]([0])
+damage_by_type = {
+0: 150
+}
+attack_range = 8.0
+is_ranged_override = 1
+attack_speed = 2.0
+attack_hit_types = Array[int]([0])
+damage_by_hit = [{
+1: 200
+}]
+attack_hit_frame_start = 17
+attack_hit_frame_end = 17
+attack_sound_frame = 17
+display_height = 85.0
+display_width = 147.0
+move_display_height = 74.0
+move_display_width = 98.0
+walk_display_height = 71.0
+walk_display_width = 95.0
+attack_display_height = 80.0
+attack_display_width = 88.0
+sprint_display_height = 74.0
+sprint_display_width = 98.0
+idle_display_height = 100.0
+idle_display_width = 100.0
+projectile_texture = ExtResource("2_arrow")
+projectile_spawn_offset_y = -30.0
+color_red = Color(0.3, 0.75, 0.35, 1)
+color_blue = Color(0.2, 0.65, 0.75, 1)

@@ -70,8 +70,8 @@ const HERO_DEFS: Array[Dictionary] = [
 	{"id": "Hero1", "name": "爱弥斯", "locked": false, "army": "四兵种随机军队", "special": "全军 +30% 攻击与攻速"},
 	{"id": "Hero2", "name": "Doro勇士", "locked": true, "army": "Doro 系随机军队", "special": ""},
 	{"id": "Hero3", "name": "菲比Hero", "locked": true, "army": "菲比系随机军队", "special": ""},
-	{"id": "Hero4", "name": "？？？", "locked": true, "army": "", "special": ""},
-	{"id": "Hero5", "name": "？？？", "locked": true, "army": "", "special": ""},
+	{"id": "Hero4", "name": "咕咕嘎嘎Hero", "locked": true, "army": "咕咕嘎嘎系随机军队", "special": ""},
+	{"id": "Hero5", "name": "糯糯Hero", "locked": true, "army": "糯糯系随机军队", "special": ""},
 ]
 
 ## 返回英雄选择界面使用的英雄表（HERO_DEFS 的运行时副本）。## #8（2026-08-11）：Hero2的locked 动态计—开发者模式默认解锁；
@@ -81,13 +81,21 @@ func get_hero_defs() -> Array[Dictionary]:
 	var defs: Array[Dictionary] = []
 	for hero in HERO_DEFS:
 		var def := hero.duplicate()
+		## #25（2026-08-21 用户拍板）：Hero3 菲比Hero / Hero4 咕咕嘎嘎Hero / Hero5 糯糯Hero
+		## 已实装（单位资源齐全），肉鸽中仅开发者模式解锁可选；非开发者模式保持「？？？」锁定占位。
+		## 注意：这三个英雄走纯 DevMode 门控，不走战役解锁通道（Hero4/5 属 special_units，不在常规关解锁内）。
+		## Hero2 保持既有逻辑：开发者模式默认解锁 / 战役隐藏成就「为了欧润橘！」解锁。
+		var locked: bool = hero["locked"]
 		if hero["id"] == "Hero2":
 			var unlocked: bool = DevMode.enabled or CampaignProgress.is_unit_unlocked("Hero2")
-			def["locked"] = not unlocked
-			if not unlocked:
-				def["name"] = "？？？"
-				def["army"] = ""
-				def["special"] = ""
+			locked = not unlocked
+		elif hero["id"] in ["Hero3", "Hero4", "Hero5"]:
+			locked = not DevMode.enabled
+		def["locked"] = locked
+		if locked:
+			def["name"] = "？？？"
+			def["army"] = ""
+			def["special"] = ""
 		defs.append(def)
 	return defs
 ## ── 局内AI 调参（#210，肉鸽控制台可改）─────────────────────────

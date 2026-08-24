@@ -1,0 +1,236 @@
+[gd_resource type="SpriteFrames" load_steps=30 format=3]
+
+[ext_resource type="Texture2D" path="res://resources/units/Hero5/skill_sheet.png" id="1_skill_sheet"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_skill_0"]
+atlas = ExtResource("1_skill_sheet")
+region = Rect2(0, 0, 754, 436)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_skill_1"]
+atlas = ExtResource("1_skill_sheet")
+region = Rect2(754, 0, 754, 436)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_skill_2"]
+atlas = ExtResource("1_skill_sheet")
+region = Rect2(1508, 0, 754, 436)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_skill_3"]
+atlas = ExtResource("1_skill_sheet")
+region = Rect2(2262, 0, 754, 436)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_skill_4"]
+atlas = ExtResource("1_skill_sheet")
+region = Rect2(3016, 0, 754, 436)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_skill_5"]
+atlas = ExtResource("1_skill_sheet")
+region = Rect2(3770, 0, 754, 436)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_skill_6"]
+atlas = ExtResource("1_skill_sheet")
+region = Rect2(4524, 0, 754, 436)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_skill_7"]
+atlas = ExtResource("1_skill_sheet")
+region = Rect2(5278, 0, 754, 436)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_skill_8"]
+atlas = ExtResource("1_skill_sheet")
+region = Rect2(6032, 0, 754, 436)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_skill_9"]
+atlas = ExtResource("1_skill_sheet")
+region = Rect2(0, 436, 754, 436)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_skill_10"]
+atlas = ExtResource("1_skill_sheet")
+region = Rect2(754, 436, 754, 436)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_skill_11"]
+atlas = ExtResource("1_skill_sheet")
+region = Rect2(1508, 436, 754, 436)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_skill_12"]
+atlas = ExtResource("1_skill_sheet")
+region = Rect2(2262, 436, 754, 436)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_skill_13"]
+atlas = ExtResource("1_skill_sheet")
+region = Rect2(3016, 436, 754, 436)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_skill_14"]
+atlas = ExtResource("1_skill_sheet")
+region = Rect2(3770, 436, 754, 436)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_skill_15"]
+atlas = ExtResource("1_skill_sheet")
+region = Rect2(4524, 436, 754, 436)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_skill_16"]
+atlas = ExtResource("1_skill_sheet")
+region = Rect2(5278, 436, 754, 436)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_skill_17"]
+atlas = ExtResource("1_skill_sheet")
+region = Rect2(6032, 436, 754, 436)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_skill_18"]
+atlas = ExtResource("1_skill_sheet")
+region = Rect2(0, 872, 754, 436)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_skill_19"]
+atlas = ExtResource("1_skill_sheet")
+region = Rect2(754, 872, 754, 436)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_skill_20"]
+atlas = ExtResource("1_skill_sheet")
+region = Rect2(1508, 872, 754, 436)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_skill_21"]
+atlas = ExtResource("1_skill_sheet")
+region = Rect2(2262, 872, 754, 436)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_skill_22"]
+atlas = ExtResource("1_skill_sheet")
+region = Rect2(3016, 872, 754, 436)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_skill_23"]
+atlas = ExtResource("1_skill_sheet")
+region = Rect2(3770, 872, 754, 436)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_skill_24"]
+atlas = ExtResource("1_skill_sheet")
+region = Rect2(4524, 872, 754, 436)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_skill_25"]
+atlas = ExtResource("1_skill_sheet")
+region = Rect2(5278, 872, 754, 436)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_skill_26"]
+atlas = ExtResource("1_skill_sheet")
+region = Rect2(6032, 872, 754, 436)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_skill_27"]
+atlas = ExtResource("1_skill_sheet")
+region = Rect2(0, 1308, 754, 436)
+
+[resource]
+animations = [{
+"frames": [
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_skill_0")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_skill_1")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_skill_2")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_skill_3")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_skill_4")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_skill_5")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_skill_6")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_skill_7")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_skill_8")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_skill_9")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_skill_10")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_skill_11")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_skill_12")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_skill_13")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_skill_14")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_skill_15")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_skill_16")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_skill_17")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_skill_18")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_skill_19")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_skill_20")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_skill_21")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_skill_22")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_skill_23")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_skill_24")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_skill_25")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_skill_26")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_skill_27")
+}
+],
+"loop": false,
+"name": &"skill",
+"speed": 10.0
+}]

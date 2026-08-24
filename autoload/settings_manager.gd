@@ -12,9 +12,9 @@ const WINDOW_MODE_BORDERLESS = 2  ## 窗口模式常量：无边框窗口模式
 const BGM_PATHS: Dictionary = {
 	"默认": "",
 	"Medieval Vol.2": "res://assets/audio/bgm/medieval2.mp3",
-	"Falling Apart": "res://assets/audio/bgm/falling_apart.wav",
-	"Decisive Battle": "res://assets/audio/bgm/decisive_battle.wav",
-	"The Calm Before The Storm": "res://assets/audio/bgm/calm_before_storm.wav",
+	"Falling Apart": "res://assets/audio/bgm/falling_apart.mp3",
+	"Decisive Battle": "res://assets/audio/bgm/decisive_battle.mp3",
+	"The Calm Before The Storm": "res://assets/audio/bgm/calm_before_storm.mp3",
 	"Victory!": "res://assets/audio/bgm/victory.wav",
 }
 
@@ -36,6 +36,7 @@ var sound_volumes: Dictionary = {}
 var menu_bgm: String = "默认"  ## 主菜单BGM名称
 var battle_bgm: String = "默认"  ## 战斗BGM名称
 var victory_bgm: String = "默认"  ## 胜利BGM名称（"无"=不播放）
+var defeat_bgm: String = "默认"  ## 失败BGM名称（"无"=不播放）
 
 ## 兵种音效配置
 ## 结构：{ "G1": { "click_sound": "res://path", "spawn_sound": "res://path", "spawn_rules": [{ "type": 0, "count": 1 }, ...] }, ... }
@@ -96,6 +97,8 @@ func _load_settings() -> void:  ## 从配置文件加载设置（私有方法）
 		battle_bgm = cfg.get_value("bgm", "battle")  ## 读取战斗BGM名称
 	if cfg.has_section_key("bgm", "victory"):  ## 如果配置中存在胜利BGM键
 		victory_bgm = cfg.get_value("bgm", "victory")  ## 读取胜利BGM名称
+	if cfg.has_section_key("bgm", "defeat"):  ## 如果配置中存在失败BGM键
+		defeat_bgm = cfg.get_value("bgm", "defeat")  ## 读取失败BGM名称
 	## 读取音效库自定义排序
 	if cfg.has_section_key("sound_library", "order"):
 		var raw_order = cfg.get_value("sound_library", "order", [])
@@ -174,6 +177,7 @@ func _save_settings() -> void:  ## 保存设置到配置文件（私有方法）
 	cfg.set_value("bgm", "menu", menu_bgm)  ## 写入主菜单BGM名称
 	cfg.set_value("bgm", "battle", battle_bgm)  ## 写入战斗BGM名称
 	cfg.set_value("bgm", "victory", victory_bgm)  ## 写入胜利BGM名称
+	cfg.set_value("bgm", "defeat", defeat_bgm)  ## 写入失败BGM名称
 	cfg.set_value("sound_library", "order", sound_library_order)  ## 写入音效库自定义排序
 	## 保存音效归属类型
 	for key in sound_attribution:
@@ -315,6 +319,11 @@ func set_battle_bgm(bgm_name: String) -> void:  ## 设置战斗BGM（公开方�
 
 func set_victory_bgm(bgm_name: String) -> void:  ## 设置胜利BGM（公开方法）
 	victory_bgm = bgm_name  ## 更新胜利BGM名称
+	_save_settings()  ## 保存设置
+	settings_changed.emit()  ## 发出设置变更信号
+
+func set_defeat_bgm(bgm_name: String) -> void:  ## 设置失败BGM（公开方法）
+	defeat_bgm = bgm_name  ## 更新失败BGM名称
 	_save_settings()  ## 保存设置
 	settings_changed.emit()  ## 发出设置变更信号
 

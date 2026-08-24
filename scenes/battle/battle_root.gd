@@ -116,6 +116,10 @@ func _ready() -> void:
 	BattleManager.event_unit_focus_requested.connect(_on_event_unit_focus_requested)
 	## 战内设置变更（如伤害飘字开关）实时同步到正在进行的战斗
 	SettingsManager.settings_changed.connect(_on_settings_changed)
+	## #25（2026-08-23）：进入战斗即把 BGM 上下文锁为 "battle"（必须在连接 settings_changed 之前）。
+	## 否则 start_battle() 内可能 emit settings_changed，按默认 "menu" 上下文 deferred 播主菜单 BGM，
+	## 覆盖随后同步播放的战斗 BGM（deferred 晚于同步执行）。
+	AudioManager.set_bgm_context("battle")
 	## #15（2026-08-09）：开发者模式下进入战斗即默认开启兵种攻击距离显示，
 	## 不必先打开开发工具菜单（hud 菜单里仍是切换开关，幂等无副作用）
 	if DevMode.enabled:

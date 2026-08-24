@@ -11,6 +11,7 @@ class_name BattlefieldMode
 
 ## 绘制层（运行时挂到 Battlefield 之下/之上，见 _ready）
 var grid_layer: Node2D = null
+var ground_layer: Node2D = null   ## 阵营光圈层（单位之下、网格之上）
 var selection_layer: Node2D = null
 const DRAW_LAYER_SCRIPT := preload("res://scenes/battle/battle_draw_layer.gd")
 
@@ -32,6 +33,8 @@ const LONG_PRESS_INTERVAL: float = 1.0 ## 左键按住不动每隔 1s 连出 1 �
 const MAX_SPAWN_UNITS: int = 300       ## ponytail 性能护栏：单位总数上限，避免网格铺满卡死
 const SEL_ELLIPSE_HALF_W: float = 28.0
 const SEL_ELLIPSE_HALF_H: float = 12.0
+## 框选命中所需的最小面积占比（2026-08-20 用户拍板：兵种 1/3 区域被框住即算选中）
+const SELECT_AREA_RATIO: float = 1.0 / 3.0
 
 var camera_zoom_min: float = CAMERA_ZOOM_MIN_BASE
 
@@ -69,9 +72,26 @@ var selected_team: int = 0
 ## 和平/战争 + 开战状态：combat_active = 战争模式 且 已开战
 var peace_mode: bool = true
 var war_started: bool = false
-## 出兵范围（网格区域限制）：默认关闭=全图可出兵；开启后仅标记网格可出兵
-var deploy_zone_enabled: bool = false
+## 出兵范围
+## #竞技场（2026-08-24 用户订正语义）：按钮 = 「编辑开关」，不是「限制开关」。
+## 关闭编辑后刷出来的区域**继续生效**，并落盘到项目 data/arena_deploy_zone.json。
+## deploy_zone_configured：是否配置过。未配置=全图可出兵；已配置但区域为空=全图禁止出兵。
+var deploy_zone_enabled: bool = false      ## 编辑模式（左键刷格子、不出兵）
+var deploy_zone_configured: bool = false   ## 是否已配置过出兵范围
 var allowed_cells: Dictionary = {}  ## key=Vector2i(cell_x,cell_y) → true
+const DEPLOY_ZONE_PATH: String = "res://data/arena_deploy_zone.json"
+
+## 右键移动令点击反馈（阵营色椭圆，1 秒渐隐）
+const ORDER_MARK_DURATION: float = 1.0
+var _order_mark_pos: Vector2 = Vector2.INF
+var _order_mark_time: float = 0.0
+var _order_mark_team: int = 0
+
+## 撤回：每次出兵（单击 1 只 / 一次框选铺兵 N 只）记为一批，可连续撤回多步
+var _deploy_batches: Array = []   ## Array[Array]，末尾为最近一批
+var _current_batch: Array = []    ## 当前正在填充的批次（框选分帧生成期间持续追加）
+var _batch_open: bool = false     ## 批次是否处于「填充中」
+const MAX_UNDO_BATCHES: int = 50
 
 func _ready() -> void:
 	## 根节点常驻处理（结算/暂停期间仍可操作；沙盒无暂停但保持与战斗一致）
@@ -100,23 +120,77 @@ func _ready() -> void:
 	if DevMode.enabled:
 		Unit.show_attack_ranges = true
 
-	## 创建绘制层：grid 插到 UnitContainer 之前（背景之上、单位之下），selection 追加到最后（单位之上）
+	## 创建绘制层：grid 与 ground 插到 UnitContainer 之前（背景之上、单位之下），
+	## selection 追加到最后（单位之上）。
+	## ground_layer 专画阵营光圈——必须在单位之下，否则光圈盖在贴图上会糊成一片。
 	grid_layer = DRAW_LAYER_SCRIPT.new()
 	grid_layer.name = "GridLayer"
+	ground_layer = DRAW_LAYER_SCRIPT.new()
+	ground_layer.name = "GroundLayer"
 	selection_layer = DRAW_LAYER_SCRIPT.new()
 	selection_layer.name = "SelectionLayer"
+	## #25（2026-08-23）：进入战场模式即把 BGM 上下文锁为 "battle"，避免初始化阶段 emit 的
+	## settings_changed 按 "menu" 上下文 deferred 播主菜单 BGM 覆盖战斗 BGM。
+	AudioManager.set_bgm_context("battle")
 	battlefield.add_child(grid_layer)
-	var uc_idx: int = unit_container.get_index()
-	battlefield.move_child(grid_layer, uc_idx)   ## 置于 UnitContainer 之前
+	battlefield.add_child(ground_layer)
+	## 显式排序：把两层依次插到 UnitContainer 之前，最终子节点顺序为
+	## [... 背景 ...] GridLayer → GroundLayer → UnitContainer → SelectionLayer
+	## 注意每次 move_child 都会改变 UnitContainer 的下标，必须重新取。
+	battlefield.move_child(grid_layer, unit_container.get_index())
+	battlefield.move_child(ground_layer, unit_container.get_index())
 	battlefield.add_child(selection_layer)         ## 追加到末尾（绘制在最上层）
 	grid_layer.draw_func = _draw_grid
+	ground_layer.draw_func = _draw_team_rings
 	selection_layer.draw_func = _draw_selection
 	grid_layer.visible = show_grid
 
+	## #竞技场（2026-08-24）：读取项目内持久化的出兵范围配置
+	_load_deploy_zone()
+
 	AudioManager.play_battle_bgm()
+
+## ── 出兵范围持久化（项目内 data/arena_deploy_zone.json）──────────────
+## 编辑器运行时可写 res://；导出版 res:// 只读 → 写失败只打日志不报错。
+func _load_deploy_zone() -> void:
+	if not FileAccess.file_exists(DEPLOY_ZONE_PATH):
+		deploy_zone_configured = false
+		return
+	## 文件存在即视为「配置过」（即使内容为空或损坏，也按用户配置处理）
+	deploy_zone_configured = true
+	var f := FileAccess.open(DEPLOY_ZONE_PATH, FileAccess.READ)
+	if f == null:
+		return
+	var txt: String = f.get_as_text()
+	f.close()
+	var parsed = JSON.parse_string(txt)
+	if typeof(parsed) != TYPE_DICTIONARY:
+		return
+	allowed_cells.clear()
+	var arr = parsed.get("cells", [])
+	if arr is Array:
+		for item in arr:
+			if item is Array and item.size() >= 2:
+				allowed_cells[Vector2i(int(item[0]), int(item[1]))] = true
+
+func _save_deploy_zone() -> void:
+	var cells: Array = []
+	for cell in allowed_cells.keys():
+		cells.append([cell.x, cell.y])
+	var data := {"grid_size": GRID_SIZE, "origin": [MAP_LEFT, MAP_TOP], "cells": cells}
+	var f := FileAccess.open(DEPLOY_ZONE_PATH, FileAccess.WRITE)
+	if f == null:
+		push_warning("[竞技场] 出兵范围配置写入失败（导出版 res:// 只读属正常）")
+		return
+	f.store_string(JSON.stringify(data, "\t"))
+	f.close()
+	deploy_zone_configured = true
 
 func _on_unit_spawned(unit: Node2D, _player_id: int) -> void:
 	unit_container.add_child(unit)
+	## #竞技场（2026-08-24 需求5 撤回）：批次开启期间生成的单位记入当前批
+	if _batch_open and unit is Unit and not (unit as Unit).is_base_unit:
+		_current_batch.append(unit)
 	if unit is Unit:
 		## 兵出在哪站哪（默认 hold），敌人进射程才打，符合沙盒「自由放置」预期
 		unit.hold_position = not is_combat_active()
@@ -160,11 +234,21 @@ func toggle_war_started() -> void:
 	war_started = not war_started
 	_apply_combat_state()
 
-## 切换出兵范围编辑（HUD 调用）
+## 切换出兵范围**编辑模式**（HUD 调用）
+## #竞技场（2026-08-24 用户订正）：本按钮只切换「是否在编辑」，不切换限制生效。
+## 开启：左键框选刷亮格子（只刷格、不出兵）；关闭：退出编辑并把区域落盘，限制继续生效。
 func toggle_deploy_zone() -> void:
 	deploy_zone_enabled = not deploy_zone_enabled
 	if not deploy_zone_enabled:
-		allowed_cells.clear()
+		_save_deploy_zone()   ## 退出编辑即持久化到项目 data/
+	grid_layer.queue_redraw()
+	selection_layer.queue_redraw()
+
+## 清空出兵范围（HUD 长按/右键出兵范围按钮调用）：清空白名单并落盘
+func clear_deploy_zone() -> void:
+	allowed_cells.clear()
+	_save_deploy_zone()
+	grid_layer.queue_redraw()
 	selection_layer.queue_redraw()
 
 func is_combat_active() -> bool:
@@ -178,7 +262,11 @@ func _apply_combat_state() -> void:
 			u.hold_position = not active
 			u.combat_enabled = active
 			u.order_pos = Vector2.INF
-
+			## #竞技场（2026-08-24）：切回和平/停战时，正处于攻击状态的单位必须立刻拉回
+			## move（沙盒站定分支），否则它会把当前攻击周期打完才停手。
+			if not active:
+				u.target = null
+				u.change_state("move")
 ## ── 输入处理 ───────────────────────────────────────────────
 func _input(event: InputEvent) -> void:
 	## F3 切换红蓝判定框
@@ -244,10 +332,22 @@ func _input(event: InputEvent) -> void:
 			if deploy_zone_enabled:
 				_mark_deploy_cells(_drag_box)  ## 出兵范围编辑：框选标记可出兵网格
 			elif _is_left_down and not _left_dragged:
-				_try_spawn_at_mouse()        ## 单击（未拖动）→ 立即出 1 兵
+				## #竞技场（2026-08-24 用户拍板）：单击优先「取消框选」；
+				## 无选中单位时才出 1 兵。
+				if not selected_units.is_empty():
+					selected_units.clear()
+					if ground_layer != null and is_instance_valid(ground_layer):
+						ground_layer.queue_redraw()
+				else:
+					_spawn_one_at_mouse()
 			elif _is_left_down and _left_dragged:
 				_on_drag_release()            ## 拖框松开 → 框选单位 or 网格铺兵
 			_is_left_down = false
+			## #竞技场（2026-08-24）：松手即清框选矩形，否则 _draw_selection 会一直画着旧框
+			_left_dragged = false
+			_drag_box = Rect2()
+			if selection_layer != null and is_instance_valid(selection_layer):
+				selection_layer.queue_redraw()
 
 	if event is InputEventMouseMotion and _is_left_down:
 		var d: Vector2 = battlefield.get_global_mouse_position() - _left_start_world
@@ -261,16 +361,23 @@ func _input(event: InputEvent) -> void:
 ## 每帧：键盘镜头 + 长按连出 + 选中标记持续重绘（单位会移动）
 func _process(delta: float) -> void:
 	_update_camera_keys(delta)
-	if _is_left_down and not _left_dragged:
+	## 长按连出：仅在「无选中单位」时生效（有选中时左键是取消框选，不该连出兵）
+	if _is_left_down and not _left_dragged and selected_units.is_empty():
 		var res = _current_spawn_res()
 		if res != null:
 			_hold_timer += delta
 			if _hold_timer >= LONG_PRESS_INTERVAL:
 				_hold_timer = 0.0
-				_try_spawn_at_mouse()
+				_spawn_one_at_mouse()
 	_process_deploy_queue()  ## 按帧分批消化网格出兵队列（避免框选瞬间卡死）
+	## 右键移动令反馈计时（阵营色椭圆 1 秒渐隐）
+	if _order_mark_time > 0.0:
+		_order_mark_time = maxf(0.0, _order_mark_time - delta)
 	if selection_layer != null and is_instance_valid(selection_layer):
 		selection_layer.queue_redraw()
+	## 阵营光圈随单位移动，必须与 selection_layer 一样每帧重绘
+	if ground_layer != null and is_instance_valid(ground_layer):
+		ground_layer.queue_redraw()
 
 ## ── 出兵 / 框选 / 移动 ─────────────────────────────────────
 func _current_spawn_res() -> Resource:
@@ -278,10 +385,18 @@ func _current_spawn_res() -> Resource:
 		return null
 	return hud.battlefield_spawn_res
 
+## 当前出兵归属阵营（#竞技场 2026-08-24 修）：
+## 直接返回 selected_team，不再读 hud.battlefield_spawn_team ——
+## 后者只在「点击兵种按钮」那一刻快照一次，之后切换阵营按钮不会更新，
+## 表现为「无论怎么切阵营，出的兵都还是上次点兵种时那个阵营」。
 func _current_spawn_team() -> int:
-	if hud == null or not is_instance_valid(hud):
-		return 0
-	return hud.battlefield_spawn_team
+	return selected_team
+
+## 单击 / 长按连出：出 1 兵，并单独记为一个可撤回批次
+func _spawn_one_at_mouse() -> void:
+	_begin_batch()
+	_try_spawn_at_mouse()
+	_commit_batch()
 
 func _try_spawn_at_mouse() -> void:
 	if deploy_zone_enabled:
@@ -296,6 +411,58 @@ func _try_spawn_at_mouse() -> void:
 		return  ## 不在允许出兵的网格区域内，忽略
 	BattleManager.spawn_unit(res, _current_spawn_team(), pos)
 
+## ── 撤回（需求5，2026-08-24）────────────────────────────────
+## 一次出兵操作 = 一批：单击/长按 1 只，框选铺兵 N 只（分帧生成期间批次保持开启）。
+## 撤回 = 弹出最近一批并移除其中所有存活单位，可连续撤回多步。
+func _begin_batch() -> void:
+	_current_batch = []
+	_batch_open = true
+
+func _commit_batch() -> void:
+	_batch_open = false
+	if _current_batch.is_empty():
+		return
+	_deploy_batches.append(_current_batch)
+	if _deploy_batches.size() > MAX_UNDO_BATCHES:
+		_deploy_batches.pop_front()
+	_current_batch = []
+	_refresh_undo_btn()
+
+## 撤回上一次出兵（HUD 撤回按钮调用）；返回是否真的撤掉了东西
+func undo_last_deploy() -> bool:
+	## 框选铺兵仍在分帧生成中 → 先清掉未生成的落点，避免撤完又冒出来
+	if not _pending_deploy_positions.is_empty():
+		_clear_deploy_queue()
+		if _batch_open:
+			_commit_batch()
+	if _deploy_batches.is_empty():
+		_refresh_undo_btn()
+		return false
+	var batch: Array = _deploy_batches.pop_back()
+	for item in batch:
+		if item == null or not (item is Unit):
+			continue
+		var u := item as Unit
+		if not is_instance_valid(u):
+			continue
+		selected_units.erase(u)
+		BattleManager.remove_unit(u, u.team if u.team <= 1 else 1)
+		u.queue_free()
+	_refresh_undo_btn()
+	if selection_layer != null and is_instance_valid(selection_layer):
+		selection_layer.queue_redraw()
+	if ground_layer != null and is_instance_valid(ground_layer):
+		ground_layer.queue_redraw()
+	return true
+
+## 是否还有可撤回的批次（HUD 用于置灰按钮）
+func has_undoable_deploy() -> bool:
+	return not _deploy_batches.is_empty() or not _pending_deploy_positions.is_empty()
+
+func _refresh_undo_btn() -> void:
+	if hud != null and is_instance_valid(hud) and hud.has_method("_refresh_undo_btn_state"):
+		hud._refresh_undo_btn_state()
+
 func _on_drag_release() -> void:
 	if deploy_zone_enabled:
 		return  ## 编辑模式下拖框用于标记出兵区，已在 _input 处理
@@ -305,7 +472,7 @@ func _on_drag_release() -> void:
 	var inside: Array[Unit] = []
 	for u in unit_container.get_children():
 		if u is Unit and is_instance_valid(u) and not u.is_dead and not u.is_base_unit \
-				and u.team == selected_team and box.has_point(u.global_position):
+				and u.team == selected_team and _is_unit_boxed(u, box):
 			inside.append(u)
 	if not inside.is_empty():
 		selected_units = inside
@@ -317,15 +484,29 @@ func _on_drag_release() -> void:
 		_grid_deploy(box, res, _current_spawn_team())
 	selection_layer.queue_redraw()
 
-## 在矩形区域内按 GRID_SIZE 网格中心铺兵（保留「一格一兵」语义）。
+## 在矩形区域内按格子铺兵：仅「被框住面积 ≥ 格子面积 1/3」的格子出兵，落点取格子中心。
+## #竞技场（2026-08-24 用户拍板）：原实现按 GRID_SIZE 整数倍交点铺兵（与画出来的网格线
+## 还错位），且框沾到一点就出一个兵。现改为格子制 + 中心落点，与出兵范围格子索引统一。
 ## 落点入队而非当场生成——真正的实例化在 _process_deploy_queue 按帧分批完成，
 ## 这样一次大框选也不会在单帧同步 spawn 上百个单位（即此前卡死/闪退的根因）。
 func _grid_deploy(box: Rect2, res: Resource, team: int) -> void:
-	var positions: Array[Vector2] = compute_grid_deploy_positions(box, GRID_SIZE)
-	for pos in positions:
+	var origin := Vector2(MAP_LEFT, MAP_TOP)
+	var cells: Array[Vector2i] = compute_grid_cells_in_box(box, GRID_SIZE, origin, SELECT_AREA_RATIO)
+	var queued: int = 0
+	for cell in cells:
+		var pos := Vector2(
+			MAP_LEFT + (float(cell.x) + 0.5) * GRID_SIZE,
+			MAP_TOP + (float(cell.y) + 0.5) * GRID_SIZE)
+		## #竞技场（2026-08-24）：出兵范围限制同样约束框选铺兵（原先只拦单击出兵）
+		if not _is_cell_allowed(pos):
+			continue
 		_pending_deploy_positions.append(pos)
 		_pending_deploy_res.append(res)
 		_pending_deploy_team.append(team)
+		queued += 1
+	## 一次框选铺兵 = 一个撤回批次；批次在分帧生成完毕后才 commit
+	if queued > 0:
+		_begin_batch()
 
 ## 每帧从队列取出最多 DEPLOY_BATCH_PER_FRAME 个落点生成单位（根因修复：摊平单帧开销）
 func _process_deploy_queue() -> void:
@@ -341,8 +522,12 @@ func _process_deploy_queue() -> void:
 			continue
 		if unit_container.get_child_count() >= MAX_SPAWN_UNITS:
 			_clear_deploy_queue()
+			_commit_batch()
 			return
 		BattleManager.spawn_unit(res, team, pos)
+	## 队列刚刚排空 → 本批铺兵全部生成完毕，收口成一个可撤回批次
+	if _pending_deploy_positions.is_empty() and _batch_open:
+		_commit_batch()
 
 ## 清空批量出兵队列（模式重置/切换时调用，避免遗留落点继续生成）
 func _clear_deploy_queue() -> void:
@@ -350,7 +535,7 @@ func _clear_deploy_queue() -> void:
 	_pending_deploy_res.clear()
 	_pending_deploy_team.clear()
 
-## 纯静态：给定矩形与网格尺寸，返回所有网格中心坐标（供 gdUnit4 单测）
+## 纯静态（保留供旧回归用例）：给定矩形与网格尺寸，返回所有网格交点坐标
 static func compute_grid_deploy_positions(box: Rect2, grid_size: float) -> Array[Vector2]:
 	var result: Array[Vector2] = []
 	if box.size.x <= 0.0 or box.size.y <= 0.0 or grid_size <= 0.0:
@@ -365,24 +550,35 @@ static func compute_grid_deploy_positions(box: Rect2, grid_size: float) -> Array
 	return result
 
 ## 右键点按：对当前框选单位下达移动令（以点击点为中心按网格分配编队偏移）
+## #竞技场（2026-08-24 需求3 修）：编队间距原用 GRID_SIZE(30) < 友军分离半径(40)，
+## 相邻编队位永远处在互推范围内 → 分离推力抵消前进速度（表现为「某只兵移速特别慢」），
+## 且两兵目标点互相在分离半径内时谁都进不到到达阈值 → 永远播 move 动画原地狂奔。
+## 改为间距 = max(GRID_SIZE, SEPARATION_RADIUS + 4)，让编队位彼此落在分离感知范围之外。
+const FORMATION_SPACING: float = 44.0
 func _issue_move_order() -> void:
 	if selected_units.is_empty():
 		return
 	var center: Vector2 = _clamp_to_map(battlefield.get_global_mouse_position())
 	var n: int = selected_units.size()
 	var cols: int = int(ceil(sqrt(float(n))))
+	var rows: int = int(ceil(float(n) / float(cols)))
 	var idx: int = 0
 	for u in selected_units:
 		if not is_instance_valid(u) or u.is_dead:
 			continue
 		var gx: int = idx % cols
 		var gy: int = idx / cols
+		## 纵向居中按实际行数算（原用 cols 导致行数≠列数时整个阵列偏心）
 		var offset: Vector2 = Vector2(
-			(float(gx) - float(cols - 1) * 0.5) * GRID_SIZE,
-			(float(gy) - float(cols - 1) * 0.5) * GRID_SIZE)
-		u.order_pos = center + offset
+			(float(gx) - float(cols - 1) * 0.5) * FORMATION_SPACING,
+			(float(gy) - float(rows - 1) * 0.5) * FORMATION_SPACING)
+		u.order_pos = _clamp_to_map(center + offset)
 		u.hold_position = true
 		idx += 1
+	## #竞技场（2026-08-24 需求4）：下令点弹出阵营色椭圆，1 秒渐隐
+	_order_mark_pos = center
+	_order_mark_time = ORDER_MARK_DURATION
+	_order_mark_team = selected_team
 
 ## ── 绘制 ───────────────────────────────────────────────────
 func _draw_grid() -> void:
@@ -391,8 +587,9 @@ func _draw_grid() -> void:
 		grid_layer.draw_line(Vector2(float(x), MAP_TOP), Vector2(float(x), MAP_BOTTOM), col, 1.0)
 	for y in range(int(MAP_TOP), int(MAP_BOTTOM) + 1, int(GRID_SIZE)):
 		grid_layer.draw_line(Vector2(MAP_LEFT, float(y)), Vector2(MAP_RIGHT, float(y)), col, 1.0)
-	## 出兵范围高亮：允许的网格单元叠加半透明白色（增加亮度）
-	if deploy_zone_enabled and not allowed_cells.is_empty():
+	## 出兵范围高亮：允许的网格单元叠加半透明白色
+	## #竞技场（2026-08-24 用户订正）：只要配置过就一直显示（原先仅编辑模式下可见）
+	if deploy_zone_configured and not allowed_cells.is_empty():
 		for cell in allowed_cells.keys():
 			var cx: int = cell.x
 			var cy: int = cell.y
@@ -407,30 +604,61 @@ func _draw_selection() -> void:
 			selection_layer.draw_rect(_drag_box, Color(1.0, 1.0, 1.0, 0.10))
 			selection_layer.draw_rect(_drag_box, Color(1.0, 1.0, 1.0, 0.9), false, 2.0)
 		else:
-			selection_layer.draw_rect(_drag_box, Color(0.3, 1.0, 0.4, 0.12))
-			selection_layer.draw_rect(_drag_box, Color(0.3, 1.0, 0.4, 0.9), false, 2.0)
-	## 每个单位脚下阵营光圈（团队色半透明填充，始终显示）
-	for u in unit_container.get_children():
-		if u is Unit and is_instance_valid(u) and not u.is_dead:
+			## #竞技场（2026-08-24 用户拍板）：框选矩形改白色（原绿色）
+			selection_layer.draw_rect(_drag_box, Color(1.0, 1.0, 1.0, 0.12))
+			selection_layer.draw_rect(_drag_box, Color(1.0, 1.0, 1.0, 0.9), false, 2.0)
+	## #竞技场（2026-08-24 用户拍板）：选中态的绿色椭圆描边已删除 ——
+	## 选中反馈统一由 ground_layer 的阵营色光圈承担（且光圈只在选中时才画）。
+
+## 绘制**被选中单位**脚下的阵营光圈（画在 ground_layer：单位之下、网格之上）
+## #竞技场（2026-08-24 用户拍板）：从「所有单位常驻显示」改为「仅框选中的单位显示」，
+## 未选中的兵脚下保持干净。颜色仍取 Unit.team_color()（与血条同源，阵营1 = #D93025 红）。
+func _draw_team_rings() -> void:
+	for u in selected_units:
+		if u is Unit and is_instance_valid(u) and not u.is_dead and not u.is_base_unit:
 			var c: Color = Unit.team_color(u.team)
 			var p: Vector2 = u.global_position + Vector2(0.0, 12.0)
-			_draw_ellipse_filled(selection_layer, p, SEL_ELLIPSE_HALF_W, SEL_ELLIPSE_HALF_H, Color(c.r, c.g, c.b, 0.30))
-	## 选中单位脚下绿色椭圆描边（叠加在阵营光圈之上）
-	for u in selected_units:
-		if is_instance_valid(u) and not u.is_dead:
-			var p: Vector2 = u.global_position + Vector2(0.0, 12.0)
-			_draw_ellipse_outline(selection_layer, p, SEL_ELLIPSE_HALF_W, SEL_ELLIPSE_HALF_H, Color(0.2, 1.0, 0.3, 0.9))
+			_draw_ellipse_filled(ground_layer, p, SEL_ELLIPSE_HALF_W, SEL_ELLIPSE_HALF_H, Color(c.r, c.g, c.b, 0.55))
+	## #竞技场（2026-08-24 需求4）：右键移动令点击反馈——阵营色椭圆描边，1 秒渐隐 + 微扩
+	if _order_mark_time > 0.0 and _order_mark_pos.is_finite():
+		var t: float = _order_mark_time / ORDER_MARK_DURATION   ## 1→0
+		var mc: Color = Unit.team_color(_order_mark_team)
+		var grow: float = 1.0 + (1.0 - t) * 0.35
+		ground_layer.draw_polyline(
+			_ellipse_points(_order_mark_pos, SEL_ELLIPSE_HALF_W * grow, SEL_ELLIPSE_HALF_H * grow),
+			Color(mc.r, mc.g, mc.b, t * 0.95), 2.5)
+
+## 框选命中判定：单位有 1/3 以上面积落在框内即算选中（2026-08-20 用户拍板，依据单位碰撞体尺寸）
+## 旧实现用 box.has_point(global_position) 只测中心点，贴边的兵会漏选。
+## 单位碰撞体是 CircleShape2D（见 unit_base._setup_collision_body），这里取其外接正方形做面积近似——
+## 圆与矩形的精确交集面积需要积分，正方形近似在实用精度上足够且每帧开销恒定。
+func _is_unit_boxed(u: Unit, box: Rect2) -> bool:
+	var half: float = _unit_half_extent(u)
+	var rect := Rect2(u.global_position - Vector2(half, half), Vector2(half * 2.0, half * 2.0))
+	var inter: Rect2 = box.intersection(rect)
+	if inter.size.x <= 0.0 or inter.size.y <= 0.0:
+		return false
+	var unit_area: float = rect.size.x * rect.size.y
+	if unit_area <= 0.0:
+		return box.has_point(u.global_position)
+	return (inter.size.x * inter.size.y) / unit_area >= SELECT_AREA_RATIO
+
+## 取单位碰撞体的半边长（CircleShape2D 半径；异常时回落到光圈半高，保证判定不失效）
+func _unit_half_extent(u: Unit) -> float:
+	var col := u.get_node_or_null("CollisionShape2D")
+	if col != null and col.shape is CircleShape2D:
+		var r: float = (col.shape as CircleShape2D).radius
+		if r > 0.0:
+			return r
+	return SEL_ELLIPSE_HALF_H
 
 ## 手动绘制椭圆描边（避免 draw_ellipse 在不同 Godot 版本签名差异：本作 4.7 第二参为 float）
 func _ellipse_points(center: Vector2, rx: float, ry: float, segments: int = 24) -> PackedVector2Array:
 	var pts: PackedVector2Array = []
-	for i in range(segments):
+	for i in range(segments + 1):   ## +1 闭合首尾（draw_polyline 不自动闭环；polygon 多一点无害）
 		var a: float = float(i) / float(segments) * TAU
 		pts.append(center + Vector2(cos(a) * rx, sin(a) * ry))
 	return pts
-
-func _draw_ellipse_outline(layer: CanvasItem, center: Vector2, rx: float, ry: float, color: Color) -> void:
-	layer.draw_polyline(_ellipse_points(center, rx, ry), color, 2.0)
 
 func _draw_ellipse_filled(layer: CanvasItem, center: Vector2, rx: float, ry: float, color: Color) -> void:
 	layer.draw_polygon(_ellipse_points(center, rx, ry), [color])
@@ -493,14 +721,21 @@ func _clamp_to_map(p: Vector2) -> Vector2:
 	return Vector2(clampf(p.x, MAP_LEFT, MAP_RIGHT), clampf(p.y, MAP_TOP, MAP_BOTTOM))
 
 ## 标记矩形覆盖的网格为可出兵（cell 索引 = floor((x-MAP_LEFT)/GRID_SIZE)）
+## #竞技场（2026-08-24 修）：原实现按世界坐标直接除 GRID_SIZE 算索引，未减 MAP_LEFT/MAP_TOP，
+## 与 _is_cell_allowed / _draw_grid 的索引口径不一致（偏移 656/30 非整数 → 刷亮格与实际可出兵格错位）。
+## 同时套用 1/3 面积门槛，与框选铺兵规则统一。
 func _mark_deploy_cells(box: Rect2) -> void:
-	for cell in compute_grid_cells_in_box(box, GRID_SIZE):
+	var origin := Vector2(MAP_LEFT, MAP_TOP)
+	for cell in compute_grid_cells_in_box(box, GRID_SIZE, origin, SELECT_AREA_RATIO):
 		allowed_cells[cell] = true
+	grid_layer.queue_redraw()
 	selection_layer.queue_redraw()
 
-## 世界坐标是否落在允许出兵的网格（未开启范围限制=全图可出；开启但无标记=不可出）
+## 世界坐标是否落在允许出兵的网格
+## #竞技场（2026-08-24 用户订正）：不再看「编辑开关」，只看是否配置过。
+## 未配置过 → 全图可出兵；已配置但区域为空 → 全图禁止出兵（用户拍板）。
 func _is_cell_allowed(world_pos: Vector2) -> bool:
-	if not deploy_zone_enabled:
+	if not deploy_zone_configured:
 		return true
 	if allowed_cells.is_empty():
 		return false
@@ -509,16 +744,28 @@ func _is_cell_allowed(world_pos: Vector2) -> bool:
 	return allowed_cells.has(Vector2i(cx, cy))
 
 ## 纯静态：返回矩形覆盖的网格单元索引（供标记与单测）
-static func compute_grid_cells_in_box(box: Rect2, grid_size: float) -> Array[Vector2i]:
+## #竞技场（2026-08-24 用户拍板）：新增 origin（网格原点，默认 0 保持旧签名语义）与
+## min_ratio（命中所需的最小格内被框面积占比，默认 0 = 沾到即算）。
+## 出兵范围刷格子与框选铺兵都传 SELECT_AREA_RATIO(1/3)，两处规则一致。
+static func compute_grid_cells_in_box(box: Rect2, grid_size: float, origin: Vector2 = Vector2.ZERO, min_ratio: float = 0.0) -> Array[Vector2i]:
 	var result: Array[Vector2i] = []
 	if box.size.x <= 0.0 or box.size.y <= 0.0 or grid_size <= 0.0:
 		return result
-	var min_cx: int = int(floor(box.position.x / grid_size))
-	var max_cx: int = int(floor((box.end.x - 0.001) / grid_size))
-	var min_cy: int = int(floor(box.position.y / grid_size))
-	var max_cy: int = int(floor((box.end.y - 0.001) / grid_size))
+	var local := Rect2(box.position - origin, box.size)
+	var min_cx: int = int(floor(local.position.x / grid_size))
+	var max_cx: int = int(floor((local.end.x - 0.001) / grid_size))
+	var min_cy: int = int(floor(local.position.y / grid_size))
+	var max_cy: int = int(floor((local.end.y - 0.001) / grid_size))
+	var cell_area: float = grid_size * grid_size
 	for cx in range(min_cx, max_cx + 1):
 		for cy in range(min_cy, max_cy + 1):
+			if min_ratio > 0.0:
+				var cell_rect := Rect2(float(cx) * grid_size, float(cy) * grid_size, grid_size, grid_size)
+				var inter: Rect2 = local.intersection(cell_rect)
+				if inter.size.x <= 0.0 or inter.size.y <= 0.0:
+					continue
+				if (inter.size.x * inter.size.y) / cell_area < min_ratio:
+					continue
 			result.append(Vector2i(cx, cy))
 	return result
 
