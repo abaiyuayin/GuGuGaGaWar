@@ -5,7 +5,8 @@ extends Node
 ##   文物/军令/事件图鉴、开发工具按钮等开发者专属 UI 可见。
 ## 持久化：状态写入 user://dev_mode.cfg，下次启动自动恢复，
 ##   关闭后所有开发者专属 UI 一律隐藏；F12 局内按钮栏显隐标志同样持久化（2026-08-15）。
-## 开关方式：F11 快捷键 / 图鉴 G1 页 abay 秘技 / 图鉴 G1 待机按钮连按 7 次（原 DevConsole 面板已删除）。
+## 开关方式：图鉴 G1 页 abay 秘技 / 图鉴 G1 待机按钮连按 7 次 / 主菜单「控制台」按钮。
+## （F11 快捷键已于 2026-08-23 隐藏，不再用于开关开发者模式。）
 
 ## 开发者模式开关状态变化时发出
 signal dev_mode_changed(enabled: bool)
@@ -69,9 +70,13 @@ func set_single_spawn(value: bool) -> void:
 	single_spawn = value
 	print("[调试] 出兵限制（玩家每次只出1个）: ", "开" if single_spawn else "关")
 
-## 全局快捷键 F11（开发者模式切换）已暂时禁用（2026-08-15 用户拍板）。
-## 开发者模式改由 图鉴 G1 页 abay 秘技 / G1 待机按钮连按 7 次 / 主菜单控制台 进入；
-## 其中 abay 秘技兼作「开/关」切换，确保禁用 F11 后仍有退出开发者模式的入口。
+## 全局快捷键 F11（开发者模式切换）已隐藏（2026-08-23 用户要求）：
+## F11 不再开关开发者模式，避免玩家误触。仍保留 图鉴 G1 页 abay 秘技 /
+## G1 待机按钮连按 7 次 / 主菜单「控制台」按钮 作为补充入口。
+# func _unhandled_input(event: InputEvent) -> void:
+# 	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_F11:
+# 		get_viewport().set_input_as_handled()
+# 		toggle()
 
 func _load_state() -> void:
 	var cfg := ConfigFile.new()

@@ -21,6 +21,14 @@ func enter() -> void:  ## 重写进入状态方法
 	if detection:  ## 如果检测区域存在
 		detection.monitoring = false  ## 关闭检测区域监控
 
+	## #闪退修复（2026-08-21）：单位可能已脱离场景树（上一局的 2s 兜底回收定时器把
+	## 复用单位中途拽回池 / 场景切换竞态），此时 get_tree() 返回 null，
+	## 直接 create_timer 会报「Cannot call method 'create_timer' on a null value」并闪退。
+	## 树外单位无需死亡演出，直接回收（recycle_unit 幂等：已在池中会被跳过）。
+	if not unit.is_inside_tree():
+		BattleManager.recycle_unit(unit)
+		return
+
 	## #9：优先播放兵种专属死亡动画（死亡使者 Death_1~10：站立→弯腰→下跪→躺平）
 	## 播完停在最后一帧（躺平），配合下方淡出与强制回收完成销毁。
 	## 其他兵种没有 death_frames → 回退到旧的「跳起+掉出屏幕」tween（优雅降级）。
@@ -36,7 +44,12 @@ func enter() -> void:  ## 重写进入状态方法
 	## 超时后只要实例仍有效且尚未入销毁队列就回收进对象池（2026-08-18 性能优化：替代 queue_free）。
 	var cleanup_timer := unit.get_tree().create_timer(2.0)
 	cleanup_timer.timeout.connect(func() -> void:
-		if is_instance_valid(unit) and not unit.is_queued_for_deletion():
+		## #闪退修复（2026-08-21）：加 is_dead 防护——单位若在 2s 内被对象池复用
+		##（setup() 会复位 is_dead=false 并重新入列 player_units/enemy_units），
+		## 该陈旧定时器若照旧回收，会把正在战斗的复用单位中途拽回池：单位凭空消失、
+		## 且仍残留在 BattleManager 列表里成为「树外幽灵」，后续 freeze_units()
+		## 的 change_state("idle") 会再次触树外 create_timer 闪退。
+		if is_instance_valid(unit) and unit.is_dead and not unit.is_queued_for_deletion():
 			BattleManager.recycle_unit(unit)
 	)
 
@@ -60,7 +73,9 @@ func _play_legacy_fall_tween() -> void:  ## 旧跳落补间
 	tween.tween_property(unit, "position:y", start_y + 900.0, 0.6)  ## 再向下掉出屏幕
 	tween.tween_callback(func() -> void:
 		## 回收到对象池（2026-08-18 性能优化：替代 queue_free）
-		if is_instance_valid(unit) and not unit.is_queued_for_deletion():
+		## #闪退修复（2026-08-21）：is_dead 防护同 2s 兜底定时器——单位在 0.8s 内被
+		## 对象池复用（is_dead 已被 setup 复位）时，本补间不得把它中途拽回池。
+		if is_instance_valid(unit) and unit.is_dead and not unit.is_queued_for_deletion():
 			BattleManager.recycle_unit(unit)
 	)
 
@@ -80,6 +95,8 @@ func update(delta: float) -> void:  ## 重写每帧更新方法
 	death_timer += delta  ## 计时器累加
 	## 如果死亡动画播放完毕
 	if death_timer >= death_duration:  ## 如果达到持续时间
-		## 从场景中移除单位（销毁节点）
-		## TODO: 后续可改为回收到对象池以优化性能
-		unit.queue_free()  ## 销毁单位节点
+		## #对象池（2026-08-20）：原先此处 queue_free 会绕过对象池把实例销毁掉。
+		## 该分支当前实际不可达（unit_base._physics_process 在 is_dead 时提前 return，
+		## update 不会被调用，回收由本文件的 tween 回调与 2s 兜底 timer 负责），
+		## 但留着 queue_free 是隐患——一旦有人放开那个早退，池就会被这里悄悄抽干。
+		BattleManager.recycle_unit(unit)  ## 回收到对象池（与另两条回收路径保持一致）

@@ -26,8 +26,8 @@ const HIDDEN_UNITS: Array[String] = ["S2", "S3", "Y2", "Y3", "Y4"]
 
 ## 特殊英雄单位（不计入常规编成，仅用于肉鸽固定首发卡 + 图鉴/控制台特殊行展示）
 ## 爱弥斯（Hero1）已并入常规 UNLOCK_ORDER 使其可在战役/全面战争中作为兵种解锁与部署，
-## 故此处留空；之后若新增其他不参与常规战争的纯展示英雄，再追加到此数组。
-const SPECIAL_UNITS: Array[String] = []
+## 故此处仅放不参与常规战争的纯展示英雄（Hero4/Hero5 咕咕嘎嘎/糯糯，肉鸽固定首发卡）。
+const SPECIAL_UNITS: Array[String] = ["Hero4", "Hero5"]
 
 var units: Dictionary = {}  ## 兵种资源字典：键为兵种 ID，值为对应的兵种资源
 var unit_list: Array = []  ## 兵种列表：按解锁顺序排序的所有常规兵种资源数组（不含特殊英雄）

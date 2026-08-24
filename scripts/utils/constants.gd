@@ -138,7 +138,8 @@ const GUARD_ESCORT_STANDOFF_MAX: float = 200.0
 const PIERCE_ARMOR_IGNORE_RATIO: float = 0.3  ## 穿刺无视护甲占比
 ## 钝击：对护甲的伤害倍率（破甲专精）
 ## #6：由 2.0 调整为 1.3 ——「打甲额外 30%」（原来 200% 破甲过于夸张，等于对护甲翻倍）
-const BLUNT_ARMOR_MULTIPLIER: float = 1.3  ## 钝击破甲倍率
+## 2026-08-23 用户拍板：钝击打有护盾目标额外伤害由 30% 提升到 50%（倍率 1.3 → 1.5）
+const BLUNT_ARMOR_MULTIPLIER: float = 1.5  ## 钝击破甲倍率（打盾额外 +50%）
 ## 钝击：护甲被打穿后，溢出的破甲量折算回血量伤害的系数（与破甲倍率互为倒数）
 const BLUNT_OVERFLOW_TO_HP_RATIO: float = 0.5  ## 钝击溢出折算系数
 ## 魔法：无视护甲直接进血的占比（1.0 = 完全无视护甲）

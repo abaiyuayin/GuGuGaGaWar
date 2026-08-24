@@ -7,29 +7,33 @@
 script = ExtResource("1_base")
 unit_id = "Hero3"
 display_name = "菲比Hero"
-description = "菲比阵营英雄单位。挥剑四连击近战，身法灵动。仅于肉鸽模式作为固定首发卡登场，不参与常规战争的兵种解锁与编成。"
+description = "菲比阵营远程英雄单位。发射魔法白球攻击远处敌人，仅于肉鸽模式作为固定首发卡登场，不参与常规战争的兵种解锁与编成。"
 cost = 300
 units_per_card = 1
-max_hp = 400
+max_hp = 200
 armor_value = 200
 move_speed = 2.5
-damage = 30
-damage_types = Array[int]([0])
+damage = 40
+damage_type = 3
+damage_types = Array[int]([3])
 damage_by_type = {
-0: 150
+3: 40
 }
-attack_range = 2.0
-attack_range_h = 0.6
-attack_range_v = 0.6
+attack_range = 8.0
+is_ranged_override = 1
 attack_speed = 2.0
-attack_hit_types = Array[int]([0])
+attack_count = 4
 damage_by_hit = [{
-0: 170
+3: 40
+}, {
+3: 40
+}, {
+3: 40
+}, {
+3: 40
 }]
-attack_hit_frame_start = 10
-attack_hit_frame_end = 10
 attack_sound_frame = 10
-attack_wait_anim_end = true
+attack_hit_frames = Array[int]([10, 16, 27, 33])
 display_height = 64.0
 display_width = 64.0
 move_display_height = 58.0

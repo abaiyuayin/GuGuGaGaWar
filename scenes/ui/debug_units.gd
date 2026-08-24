@@ -12,6 +12,9 @@ const UNIT_ORDER: Array[String] = [
 	"N1", "N2", "N3", "N4", "N5",
 	"Hero1",  ## 特殊英雄单位（爱弥斯），归入第 5 阵营「英雄」
 	"Hero2",  ## Doro勇士（隐藏成就「为了欧润橘！」解锁），归入第 5 阵营「英雄」
+	"Hero3",  ## 菲比Hero（肉鸽首发英雄 / 开发者模式解锁），归入第 5 阵营「英雄」
+	"Hero4",  ## 咕咕嘎嘎Hero（成就「咕嘎军团」+20 星解锁），归入第 5 阵营「英雄」
+	"Hero5",  ## 糯糯Hero（成就「糯糯大军」+20 星解锁），归入第 5 阵营「英雄」
 	"S1",  ## 蓝女巫：特殊阵营，归入第 6 阵营「特殊」
 	"S2",  ## 仓鼠士兵：特殊阵营（G1 替换事件兵种）
 	"S3",  ## 天命人：特殊阵营（占位，素材待补）
@@ -1976,7 +1979,8 @@ func _create_sound_library_panel() -> Control:  ## 定义创建音效管理面�
 	filter_option.add_item("D", 3)
 	filter_option.add_item("F", 4)
 	filter_option.add_item("N", 5)
-	var _filter_map: Array[String] = ["all", "shared", "G", "D", "F", "N"]
+	filter_option.add_item("Hero", 6)
+	var _filter_map: Array[String] = ["all", "shared", "G", "D", "F", "N", "Hero"]
 	filter_option.select(0)
 	filter_option.item_selected.connect(func(idx: int) -> void:
 		_sound_filter = _filter_map[idx]
@@ -2022,7 +2026,7 @@ func _refresh_sound_library() -> void:  ## 定义刷新音效库列表的方法
 	## 按当前分类筛选（归属来源：SettingsManager.get_sound_attribution）
 	var paths: Array[String] = []
 	for p in _cached_sound_paths:
-		if _sound_filter == "all" or SettingsManager.get_sound_attribution(p) == _sound_filter:
+		if _sound_filter == "all" or _effective_attr(p) == _sound_filter:
 			paths.append(p)
 	if _sound_library_count_label != null:
 		_sound_library_count_label.text = "共 %d 个音效" % paths.size()
@@ -2116,8 +2120,10 @@ func _create_sound_library_row(path: String) -> Control:  ## 定义创建音效�
 	attr_option.add_item("D", 2)
 	attr_option.add_item("F", 3)
 	attr_option.add_item("N", 4)
-	var _attr_type_map: Array[String] = ["shared", "G", "D", "F", "N"]
-	var _cur_attr: String = SettingsManager.get_sound_attribution(path)
+	attr_option.add_item("Hero", 5)
+	var _attr_type_map: Array[String] = ["shared", "G", "D", "F", "N", "Hero"]
+	## 用有效归属决定当前选中项（hero/ 路径无显式归属时也正确显示为 Hero）
+	var _cur_attr: String = _effective_attr(path)
 	var _attr_idx: int = 0
 	match _cur_attr:
 		"shared": _attr_idx = 0
@@ -2125,6 +2131,7 @@ func _create_sound_library_row(path: String) -> Control:  ## 定义创建音效�
 		"D": _attr_idx = 2
 		"F": _attr_idx = 3
 		"N": _attr_idx = 4
+		"Hero": _attr_idx = 5
 	## 先连接信号再 select：避免个别 Godot 版本 select() 立即触发 item_selected 时，
 	## 把尚未持久化的默认值（共享）反向写回，覆盖已配置的 G/D/F/N 归属（#202 防御）
 	attr_option.item_selected.connect(func(idx: int) -> void:
@@ -2956,9 +2963,10 @@ func _on_batch_files_selected(paths: PackedStringArray) -> void:
 ## 用于下拉菜单和自动补全
 func _refresh_cached_sound_paths() -> void:
 	_cached_sound_paths.clear()
-	## 仅扫描单位音效目录与共享上传目录，不扫描 bgm/ 背景音乐
+	## 扫描单位音效目录、共享上传目录、Hero 专属目录；刻意排除 bgm/ 背景音乐
 	_scan_sound_dir("res://assets/audio/units")
 	_scan_sound_dir("res://assets/audio/shared")
+	_scan_sound_dir("res://assets/audio/hero")
 	_cached_sound_paths.sort()
 	_apply_sound_library_order()
 
@@ -3011,25 +3019,39 @@ func _scan_sound_dir(base_dir: String) -> void:
 ##   res://assets/audio/units/D1/我的音效.wav      → 我的音效.wav  [D1]
 ## path: res:// 音频路径
 ## 返回值: 显示用标签
+## 计算音频的有效归属（用于显示标签与分类筛选）
+## 优先取管理面板设置的归属；未设置时按物理目录推断：
+##   shared/ → "shared"，units/<id>/ → 阵营首字母，hero/ → "Hero"，其余 → ""
+func _effective_attr(path: String) -> String:  ## 定义计算有效归属的方法
+	var a: String = SettingsManager.get_sound_attribution(path)
+	if a != "":
+		return a
+	if path.begins_with("res://assets/audio/hero/"):
+		return "Hero"
+	if path.begins_with("res://assets/audio/shared/"):
+		return "shared"
+	if path.begins_with("res://assets/audio/units/"):
+		var rest: String = path.trim_prefix("res://assets/audio/units/")  ## <unit_id>/<file>
+		var slash_idx: int = rest.find("/")
+		return rest.substr(0, slash_idx) if slash_idx > 0 else rest
+	return ""
+
 func _sound_display_label(path: String) -> String:  ## 定义生成音效显示标签的方法
 	var file_name: String = path.get_file()  ## 原始文件名（保持不变）
-	## 归属标签以「用户在管理面板设置的归属类型」为准（不再仅看物理目录），
+	## 归属标签以「有效归属」为准：优先用用户在管理面板设置的归属类型，
+	## 未设置时按物理目录推断（shared/→共享、units/<id>/→阵营、hero/→Hero），
 	## 这样把"共享"改成某阵营专属后，[共享] 后缀会立即消失（#142）
-	var attr: String = SettingsManager.get_sound_attribution(path)
+	var attr: String = _effective_attr(path)
 	var tag: String = ""
 	match attr:
 		"shared":
 			tag = "共享"
 		"G", "D", "F", "N":
 			tag = attr
+		"Hero":
+			tag = "Hero"
 		_:
-			## 未设置归属（旧文件/上传时未登记）→ 回退到物理目录推断
-			if path.begins_with("res://assets/audio/shared/"):
-				tag = "共享"
-			elif path.begins_with("res://assets/audio/units/"):
-				var rest: String = path.trim_prefix("res://assets/audio/units/")  ## <unit_id>/<file>
-				var slash_idx: int = rest.find("/")
-				tag = rest.substr(0, slash_idx) if slash_idx > 0 else rest
+			pass  ## 未识别归属：无 tag
 	## 兼容历史被强制改名的文件：按 basename 推断用途，展示成中文用途标签
 	var base_name: String = file_name.get_basename().to_lower()
 	if base_name == "click":
@@ -3679,6 +3701,7 @@ var _sheet_preview: Control = null  ## 精灵图预览控件
 var _frame_list_vbox: VBoxContainer = null  ## 帧列表容器
 var _frame_font: Font = null  ## 缓存字体（用于帧索引绘制）
 var _anim_sprite: AnimatedSprite2D = null  ## 动画播放预览精灵
+var _btn_anim_pause: Button = null  ## 动画预览暂停按钮（开启后停播、展示选中帧）
 var _overlap_preview: Control = null  ## 重叠预览控件
 var _overlap_dragging: bool = false  ## 是否正在拖动重叠预览中的帧（调整偏移）
 var _overlap_drag_start: Vector2 = Vector2.ZERO  ## 拖动起始位置
@@ -3703,15 +3726,12 @@ var _btn_hit_sound_apply: Button = null  ## 应用按钮
 var _frame_bar: Control = null  ## 帧条预览控件（绘制所有帧缩略图）
 var _btn_mode_hit: Button = null  ## 模式按钮：设置判定帧
 var _btn_mode_sound: Button = null  ## 模式按钮：设置音效帧
-var _btn_mode_recovery: Button = null  ## 模式按钮：设置后摇帧
 var _btn_clear_hit: Button = null  ## 清除判定帧按钮
 var _btn_clear_sound: Button = null  ## 清除音效帧按钮
-var _btn_clear_recovery: Button = null  ## 清除后摇帧按钮
-var _hit_sound_mode: String = "hit"  ## 当前选择模式："hit"=判定帧, "sound"=音效帧, "recovery"=后摇帧
+var _hit_sound_mode: String = "hit"  ## 当前选择模式："hit"=判定帧, "sound"=音效帧
 var _cur_hit_frame: int = -1  ## 当前编辑中的判定帧（-1=未设置）
 var _cur_hit_frames: Array[int] = []  ## 多段连击判定帧（按点击顺序对应第1击、第2击...）
 var _cur_sound_frame: int = -1  ## 当前编辑中的音效帧（-1=未设置）
-var _cur_recovery_frames: Array[int] = []  ## 后摇循环帧（按点击顺序乒乓循环，仅无待机动画兵种生效）
 var _hs_hint_label: Label = null  ## 配置栏提示标签（显示当前模式 + 已选帧）
 ## 帧条布局常量
 const FRAME_BAR_PAD: float = 8.0  ## 帧条内边距
@@ -3817,14 +3837,6 @@ func _build_frame_tab() -> void:
 	_btn_mode_sound.pressed.connect(_on_mode_sound_pressed)
 	hs_top_row.add_child(_btn_mode_sound)
 
-	_btn_mode_recovery = Button.new()
-	_btn_mode_recovery.text = "设置后摇帧"
-	_btn_mode_recovery.custom_minimum_size = Vector2(110, 28)
-	_btn_mode_recovery.tooltip_text = "点击后进入“后摇帧”模式：在下方帧条点击多个帧（再点一次取消），作为后摇站定时循环播放的动画。\n按点击顺序乒乓循环（如选前5帧：1 2 3 4 5 4 3 2 1...），双击帧清空全部。\n仅对无待机动画的兵种生效（有待机动画后摇优先播待机）；未配置则后摇站定冻结在攻击收尾姿势"
-	_btn_mode_recovery.toggle_mode = true
-	_btn_mode_recovery.pressed.connect(_on_mode_recovery_pressed)
-	hs_top_row.add_child(_btn_mode_recovery)
-
 	_btn_clear_hit = Button.new()
 	_btn_clear_hit.text = "清除判定"
 	_btn_clear_hit.custom_minimum_size = Vector2(80, 28)
@@ -3838,13 +3850,6 @@ func _build_frame_tab() -> void:
 	_btn_clear_sound.tooltip_text = "清除音效帧（恢复为 -1，使用 attack_sound_timing 比例播放）"
 	_btn_clear_sound.pressed.connect(_on_clear_sound_pressed)
 	hs_top_row.add_child(_btn_clear_sound)
-
-	_btn_clear_recovery = Button.new()
-	_btn_clear_recovery.text = "清除后摇"
-	_btn_clear_recovery.custom_minimum_size = Vector2(80, 28)
-	_btn_clear_recovery.tooltip_text = "清空后摇循环帧（后摇站定时冻结在攻击收尾姿势）"
-	_btn_clear_recovery.pressed.connect(_on_clear_recovery_pressed)
-	hs_top_row.add_child(_btn_clear_recovery)
 
 	_btn_hit_sound_apply = Button.new()
 	_btn_hit_sound_apply.text = "应用到 .tres"
@@ -3863,7 +3868,7 @@ func _build_frame_tab() -> void:
 
 	## 多段连击判定帧说明
 	var hs_combo_hint := Label.new()
-	hs_combo_hint.text = "连击兵种可点击多个帧设置多段判定（按点击顺序对应第1击、第2击...），双击帧可清空多段判定\n后摇帧：点击多帧按点击顺序乒乓循环（仅无待机动画的兵种生效，有待机动画优先播待机）"
+	hs_combo_hint.text = "连击兵种可点击多个帧设置多段判定（按点击顺序对应第1击、第2击...），双击帧可清空多段判定"
 	hs_combo_hint.add_theme_color_override("font_color", Color(0.6, 0.75, 1, 1))
 	hs_combo_hint.add_theme_font_size_override("font_size", 12)
 	_hit_sound_bar.add_child(hs_combo_hint)
@@ -3921,12 +3926,28 @@ func _build_frame_tab() -> void:
 	anim_vbox.add_theme_constant_override("separation", 4)
 	anim_panel.add_child(anim_vbox)
 
+	## 标题行：标题（左） + 暂停按钮（右）
+	var anim_title_row := HBoxContainer.new()
+	anim_title_row.add_theme_constant_override("separation", 8)
+	anim_vbox.add_child(anim_title_row)
+
 	var anim_title := Label.new()
 	anim_title.text = "动画播放预览"
+	anim_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	anim_title.add_theme_color_override("font_color", Color(1, 0.85, 0.4, 1))
 	anim_title.add_theme_font_size_override("font_size", 13)
-	anim_vbox.add_child(anim_title)
+	anim_title_row.add_child(anim_title)
 
+	## 暂停按钮：开启后停播动画并定格展示当前选中的帧（attack 分栏时左右两侧都定格）
+	_btn_anim_pause = Button.new()
+	_btn_anim_pause.text = "暂停"
+	_btn_anim_pause.custom_minimum_size = Vector2(70, 26)
+	_btn_anim_pause.toggle_mode = true
+	_btn_anim_pause.tooltip_text = "点击后停止播放动画，切换为展示当前选中的帧（再点恢复循环播放）"
+	_btn_anim_pause.toggled.connect(_on_anim_pause_toggled)
+	anim_title_row.add_child(_btn_anim_pause)
+
+	## 攻击帧（整条）预览区域
 	var anim_preview := Control.new()
 	anim_preview.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	anim_preview.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -3937,6 +3958,11 @@ func _build_frame_tab() -> void:
 	_anim_sprite.centered = true
 	_anim_sprite.position = Vector2(400, 110)
 	anim_preview.add_child(_anim_sprite)
+	## 面板尺寸稳定后再重算攻击预览的缩放与居中
+	anim_preview.resized.connect(func() -> void:
+		if _anim_sprite.sprite_frames != null:
+			_apply_anim_preview_scale(_anim_sprite.sprite_frames)
+	)
 	## 帧预览播放到“音效帧”时自动同步播放攻击音效（替代原“试听音效”按钮，#147）
 	_anim_sprite.frame_changed.connect(_on_anim_preview_frame_changed)
 
@@ -3955,7 +3981,7 @@ func _build_frame_tab() -> void:
 	sheet_panel.add_child(sheet_vbox)
 
 	var sheet_title := Label.new()
-	sheet_title.text = "精灵图（点击空白添加帧，点击方框选中）"
+	sheet_title.text = "精灵图（单击选中并暂停播放，双击取消选中，点击空白添加帧）"
 	sheet_title.add_theme_color_override("font_color", Color(1, 0.85, 0.4, 1))
 	sheet_title.add_theme_font_size_override("font_size", 13)
 	sheet_vbox.add_child(sheet_title)
@@ -4051,7 +4077,6 @@ func _update_hit_sound_bar() -> void:
 		_cur_hit_frame = -1
 		_cur_hit_frames.clear()
 		_cur_sound_frame = -1
-		_cur_recovery_frames.clear()
 	else:
 		## #18-5（2026-08-15）：attack2（备用攻击动画）用独立的判定/音效帧字段。
 		## 此前无条件读 attack_hit_frame_start / attack_sound_frame——在 attack2 下编辑时
@@ -4059,11 +4084,9 @@ func _update_hit_sound_bar() -> void:
 		## 设定判定帧仍影响另一个攻击动画」）。
 		var is_alt: bool = _frame_anim_name == "attack2"
 		_cur_hit_frame = res.attack_hit_frame_start_alt if is_alt else res.attack_hit_frame_start
-		## 加载多段连击判定帧
-		_cur_hit_frames = res.attack_hit_frames.duplicate()
+		## 加载多段连击判定帧（字段为 Array[int]，用 assign 显式拷贝，避免泛型 Array 赋给 Array[int] 报错）
+		_cur_hit_frames.assign(res.attack_hit_frames)
 		_cur_sound_frame = res.attack_sound_frame_alt if is_alt else res.attack_sound_frame
-		## 加载后摇循环帧（attack2 独立一套）
-		_cur_recovery_frames = (res.attack_recovery_frames_alt if is_alt else res.attack_recovery_frames).duplicate()
 	## 默认进入"判定帧"模式
 	_hit_sound_mode = "hit"
 	_refresh_mode_buttons()
@@ -4091,8 +4114,10 @@ func _on_hit_sound_apply() -> void:
 	## #18-5（2026-08-15）：attack2 独立判定/音效帧——按当前动画分流写入 alt 字段，
 	## 与 _update_hit_sound_bar 的读取分流配对，两套攻击动画判定帧彻底互不干扰。
 	var is_alt: bool = _frame_anim_name == "attack2"
-	## 保存多段连击判定帧
-	res.attack_hit_frames = _cur_hit_frames.duplicate()
+	## 保存多段连击判定帧：显式拷贝到新 Array[int]，避免 duplicate() 返回泛型 Array 赋给 Array[int] 报错
+	var hit_dst: Array[int] = []
+	hit_dst.assign(_cur_hit_frames)
+	res.attack_hit_frames = hit_dst
 	## 如果多段判定帧非空，清空旧的单帧配置（避免冲突）
 	if not _cur_hit_frames.is_empty():
 		if is_alt:
@@ -4108,21 +4133,15 @@ func _on_hit_sound_apply() -> void:
 		res.attack_sound_frame_alt = _cur_sound_frame
 	else:
 		res.attack_sound_frame = _cur_sound_frame
-	## 后摇循环帧（attack2 独立一套，按点击顺序乒乓循环）
-	if is_alt:
-		res.attack_recovery_frames_alt = _cur_recovery_frames.duplicate()
-	else:
-		res.attack_recovery_frames = _cur_recovery_frames.duplicate()
 	var path := "%s/%s.tres" % [ANIM_ROOT_DIR, _frame_unit_id]
 	var err := ResourceSaver.save(res, path)
 	if err != OK:
 		push_warning("保存失败，错误码: %d" % err)
 	else:
-		print("已应用 %s 的判定/音效/后摇帧配置（动画=%s）：单帧=%d, 音效帧=%d, 后摇帧=%s" % [
+		print("已应用 %s 的判定/音效帧配置（动画=%s）：单帧=%d, 音效帧=%d" % [
 			_frame_unit_id, _frame_anim_name,
 			res.attack_hit_frame_start_alt if is_alt else res.attack_hit_frame_start,
-			res.attack_sound_frame_alt if is_alt else res.attack_sound_frame,
-			str(res.attack_recovery_frames_alt if is_alt else res.attack_recovery_frames)])
+			res.attack_sound_frame_alt if is_alt else res.attack_sound_frame])
 
 ## ============================================================
 ## 攻击判定/音效帧 - 可视化帧条交互
@@ -4140,12 +4159,6 @@ func _on_mode_sound_pressed() -> void:
 	_refresh_mode_buttons()
 	_refresh_hs_hint()
 
-## 切换到"后摇帧"模式
-func _on_mode_recovery_pressed() -> void:
-	_hit_sound_mode = "recovery"
-	_refresh_mode_buttons()
-	_refresh_hs_hint()
-
 ## 清除判定帧
 func _on_clear_hit_pressed() -> void:
 	_cur_hit_frame = -1
@@ -4156,12 +4169,6 @@ func _on_clear_hit_pressed() -> void:
 ## 清除音效帧
 func _on_clear_sound_pressed() -> void:
 	_cur_sound_frame = -1
-	_refresh_hs_hint()
-	_frame_bar.queue_redraw()
-
-## 清除后摇帧
-func _on_clear_recovery_pressed() -> void:
-	_cur_recovery_frames.clear()
 	_refresh_hs_hint()
 	_frame_bar.queue_redraw()
 
@@ -4185,21 +4192,12 @@ func _refresh_mode_buttons() -> void:
 		else:
 			_btn_mode_sound.remove_theme_color_override("font_color")
 			_btn_mode_sound.remove_theme_color_override("font_hover_color")
-	if _btn_mode_recovery != null:
-		_btn_mode_recovery.button_pressed = (_hit_sound_mode == "recovery")
-		## 后摇帧模式 = 绿色高亮
-		if _hit_sound_mode == "recovery":
-			_btn_mode_recovery.add_theme_color_override("font_color", Color(0.4, 1.0, 0.5, 1))
-			_btn_mode_recovery.add_theme_color_override("font_hover_color", Color(0.55, 1.0, 0.6, 1))
-		else:
-			_btn_mode_recovery.remove_theme_color_override("font_color")
-			_btn_mode_recovery.remove_theme_color_override("font_hover_color")
 
 ## 刷新提示标签：显示当前模式 + 已选帧
 func _refresh_hs_hint() -> void:
 	if _hs_hint_label == null:
 		return
-	var mode_text: String = "判定帧" if _hit_sound_mode == "hit" else ("音效帧" if _hit_sound_mode == "sound" else "后摇帧")
+	var mode_text: String = "判定帧" if _hit_sound_mode == "hit" else "音效帧"
 	var hit_text: String
 	if not _cur_hit_frames.is_empty():
 		## 显示多段判定帧列表，如 [5, 15]
@@ -4209,8 +4207,7 @@ func _refresh_hs_hint() -> void:
 	else:
 		hit_text = "第 %d 帧" % _cur_hit_frame
 	var sound_text: String = "未设置（用 attack_sound_timing）" if _cur_sound_frame < 0 else "第 %d 帧" % _cur_sound_frame
-	var recovery_text: String = str(_cur_recovery_frames) + "（乒乓循环）" if not _cur_recovery_frames.is_empty() else "未设置（站定冻结）"
-	_hs_hint_label.text = "当前模式: %s    |    判定帧: %s    |    音效帧: %s    |    后摇帧: %s" % [mode_text, hit_text, sound_text, recovery_text]
+	_hs_hint_label.text = "当前模式: %s    |    判定帧: %s    |    音效帧: %s" % [mode_text, hit_text, sound_text]
 
 ## 计算第 idx 帧在帧条上的矩形区域（单元格）
 func _frame_bar_cell_rect(idx: int) -> Rect2:
@@ -4313,15 +4310,6 @@ func _on_frame_bar_draw() -> void:
 				Vector2(cell.position.x + FRAME_BAR_CELL_W - 9, cell.position.y + 8),
 			])
 			_frame_bar.draw_colored_polygon(tri2, Color(0.3, 0.7, 1, 1))
-		## 后摇帧标记（绿色三角[顶部中央] + 绿色边框）
-		if _cur_recovery_frames.has(i):
-			_frame_bar.draw_rect(cell, Color(0.4, 1.0, 0.5, 1), false, 2.0)
-			var tri3 := PackedVector2Array([
-				Vector2(cell.position.x + FRAME_BAR_CELL_W * 0.5 - 5, cell.position.y + FRAME_BAR_CELL_H + 2),
-				Vector2(cell.position.x + FRAME_BAR_CELL_W * 0.5 + 5, cell.position.y + FRAME_BAR_CELL_H + 2),
-				Vector2(cell.position.x + FRAME_BAR_CELL_W * 0.5, cell.position.y + FRAME_BAR_CELL_H - 8),
-			])
-			_frame_bar.draw_colored_polygon(tri3, Color(0.4, 1.0, 0.5, 1))
 
 ## 帧条点击：根据当前模式设置判定帧/音效帧
 func _on_frame_bar_input(event: InputEvent) -> void:
@@ -4343,8 +4331,6 @@ func _on_frame_bar_input(event: InputEvent) -> void:
 				_cur_hit_frame = -1
 		elif _hit_sound_mode == "sound" and _cur_sound_frame == idx:
 			_cur_sound_frame = -1
-		elif _hit_sound_mode == "recovery":
-			_cur_recovery_frames.clear()
 	else:
 		match _hit_sound_mode:
 			"hit":
@@ -4361,13 +4347,6 @@ func _on_frame_bar_input(event: InputEvent) -> void:
 					_cur_hit_frame = idx
 			"sound":
 				_cur_sound_frame = idx
-			"recovery":
-				## 后摇帧：点击加入（按点击顺序乒乓循环），再点同一帧取消
-				var r_idx := _cur_recovery_frames.find(idx)
-				if r_idx >= 0:
-					_cur_recovery_frames.remove_at(r_idx)
-				else:
-					_cur_recovery_frames.append(idx)
 	_refresh_hs_hint()
 	_frame_bar.queue_redraw()
 
@@ -4477,12 +4456,35 @@ func _update_anim_preview(frames: SpriteFrames) -> void:
 	if frames == null or frames.get_frame_count(_frame_anim_name) <= 0:
 		_anim_sprite.stop()
 		_anim_sprite.sprite_frames = null
+		_apply_anim_pause_state()
 		return
 	_anim_sprite.sprite_frames = frames
 	_apply_anim_preview_scale(frames)
 	## #回归修复 2026-08-15：同 _create_anim_column，回置 loop=true 让帧图预览循环播放（仅内存，不写盘）
 	frames.set_animation_loop(_frame_anim_name, true)
 	_anim_sprite.play(_frame_anim_name)
+	## 暂停开启时停播并定格到选中帧
+	_apply_anim_pause_state()
+
+## 暂停状态：选中有帧（_frame_selected >= 0）或暂停按钮开启时停播并定格到选中帧；否则恢复循环播放
+func _apply_anim_pause_state() -> void:
+	if _anim_sprite == null:
+		return
+	var should_pause: bool = (_btn_anim_pause != null and _btn_anim_pause.button_pressed) or _frame_selected >= 0
+	if not should_pause:
+		## 恢复循环播放（仅当存在精灵帧与对应动画名）
+		if _anim_sprite.sprite_frames != null and _frame_anim_name != "":
+			_anim_sprite.play(_frame_anim_name)
+		return
+	## 停播并定格到当前选中的帧（有选中帧时）
+	if _frame_selected >= 0 and _anim_sprite.sprite_frames != null \
+			and _frame_selected < _anim_sprite.sprite_frames.get_frame_count(_frame_anim_name):
+		_anim_sprite.frame = _frame_selected
+	_anim_sprite.pause()
+
+## 暂停按钮切换回调
+func _on_anim_pause_toggled(on: bool) -> void:
+	_apply_anim_pause_state()
 
 ## 根据精灵帧实际尺寸与预览面板大小自动计算缩放，确保帧完整显示（上下不被遮盖）
 ## 使用 anim_preview 父节点的实际 size 计算可用区域
@@ -4504,6 +4506,9 @@ func _apply_anim_preview_scale(frames: SpriteFrames) -> void:
 		return
 	var ctrl: Control = parent
 	var rect: Rect2 = ctrl.get_rect()
+	if rect.size.x <= 0 or rect.size.y <= 0:
+		## 布局未完成时使用自定义最小尺寸，避免缩放塌缩为 0
+		rect = Rect2(rect.position, ctrl.custom_minimum_size)
 	## 留 10px 边距
 	var area_w: float = max(1.0, rect.size.x - 20.0)
 	var area_h: float = max(1.0, rect.size.y - 20.0)
@@ -4643,6 +4648,7 @@ func _rebuild_frame_list() -> void:
 			_rebuild_frame_list()
 			_sheet_preview.queue_redraw()
 			_overlap_preview.queue_redraw()
+			_apply_anim_pause_state()
 		)
 		top_row.add_child(btn_sel)
 
@@ -4773,6 +4779,7 @@ func _refresh_anim_preview_from_edits() -> void:
 	if _frame_edits.is_empty():
 		_anim_sprite.stop()
 		_anim_sprite.sprite_frames = null
+		_apply_anim_pause_state()
 		return
 	var tmp_frames := SpriteFrames.new()
 	tmp_frames.remove_animation("default")
@@ -4791,6 +4798,7 @@ func _refresh_anim_preview_from_edits() -> void:
 	_apply_anim_preview_scale(tmp_frames)
 	if not _anim_sprite.is_playing():
 		_anim_sprite.play(_frame_anim_name)
+	_apply_anim_pause_state()
 
 ## 移动帧顺序
 func _frame_move(idx: int, dir: int) -> void:
@@ -4804,6 +4812,7 @@ func _frame_move(idx: int, dir: int) -> void:
 	_rebuild_frame_list()
 	_sheet_preview.queue_redraw()
 	_overlap_preview.queue_redraw()
+	_apply_anim_pause_state()
 	_refresh_anim_preview_from_edits()
 
 ## 删除帧
@@ -4883,10 +4892,17 @@ func _on_sheet_preview_input(event: InputEvent) -> void:
 		var edit: Dictionary = _frame_edits[i]
 		var r := Rect2(float(edit.x), float(edit.y), float(edit.w), float(edit.h))
 		if r.has_point(Vector2(px, py)):
-			_frame_selected = i
+			if mb.double_click:
+				## 双击：取消选中（仅当双击的是当前选中的帧）
+				if _frame_selected == i:
+					_frame_selected = -1
+			else:
+				## 单击：选中该帧（有选中帧 → _apply_anim_pause_state 自动定格暂停）
+				_frame_selected = i
 			_rebuild_frame_list()
 			_sheet_preview.queue_redraw()
 			_overlap_preview.queue_redraw()
+			_apply_anim_pause_state()
 			return
 	## 未点中任何帧：若在贴图范围内，添加新帧（以点击点为左上角，400×400）
 	var tex_w: float = float(_frame_sheet_tex.get_width())

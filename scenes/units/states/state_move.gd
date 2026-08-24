@@ -30,6 +30,26 @@ func update(delta: float) -> void:  ## 重写每帧更新方法
 	if unit.order_pos.is_finite():
 		_advance_to_order(delta, speed_px)
 		return
+	## #竞技场（2026-08-24 用户拍板）：沙盒索敌与站定统一在此处理。
+	## ① 未开战（和平 / 停战）：站定定格行走动画第一帧，绝不攻击、绝不移动。
+	## ② 已开战：全场索敌锁最近敌人 → 进射程打，未进射程全向追击；
+	##    场上无敌人则原地站定（沙盒无基地可推，不再沿水平方向平推）。
+	if GameManager.is_battlefield_mode:
+		if not unit.combat_enabled:
+			unit.velocity = Vector2.ZERO
+			unit.play_arena_stand()
+			return
+		var arena_target: Unit = unit.find_nearest_enemy()
+		if arena_target == null or not is_instance_valid(arena_target):
+			unit.velocity = Vector2.ZERO
+			unit.play_arena_stand()
+			return
+		unit.target = arena_target
+		if unit.is_target_in_attack_range(arena_target.global_position, 10.0):
+			unit.change_state("attack")
+			return
+		_advance_to_target(delta, arena_target.global_position, speed_px)
+		return
 	## 站定待命：hold_position 且无移动令时原地站住，仅敌人进入自身攻击范围才还击
 	if unit.hold_position:
 		if unit.combat_enabled:
@@ -92,6 +112,7 @@ func update(delta: float) -> void:  ## 重写每帧更新方法
 				unit.change_state("attack")  ## 切换到攻击状态
 				return  ## 直接返回
 			## 敌人在检测范围但不在攻击范围，远程单位继续推进（不追击）
+			## 注：竞技场沙盒的全向追击已在本函数开头的 is_battlefield_mode 分支统一处理
 		else:  ## 近战单位
 			## 近战单位：发现敌人立即进入攻击状态追击
 			unit.target = target  ## 设置目标
@@ -204,11 +225,50 @@ func _advance_to_order(delta: float, speed_px: float) -> void:
 	var to_target: Vector2 = unit.order_pos - unit.global_position
 	var dist: float = to_target.length()
 	## 到达判定：距离小于一步或阈值即视为到达，避免抖动
-	if dist <= maxf(6.0, speed_px * delta):
+	## #竞技场（2026-08-24 需求3 修）：原阈值 6px 过严——编队间距 30px 小于友军分离
+	## 感知半径 40px，相邻单位永远互推，谁都进不到 6px → 原地狂奔。放宽到 14px。
+	if dist <= maxf(14.0, speed_px * delta):
 		unit.order_pos = Vector2.INF
 		unit.hold_position = true
 		unit.velocity = Vector2.ZERO
 		unit.play_anim("idle")
+		return
+	var dir: Vector2 = to_target / dist
+	var sep: Vector2 = unit._compute_ally_separation()
+	var desired: Vector2 = dir * speed_px + sep * 0.5
+	unit.velocity = unit.clamp_move_velocity(desired, speed_px)
+	unit.set_facing_hysteresis(unit.velocity.x, maxf(0.25, speed_px * 0.4))
+	var prev: Vector2 = unit.global_position
+	unit.move_and_slide()
+	## #竞技场（2026-08-24 需求3 修）：卡住检测——想去目标点却被友军顶死推不动时，
+	## 连续 1.2s 几乎无推进 → 强制视为已到位站定，停止原地奔跑动画。
+	var progress: float = (unit.global_position - prev).dot(dir)
+	if progress < maxf(2.0, speed_px * delta * 0.3):
+		unit._order_stuck_timer += delta
+		if unit._order_stuck_timer >= 1.2:
+			unit.order_pos = Vector2.INF
+			unit.hold_position = true
+			unit.velocity = Vector2.ZERO
+			unit.play_anim("idle")
+			return
+	else:
+		unit._order_stuck_timer = 0.0
+	unit.play_anim("move")
+	unit.queue_redraw()
+
+## 朝指定敌人位置全向接近一帧（竞技场沙盒专属）
+## 与 _advance 的区别：不锁固定水平方向、不做阵线回归（lane_y 回拉），
+## 因为沙盒是自由摆阵，敌人可能在任意方位，阵线回归会抵消纵向接近的位移。
+## 不在此处切 attack 状态：射程判定由调用方（update 开头）每帧统一处理。
+## _delta: 帧间隔（秒，本函数用 velocity + move_and_slide 移动故未直接使用）
+## target_pos: 目标世界坐标；speed_px: 像素移速
+func _advance_to_target(_delta: float, target_pos: Vector2, speed_px: float) -> void:
+	if unit == null or not is_instance_valid(unit):
+		return
+	var to_target: Vector2 = target_pos - unit.global_position
+	var dist: float = to_target.length()
+	if dist <= 0.01:
+		unit.velocity = Vector2.ZERO
 		return
 	var dir: Vector2 = to_target / dist
 	var sep: Vector2 = unit._compute_ally_separation()

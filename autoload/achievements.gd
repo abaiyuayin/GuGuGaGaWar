@@ -34,6 +34,11 @@ const ACHIEVEMENTS: Array[Dictionary] = [
 	## #新需求（2026-08-10）：为了欧润橘！—— 隐藏成就，战役模式累计购买 500 次 Doro 兵种触发
 	## 达成后 Doro勇士（Hero2）进入兵种解锁池（需 20 颗星，见 CampaignProgress.ACHIEVEMENT_GATED_UNITS）
 	{id = "for_orange", name = "为了欧润橘！", desc = "累计购买 500 次 Doro 兵种", hidden = true},
+	## #Hero4/Hero5（2026-08-21）：战役模式累计部署 500 次 G系（咕嘎）兵种 → 解锁咕咕嘎嘎Hero
+	## 达成后咕咕嘎嘎Hero（Hero4）进入兵种解锁池（需 20 颗星，见 CampaignProgress.ACHIEVEMENT_GATED_UNITS）
+	{id = "gugu_legion", name = "咕嘎军团", desc = "累计部署 500 次咕嘎兵种", hidden = true},
+	## #Hero5（2026-08-21）：战役模式累计部署 500 次 N系（糯糯）兵种 → 解锁糯糯Hero
+	{id = "nuo_legion", name = "糯糯大军", desc = "累计部署 500 次糯糯兵种", hidden = true},
 	{id = "anomaly_invasion", name = "异象入侵", desc = "第一次触发异象入侵", hidden = true},
 	{id = "parallel_heroes", name = "平行时空的英雄们", desc = "第一次触发特殊事件", hidden = true},
 	## #16（2026-08-11）：上帝模式 —— 解锁开发者模式时自动解锁（F11 / 图鉴秘技 abay→G1 待机连按）
@@ -71,11 +76,24 @@ func record_player_deploy(unit_id: String) -> void:
 	if unit_id == "":
 		return
 	_deployed_units[unit_id] = true
-	## 为了欧润橘！：仅战役模式统计（用户拍板），跨启动持久累加
-	if _is_achievement_mode() and String(unit_id).begins_with("D"):
+	## 出兵计数成就：仅战役模式统计（用户拍板），跨启动持久累加
+	if not _is_achievement_mode():
+		return
+	## 为了欧润橘！：累计部署 D 系兵种
+	if String(unit_id).begins_with("D"):
 		var total: int = CampaignProgress.add_doro_purchases(1)
 		if total >= 500:
 			_try_unlock("for_orange")
+	## 咕嘎军团：累计部署 G 系（咕嘎）兵种
+	elif String(unit_id).begins_with("G"):
+		var g: int = CampaignProgress.add_gugu_purchases(1)
+		if g >= 500:
+			_try_unlock("gugu_legion")
+	## 糯糯大军：累计部署 N 系（糯糯）兵种
+	elif String(unit_id).begins_with("N"):
+		var n: int = CampaignProgress.add_nuo_purchases(1)
+		if n >= 500:
+			_try_unlock("nuo_legion")
 
 ## 本局部署集合是否「只含 F 系兵种」（F1~F5）
 ## 用户拍板语义：集合非空且所有成员都是 F 系 → 即算「全程只使用 F 兵种」
@@ -164,6 +182,12 @@ func check_progress() -> void:
 	## 为了欧润橘！：累计购买 500 次 Doro 兵种（持久计数，兜底判定）
 	if CampaignProgress.get_doro_purchases() >= 500:
 		_try_unlock("for_orange")
+	## 咕嘎军团：累计部署 500 次咕嘎兵种（持久计数，兜底判定）
+	if CampaignProgress.get_gugu_purchases() >= 500:
+		_try_unlock("gugu_legion")
+	## 糯糯大军：累计部署 500 次糯糯兵种（持久计数，兜底判定）
+	if CampaignProgress.get_nuo_purchases() >= 500:
+		_try_unlock("nuo_legion")
 
 ## #21：实时击杀记录（battle_root 每击杀一个敌方单位调用一次）
 ## 战役模式下累加总击杀并即时判定阈值成就（战斗中实时弹出，不等结算）；
@@ -309,7 +333,8 @@ func _drain_toast_queue() -> void:
 	_toast_busy = true
 	while not _toast_queue.is_empty():
 		var entry: Dictionary = _toast_queue.pop_front()
-		AudioManager.play_sound_path(ACHIEVEMENT_SOUND_PATH)
+		## #24：成就解锁音效必须强制播放，不受音频节流（点击/出兵单并发锁）影响
+		AudioManager.play_sound_path(ACHIEVEMENT_SOUND_PATH, true)
 		_show_achievement_toast(entry)
 		## 结算界面可能处于暂停树，计时器默认 process_always=true 不受影响
 		await get_tree().create_timer(TOAST_SPACING).timeout

@@ -25,18 +25,26 @@ const META_SAVE_PATH := "user://meta_stats.cfg"
 
 ## �??�?�� D 系兵种�?数（战役模式每�?部署 D 前缀兵�? +1，�? Achievements.record_player_deploy�?
 var _doro_purchases: int = 0
+## ?累计部署 G 系（咕嘎）兵种?数?成就「咕嘎军团」解锁 Hero4 咕咕嘎嘎Hero 用）
+var _gugu_purchases: int = 0
+## ?累计部署 N 系（糯糯）兵种?数?成就「糯糯大军」解锁 Hero5 糯糯Hero 用）
+var _nuo_purchases: int = 0
 
 func _load_meta_stats() -> void:
 	var config = ConfigFile.new()
 	if config.load(META_SAVE_PATH) == OK:
 		_doro_purchases = config.get_value("meta", "doro_purchases", 0)
+		_gugu_purchases = config.get_value("meta", "gugu_purchases", 0)
+		_nuo_purchases = config.get_value("meta", "nuo_purchases", 0)
 
 func _save_meta_stats() -> void:
 	var config = ConfigFile.new()
 	config.set_value("meta", "doro_purchases", _doro_purchases)
+	config.set_value("meta", "gugu_purchases", _gugu_purchases)
+	config.set_value("meta", "nuo_purchases", _nuo_purchases)
 	config.save(META_SAVE_PATH)
 
-## �?�� D 系购买�?数并落盘，返回累加后的��数（供成就阈��判定）
+## ? D 系购买?数并落盘，返回累加后的数（供成就阈判定）
 func add_doro_purchases(amount: int) -> int:
 	if amount <= 0:
 		return _doro_purchases
@@ -46,6 +54,28 @@ func add_doro_purchases(amount: int) -> int:
 
 func get_doro_purchases() -> int:
 	return _doro_purchases
+
+## ?累计部署 G 系（咕嘎）兵种次数并落盘，返回累加后的次数（供成就「咕嘎军团」判定）
+func add_gugu_purchases(amount: int) -> int:
+	if amount <= 0:
+		return _gugu_purchases
+	_gugu_purchases += amount
+	_save_meta_stats()
+	return _gugu_purchases
+
+func get_gugu_purchases() -> int:
+	return _gugu_purchases
+
+## ?累计部署 N 系（糯糯）兵种次数并落盘，返回累加后的次数（供成就「糯糯大军」判定）
+func add_nuo_purchases(amount: int) -> int:
+	if amount <= 0:
+		return _nuo_purchases
+	_nuo_purchases += amount
+	_save_meta_stats()
+	return _nuo_purchases
+
+func get_nuo_purchases() -> int:
+	return _nuo_purchases
 
 ## 加载战役进度（�?有方法）
 func _load_progress() -> void:
@@ -166,6 +196,8 @@ const ALL_UNITS: Array[String] = [
 	"D1","D2","D3","D4","D5","D6",
 	"F1","F2","F3","F4","F5",
 	"N1","N2","N3","N4","N5",
+	"Hero4",  ## 咕嘎嘎Hero：隐藏成就「咕嘎军团」解锁后进入解锁池，需 20 颗星
+	"Hero5",  ## 糯糯Hero：隐藏成就「糯糯大军」解锁后进入解锁池，需 20 颗星
 	"Hero1",  ## 爱弥�?��特殊英雄，需�?? 20 颗星解锁（�? STAR_UNLOCK�?
 	"Hero2",  ## Doro勇士：隐藏成就��为了�?润�?！��解锁后进入解锁池，霢� 20 颗星（�? STAR_UNLOCK/ACHIEVEMENT_GATED_UNITS�?
 ]
@@ -201,11 +233,11 @@ const MERIT_PER_LEVEL: Dictionary = {
 const BOSS_LEVELS: Array[int] = [3, 6, 10]
 
 ## 星星解锁的特殊兵种（不�?入常�?22 兵�?编成，需�??星星达阈值才解锁�?## 爱弥�?��Hero1）需 20 颗星（用�?2026-08-09 要求�?10 改为 20�?## Doro勇士（Hero2）同样需 20 颗星，且霢�先解锁隐藏成就��为了�?润�?！��（�?ACHIEVEMENT_GATED_UNITS�?
-const STAR_UNLOCK: Dictionary = {"Hero1": 20, "Hero2": 20}
+const STAR_UNLOCK: Dictionary = {"Hero1": 20, "Hero2": 20, "Hero4": 20, "Hero5": 20}  ## 2026-08-21 恢复咕嘎/糯糯的 20 星门槛
 
 ## 成就门控兵�?：先解锁指定成就，兵种才进入�?��锁池（配�?STAR_UNLOCK 的星星门槛）
 ## Doro勇士（Hero2）需隐藏成就「为了�?润�?！��（�??�?�� 500 �?Doro）达成后方可�?
-const ACHIEVEMENT_GATED_UNITS: Dictionary = {"Hero2": "for_orange"}
+const ACHIEVEMENT_GATED_UNITS: Dictionary = {"Hero2": "for_orange", "Hero4": "gugu_legion", "Hero5": "nuo_legion"}
 
 ## 运�?态（持久化到 user://campaign_progress.cfg�?
 var _levels_first_cleared: Dictionary = {}

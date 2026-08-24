@@ -123,8 +123,9 @@ func _build_top_navbar() -> void:
 ## 设置按钮样式与事件
 func _setup_buttons() -> void:
 	UIButtonHelper.setup_button(back_btn)
-	UIButtonHelper.setup_button(unlock_btn)
-	UIButtonHelper.setup_button(achievements_btn)
+	## #25：兵种解锁/成就按钮统一为米色羊皮卷纸风格，与详情框/面板保持一致
+	UIButtonHelper.setup_parchment_button(unlock_btn)
+	UIButtonHelper.setup_parchment_button(achievements_btn)
 	UIButtonHelper.setup_button(random_mode_btn)
 	## #20：右上角导航按钮放大 ×2，便于触屏点击（尺寸 160×64，字号 26）
 	for nav_btn: Button in [unlock_btn, achievements_btn, random_mode_btn]:

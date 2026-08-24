@@ -13,6 +13,12 @@ func enter() -> void:  ## 重写进入状态方法
 	## AI 禁用时不自动切换状态（用于调试模拟）
 	if unit.ai_disabled:
 		return
+	## #闪退修复（2026-08-21）：单位不在场景树（对象池休眠单位被 freeze_units 等
+	## 列表遍历路径触到 change_state）时 get_tree() 为 null，
+	## create_timer 会报「Cannot call method 'create_timer' on a null value」闪退。
+	## 休眠单位无需状态切换，直接跳过定时器创建。
+	if not unit.is_inside_tree():
+		return
 	## 创建一个 0.1 秒的计时器
 	_idle_timer = unit.get_tree().create_timer(0.1)  ## 创建一次性计时器
 	## 计时器超时后，切换到移动状态

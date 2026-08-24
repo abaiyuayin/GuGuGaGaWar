@@ -2,14 +2,30 @@ extends Window
 ## 成就展示窗口（战役地图内打开）
 ## 列出全部成就，显示已解锁 / 未解锁状态（纯荣誉，无数值奖励）
 
+@onready var vbox: VBoxContainer = $VBox
 @onready var ach_list: VBoxContainer = $VBox/ScrollContainer/AchList
 @onready var close_button: Button = $VBox/CloseButton
 
 func _ready() -> void:
+	## #24：窗口底色统一为「兵种详情框」同款米色（显式铺一层，避免嵌入窗口主题差异导致白底）
+	_add_detail_background()
 	_populate()
+	## #24：窗口外观统一为「兵种详情框」同款米色描边风格（去掉系统标题栏/黑框）
+	UIButtonHelper.setup_detail_frame_dialog(self)
+	## #25-fix：嵌入式 Window 的 panel.content_margin 对子节点布局不生效，
+	## 必须改用 vbox 的 margin_* 主题常量把内容整体往里推 20px，文本才不贴边。
+	vbox.add_theme_constant_override("margin_left", 20)
+	vbox.add_theme_constant_override("margin_right", 20)
+	vbox.add_theme_constant_override("margin_top", 20)
+	vbox.add_theme_constant_override("margin_bottom", 20)
+	## 框内标题（原生标题栏已隐藏）
+	var title_lbl := UIButtonHelper.make_detail_frame_title("成就")
+	vbox.add_child(title_lbl)
+	vbox.move_child(title_lbl, 0)
 	## #12（2026-08-11）：关闭按钮放大至 180×56、字号同步放大，与设置/确认弹窗一致
 	close_button.custom_minimum_size = Vector2(180, 56)
 	close_button.add_theme_font_size_override("font_size", 28)
+	UIButtonHelper.setup_button(close_button)
 	close_button.pressed.connect(_on_close_pressed)
 	close_requested.connect(_on_close_pressed)
 	## 监听开发者模式切换：关闭时禁用图标上传功能
@@ -21,12 +37,10 @@ const ICON_SIZE: int = 44
 const COLOR_GOLD: Color = Color(0.95, 0.78, 0.28, 1.0)
 ## 已解锁状态文字绿
 const COLOR_UNLOCKED_TEXT: Color = Color(0.4, 0.85, 0.4, 1.0)
-## 未解锁成就名（保持高亮度，必须清晰可读）
-const COLOR_LOCKED_NAME: Color = Color(0.94, 0.94, 0.94, 1.0)
-## 未解锁成就描述
-const COLOR_LOCKED_DESC: Color = Color(0.82, 0.82, 0.82, 1.0)
-## 未解锁状态文字
-const COLOR_LOCKED_STATUS: Color = Color(0.78, 0.78, 0.78, 1.0)
+## #24：未解锁文字统一为兵种详情框同款深棕色（适配米色背景）
+const COLOR_LOCKED_NAME: Color = Color(0.35, 0.12, 0.08, 1.0)
+const COLOR_LOCKED_DESC: Color = Color(0.30, 0.22, 0.12, 1.0)
+const COLOR_LOCKED_STATUS: Color = Color(0.30, 0.22, 0.12, 1.0)
 ## 已解锁徽章底色（暖金）
 const COLOR_ICON_BG_UNLOCKED: Color = Color(0.22, 0.18, 0.07, 1.0)
 ## 未解锁徽章底色（冷暗）
@@ -68,12 +82,12 @@ func _create_row(entry: Dictionary) -> HBoxContainer:
 	icon_panel.custom_minimum_size = Vector2(ICON_SIZE, ICON_SIZE)
 	icon_panel.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	var icon_style := StyleBoxFlat.new()
-	## 已解锁：暖金底 + 金边 + 加粗描边；未解锁：冷暗底 + 细灰边
+	## 已解锁：暖金底 + 金边 + 加粗描边；未解锁：冷暗底 + 深棕细边（与米色底协调）
 	## 视觉差集中在徽章上，正文文字保持高亮度（可读性优先，见下方注释）
 	icon_style.bg_color = COLOR_ICON_BG_UNLOCKED if unlocked else COLOR_ICON_BG_LOCKED
 	icon_style.set_corner_radius_all(int(ICON_SIZE / 2.0))
 	icon_style.set_border_width_all(3 if unlocked else 1)
-	icon_style.border_color = COLOR_GOLD if unlocked else Color(0.32, 0.32, 0.36, 1.0)
+	icon_style.border_color = COLOR_GOLD if unlocked else Color(0.35, 0.25, 0.13, 1.0)
 	icon_panel.add_theme_stylebox_override("panel", icon_style)
 	row.add_child(icon_panel)
 
@@ -83,7 +97,7 @@ func _create_row(entry: Dictionary) -> HBoxContainer:
 	icon_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	icon_btn.text = "★"
 	icon_btn.add_theme_font_size_override("font_size", 24)
-	icon_btn.add_theme_color_override("font_color", COLOR_GOLD if unlocked else Color(0.4, 0.4, 0.4, 1.0))
+	icon_btn.add_theme_color_override("font_color", COLOR_GOLD if unlocked else Color(0.35, 0.12, 0.08, 1.0))
 	icon_panel.add_child(icon_btn)
 	icon_btn.expand_icon = true
 	icon_btn.tooltip_text = tr("ACH_ICON_TOOLTIP")
@@ -135,7 +149,7 @@ func _create_row(entry: Dictionary) -> HBoxContainer:
 	var desc_label := Label.new()
 	desc_label.text = show_desc
 	desc_label.add_theme_font_size_override("font_size", 13)
-	desc_label.add_theme_color_override("font_color", COLOR_LOCKED_DESC if not unlocked else Color(0.90, 0.90, 0.90, 1.0))
+	desc_label.add_theme_color_override("font_color", COLOR_LOCKED_DESC if not unlocked else Color(0.30, 0.22, 0.12, 1.0))
 	desc_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	info_box.add_child(desc_label)
 
@@ -155,6 +169,23 @@ func _create_row(entry: Dictionary) -> HBoxContainer:
 
 func _on_close_pressed() -> void:
 	queue_free()
+
+## #24：在窗口最底层铺一张与兵种详情框同款的米色描边背景
+## 部分嵌入窗口（战役地图内打开的 Window）主题渲染与 AcceptDialog 不同，仅靠 setup_detail_frame_dialog
+## 的 panel 覆盖会出现白底；显式铺一层 Panel 最稳妥，保证米色底稳定可见。
+func _add_detail_background() -> void:
+	var bg := Panel.new()
+	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var st := StyleBoxFlat.new()
+	st.bg_color = Color(0.93, 0.86, 0.70, 1.0)
+	st.border_color = Color(0.35, 0.25, 0.13, 1.0)
+	st.set_border_width_all(3)
+	st.set_corner_radius_all(8)
+	st.set_content_margin_all(14)
+	bg.add_theme_stylebox_override("panel", st)
+	add_child(bg)
+	move_child(bg, 0)
 
 ## 开发者模式切换：关闭时统一禁用图标上传按钮（开启时恢复）
 func _on_dev_mode_changed(on: bool) -> void:

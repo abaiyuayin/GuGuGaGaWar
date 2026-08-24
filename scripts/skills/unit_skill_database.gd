@@ -117,11 +117,32 @@ const SKILL_DEFS: Array[Dictionary] = [
 static var _by_unit: Dictionary = {}
 static var _built: bool = false
 
+## ============================================================
+## 标准模式兵种技能系统总开关（2026-08-21 用户要求「先停用」）
+## ============================================================
+## false = 停用：has_skill() 恒返回 false、get_skill_for_unit() 恒返回空字典。
+## 于是 unit_base._setup_skill_component() 直接不挂组件，
+## 已挂载的 UnitSkillComponent 也会在 _ready 查表拿到空字典后自我 queue_free。
+## 单位不会再切入 "skill" 状态，SkillEffects 也不会被调用。
+##
+## 为什么在这里加而不是把各技能的 enabled 改成 false：
+##   1. 单点可逆——恢复时只改这一行，不必逐条回滚数据、不会漏项或改错值；
+##   2. 各技能自己的 enabled 语义保持原样（表示「这条技能本身做完了没」），
+##      与「整个系统要不要开」是两件事，混在一起以后会分不清是谁关的。
+##
+## 注意：本开关**只管标准模式**（战役 / 全面战争 / 双人）。
+## 肉鸽模式的英雄技能走 autoload/hero_skill_manager.gd，与本表完全无关，不受影响。
+## 另外 _built 是 static var，缓存只构建一次，改动本开关需重启才生效。
+const SYSTEM_ENABLED: bool = false
+
 ## 构建查找表：只收录 enabled == true 的技能
 static func _build() -> void:
 	if _built:
 		return
 	_built = true
+	## 总开关关闭时留空表，等价于「所有兵种都没有技能」
+	if not SYSTEM_ENABLED:
+		return
 	for d in SKILL_DEFS:
 		if not bool(d.get("enabled", false)):
 			continue

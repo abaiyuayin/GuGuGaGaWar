@@ -10,7 +10,7 @@ display_name = "盾矛兵"
 description = "咕嘎阵营中阶近战输出。以圆盾护身，单手长矛进行突刺，对重甲单位也有不错杀伤。"
 tier = 2
 cost = 50
-armor_value = 80
+armor_value = 70
 move_speed = 1.5
 damage = 30
 damage_type = 1
@@ -21,7 +21,7 @@ damage_by_type = {
 attack_range = 1.5
 attack_speed = 3.0
 damage_by_hit = [{
-1: 25
+1: 20
 }]
 attack_hit_frame_start = 14
 attack_sound_frame = 14

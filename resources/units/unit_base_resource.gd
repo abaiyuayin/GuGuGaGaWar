@@ -84,12 +84,6 @@ class_name UnitResource extends Resource  ## 声明类名为 UnitResource，继�
 @export var attack_sound_frame: int = -1
 ## 备用攻击动画（attack_alt_frames）的独立音效帧：-1 = 未配置时沿用攻击一的音效帧
 @export var attack_sound_frame_alt: int = -1
-## 后摇站定循环帧（0 开始的帧索引，按配置顺序乒乓循环：1 2 3 4 5 4 3 2 1...）
-## 仅对无待机动画的兵种生效（有待机动画后摇站定优先播待机）；空数组 = 站定冻结在攻击收尾姿势
-## 帧索引基于攻击动画帧集，控制台「帧图调整-设置后摇帧」配置，保存到 .tres
-@export var attack_recovery_frames: Array[int] = []
-## 备用攻击动画（attack2）的独立后摇循环帧：双攻击兵种两套各配各的
-@export var attack_recovery_frames_alt: Array[int] = []
 ## 多段连击的判定帧列表（与 attack_count 对应）
 ## 每个元素为该次命中的判定帧索引（0 开始）
 ## 空数组 []：使用 attack_hit_frame_start 单帧判定逻辑
@@ -193,6 +187,9 @@ class_name UnitResource extends Resource  ## 声明类名为 UnitResource，继�
 ## 飞行物贴图朝向补偿（度）。在「朝向飞行方向」基础上再叠加的固定旋转，
 ## 用于素材本身朝向不对的情况（如 G5 标枪需要额外转 180°）
 @export var projectile_rotation_offset: float = 0.0
+## 飞行物发射位置的 Y 轴偏移（像素）。正值下移、负值上移（Godot 坐标系 Y 轴向下）。
+## 用于个别骑乘/持弓兵种的弹道从更高处（如弓弦）发射，默认 0 从单位原点发射。
+@export var projectile_spawn_offset_y: float = 0.0
 ## 是否远程单位（只读属性）
 ## 优先使用 is_ranged_override（-1=自动, 0=近战, 1=远程），否则根据 attack_range 自动判断
 var is_ranged: bool:

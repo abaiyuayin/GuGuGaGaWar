@@ -40,6 +40,9 @@ var is_two_player: bool = false
 var _penguin_event_enabled: bool = true
 ## 开发工具：仓鼠士兵觉醒强制百分百触发（部署 G1 时掷点必中）
 var _g1_hamster_force: bool = false
+## 2026-08-21 曾暂时隐藏仓鼠士兵事件的自动觉醒触发（部署 G1 不再随机变 S2），
+## 用户随后要求恢复（取消隐藏）。置 false 可再次停用；开发工具的「召唤仓鼠士兵」手动入口不受影响。
+var _hamster_autotrigger_enabled: bool = true
 
 ## 异象/特殊事件（死亡使者 Y1 / 蓝女巫 S1）一局内各最多触发一次
 ## 范围：战役 / 全面战争（非双人、非肉鸽）
@@ -553,6 +556,10 @@ func spawn_unit(unit_res: Resource, player_id: int, at_position: Vector2 = Vecto
 		unit.global_position = at_position
 	else:
 		unit.global_position = Vector2(spawn_x, spawn_y)  ## 设置单位的全局出生坐标
+	## #对象池（2026-08-20）：lane_y 原先只在 _ready() 赋值一次，而 _ready 对同一实例只跑一次，
+	## 从池里复用出来的单位会沿用**上一世**的出生 Y 线，被 _return_to_lane 持续往旧阵线拉。
+	## 必须在设完 global_position 之后刷新（setup() 早于本行执行，写在 setup 里会取到旧坐标）。
+	unit.lane_y = unit.global_position.y
 	
 	## 根据玩家 ID 将单位加入对应的单位列表
 	if player_id == 0:
@@ -570,6 +577,8 @@ func spawn_unit(unit_res: Resource, player_id: int, at_position: Vector2 = Vecto
 ## 返回值: 替换后的兵种资源（未触发时原样返回）
 func _maybe_apply_hamster_replacement(unit_res: Resource, player_id: int) -> Resource:
 	if unit_res == null or unit_res.unit_id != "G1":
+		return unit_res
+	if not _hamster_autotrigger_enabled:  ## 2026-08-21 暂时隐藏自动觉醒触发
 		return unit_res
 	if RoguelikeManager.is_active:  ## 肉鸽不触发
 		return unit_res
@@ -655,6 +664,12 @@ func retreat_unit(unit: Node2D, player_id: int) -> void:
 ## 注意：基地单位（is_base_unit）不占列表、由 battlefield 单独管理，不进池。
 func recycle_unit(unit: Node2D) -> void:
 	if unit == null or not is_instance_valid(unit):
+		return
+	## #闪退修复（2026-08-21）：基地/水晶单位一律不入池。其 is_base_unit 标志、
+	## 「base_unit」组成员资格与水晶外观残留无法被 setup() 复位（_create_base_unit
+	## 先置 is_base_unit 再调 setup，setup 内不能清该标志），一旦入池会被当普通兵
+	## 复用出「is_base_unit=true 的假兵」。水晶被摧毁后留在原场景随切换销毁即可。
+	if unit is Unit and (unit as Unit).is_base_unit:
 		return
 	## 防重入：死亡动画 tween 回调与 2s 兜底 timer 可能先后触发，已在池中则跳过；
 	## 已入销毁队列（清池/池满时 queue_free 的）也跳过
@@ -779,8 +794,17 @@ func clear_all_units() -> void:
 			doomed.append(u as Node)
 	player_units.clear()
 	enemy_units.clear()
+	## #对象池（2026-08-20）：原先全量 queue_free，清一次场就把池里的实例全丢了，
+	## 清场后紧接着的刷兵只能 instantiate() 重建 → 「清空后再出兵特别卡」。
+	## 改为回收到池（recycle_unit 内部会置 is_dead 之外的复位并在池满时兜底 queue_free）。
 	for u in doomed:
-		u.queue_free()
+		## doomed 是 Array[Node]，先转 Unit 再用（recycle_unit 形参是 Node2D，
+		## 直接传 Node 会产生不安全类型访问；转型后同时能安全访问 is_dead）
+		var unit := u as Unit
+		if unit == null:
+			continue
+		unit.is_dead = true  ## 标记死亡，避免回池后残留状态机继续跑（recycle 会关物理处理）
+		recycle_unit(unit)
 	## 通知双方 UI 刷新人口计数
 	unit_removed.emit(0)
 	unit_removed.emit(1)

@@ -6,6 +6,7 @@ extends Window
 ## 高级兵种展示顺序（按阵营 G→D→F→N）
 const UNIT_ORDER: Array[String] = ["G5", "G6", "D2", "D5", "D6", "F4", "N5"]
 
+@onready var vbox: VBoxContainer = $VBox
 @onready var merit_label: Label = $VBox/MeritLabel
 @onready var unit_list: VBoxContainer = $VBox/ScrollContainer/UnitList
 @onready var close_button: Button = $VBox/CloseButton
@@ -22,9 +23,24 @@ func _ready() -> void:
 	_populate()
 	_refresh_merit()
 	_refresh_buttons()
+	## #24：窗口底色统一为「兵种详情框」同款米色（显式铺一层，避免嵌入窗口主题差异导致白底）
+	_add_detail_background()
+	## #24：窗口外观统一为「兵种详情框」同款米色描边风格（去掉系统标题栏/黑框）
+	UIButtonHelper.setup_detail_frame_dialog(self)
+	## #25-fix：嵌入式 Window 的 panel.content_margin 对子节点布局不生效，
+	## 必须改用 vbox 的 margin_* 主题常量把内容整体往里推 20px，文本才不贴边。
+	vbox.add_theme_constant_override("margin_left", 20)
+	vbox.add_theme_constant_override("margin_right", 20)
+	vbox.add_theme_constant_override("margin_top", 20)
+	vbox.add_theme_constant_override("margin_bottom", 20)
+	## 框内标题（原生标题栏已隐藏）
+	var title_lbl := UIButtonHelper.make_detail_frame_title("兵种解锁")
+	vbox.add_child(title_lbl)
+	vbox.move_child(title_lbl, 0)
 	## #12（2026-08-11）：关闭按钮放大至 180×56、字号同步放大，与设置/确认弹窗一致
 	close_button.custom_minimum_size = Vector2(180, 56)
 	close_button.add_theme_font_size_override("font_size", 28)
+	UIButtonHelper.setup_button(close_button)
 	close_button.pressed.connect(_on_close_pressed)
 	close_requested.connect(_on_close_pressed)
 
@@ -60,10 +76,12 @@ func _populate_star_units() -> void:
 func _create_star_row(res: UnitResource, unit_id: String, need: int) -> HBoxContainer:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 10)
+	row.add_theme_constant_override("margin_left", 12)
 	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 
 	var name_label := Label.new()
 	name_label.text = res.get_display_name()
+	name_label.add_theme_color_override("font_color", Color(0.35, 0.12, 0.08, 1.0))
 	name_label.custom_minimum_size = Vector2(150, 0)
 	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(name_label)
@@ -87,16 +105,19 @@ func _create_star_row(res: UnitResource, unit_id: String, need: int) -> HBoxCont
 func _create_row(res: UnitResource, unit_id: String, cost: int) -> HBoxContainer:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 10)
+	row.add_theme_constant_override("margin_left", 12)
 	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 
 	var name_label := Label.new()
 	name_label.text = res.get_display_name()
+	name_label.add_theme_color_override("font_color", Color(0.35, 0.12, 0.08, 1.0))
 	name_label.custom_minimum_size = Vector2(150, 0)
 	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(name_label)
 
 	var cost_label := Label.new()
 	cost_label.text = "战功 %d" % cost
+	cost_label.add_theme_color_override("font_color", Color(0.30, 0.22, 0.12, 1.0))
 	cost_label.custom_minimum_size = Vector2(80, 0)
 	row.add_child(cost_label)
 
@@ -173,6 +194,9 @@ func _show_top_hint(text: String) -> void:
 func _refresh_merit() -> void:
 	## #23：战功后方追加星星数量显示（成就解锁的星星数）
 	merit_label.text = "战功: %d     ★ 星星: %d" % [CampaignProgress.get_merit(), CampaignProgress.get_total_stars()]
+	merit_label.add_theme_color_override("font_color", Color(0.35, 0.12, 0.08, 1.0))
+	merit_label.add_theme_font_size_override("font_size", 16)
+	merit_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 
 func _refresh_buttons() -> void:
 	for unit_id in _buy_buttons:
@@ -195,3 +219,20 @@ func _refresh_buttons() -> void:
 
 func _on_close_pressed() -> void:
 	queue_free()
+
+## #24：在窗口最底层铺一张与兵种详情框同款的米色描边背景
+## 嵌入窗口（战役地图内打开的 Window）主题渲染与 AcceptDialog 不同，仅靠 setup_detail_frame_dialog
+## 的 panel 覆盖会出现白底；显式铺一层 Panel 最稳妥，保证米色底稳定可见。
+func _add_detail_background() -> void:
+	var bg := Panel.new()
+	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var st := StyleBoxFlat.new()
+	st.bg_color = Color(0.93, 0.86, 0.70, 1.0)
+	st.border_color = Color(0.35, 0.25, 0.13, 1.0)
+	st.set_border_width_all(3)
+	st.set_corner_radius_all(8)
+	st.set_content_margin_all(14)
+	bg.add_theme_stylebox_override("panel", st)
+	add_child(bg)
+	move_child(bg, 0)

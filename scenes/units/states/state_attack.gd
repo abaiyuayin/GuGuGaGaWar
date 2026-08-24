@@ -109,9 +109,13 @@ func update(delta: float) -> void:  ## 重写每帧更新方法
 		##      射程内确实没人了就中断周期回移动状态，不再空转动画。
 		if res.is_ranged and _is_target_lost():  ## 远程且目标已失效
 			if not _reacquire_ranged_target(res):  ## 射程内没有可换的目标
-				_abort_attack_cycle()  ## 中断当前攻击周期
-				unit.change_state(unit.get_idle_state_name())  ## 回到默认状态重新索敌
-				return  ## 直接返回
+				## 多段连击远程单位（attack_hit_frames 非空）：目标中途死亡且射程内无可换目标时，
+				## 不中断周期，剩余连击段由 perform_attack 朝默认方向空发白球（保证连击发满）。
+				if res.attack_hit_frames.is_empty():  ## 非多段连击：维持原「中断回移动」行为
+					_abort_attack_cycle()  ## 中断当前攻击周期
+					unit.change_state(unit.get_idle_state_name())  ## 回到默认状态重新索敌
+					return  ## 直接返回
+				## 多段连击：保留 target 引用继续周期，剩余段空发兜底
 		_attack_cycle(delta, res, Vector2.ZERO)  ## 执行攻击周期（不依赖目标距离）
 		return  ## 直接返回
 
@@ -154,8 +158,6 @@ func update(delta: float) -> void:  ## 重写每帧更新方法
 	if _hard_recovery_timer > 0.0:
 		_hard_recovery_timer -= delta
 		_backswing_update(delta, res)  ## #2/#3 后摇行为（目标失效内部已切换状态）
-		if _hard_recovery_timer <= 0.0:  ## 硬后摇结束 → 直接转回攻击判定（不再叠加恢复期后撤窗口，避免总后摇 2-3s）
-			unit.stop_recovery_tail()  ## 停止末段循环
 		return  ## 硬后摇期间不执行任何攻击判定
 
 	## #8（2026-08-15）：取消恢复期后撤窗口（_recovery_countdown 风筝），总后摇 = 硬后摇（攻击冷却）≈ 1s，
@@ -351,8 +353,7 @@ func _backswing_update(delta: float, res: UnitResource) -> void:
 			return
 		unit.velocity = Vector2.ZERO  ## 停下不动
 		unit.move_and_slide()
-		## 后摇站定优先级链（2026-08-17）：待机动画 > 后摇乒乓循环帧 > 冻结当前帧
-		## （原 #14「定格保持攻击末帧」行为保留为链的兜底分支）
+		## 后摇站定（2026-08-21）：待机动画 > 奔跑动画
 		unit.play_backswing_stand()
 	else:
 		## #2 近战：攻击范围内有敌人 → 停下不动；没敌人 → 奔跑追击
@@ -360,7 +361,7 @@ func _backswing_update(delta: float, res: UnitResource) -> void:
 			unit.velocity = Vector2.ZERO  ## 停下不动（等冷却结束再挥）
 			unit.move_and_slide()
 			unit.set_facing_hysteresis(hr_dist_vec.x, Constants.ATTACK_FACING_DEADBAND_PX)  ## 保持面向目标
-			unit.play_backswing_stand()  ## 后摇站定优先级链（原 play_anim("idle")）
+			unit.play_backswing_stand()  ## 后摇站定：待机动画 > 奔跑动画
 		else:
 			_move_towards_target(delta, res, hr_dist_vec)  ## 没敌人（超射程）：奔跑追击
 

@@ -20,7 +20,7 @@ damage_by_type = {
 attack_speed = 2.5
 attack_hit_types = Array[int]([2])
 damage_by_hit = [{
-2: 20
+2: 25
 }]
 attack_hit_frame_start = 13
 attack_sound_frame = 13

@@ -58,6 +58,73 @@ static func get_panel_style(texture_path: String, modulate: Color = Color(1, 1, 
 	style.modulate_color = modulate
 	return style
 
+## 获取「加载提示框（进度条框）」同款米色描边样式
+## 加载框 / 局内设置弹框 / 局外设置弹框共用这一份定义，保证三处外观完全一致；
+## 想调风格只改这里即可，不会再出现各处数值漂移。每次返回新实例，避免调用方互相污染。
+static func get_loading_frame_style() -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.93, 0.86, 0.70, 0.98)
+	style.border_color = Color(0.35, 0.25, 0.13, 1.0)
+	style.set_border_width_all(3)
+	style.set_corner_radius_all(8)
+	style.content_margin_left = 20.0
+	style.content_margin_right = 20.0
+	style.content_margin_top = 10.0
+	style.content_margin_bottom = 10.0
+	return style
+
+## 把「进度条框」同款样式套到 Control / Window（AcceptDialog 等弹窗直接可用）
+static func setup_loading_frame_panel(target: Variant) -> void:
+	if target is Control or target is Window:
+		target.add_theme_stylebox_override("panel", get_loading_frame_style())
+
+## 获取「长按兵种按钮 → 兵种详情框」同款米色描边样式（羊皮纸底 + 深棕边框 + 圆角）
+## 数值与 hud.gd 的 _show_unit_detail_popup 逐项一致（含 alpha=1.0 完全不透明）。
+## 与 get_loading_frame_style() 的差别：详情框内边距四周统一 14 且不透明，加载框是 20/20/10/10 且 0.98。
+## 每次返回新实例，避免调用方互相污染。
+static func get_detail_frame_style() -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.93, 0.86, 0.70, 1.0)
+	style.border_color = Color(0.35, 0.25, 0.13, 1.0)
+	style.set_border_width_all(3)
+	style.set_corner_radius_all(8)
+	style.set_content_margin_all(14)
+	return style
+
+## 把 AcceptDialog / ConfirmationDialog 打扮成与兵种详情框（PopupPanel）完全一致的外观
+## 背景：详情框是 PopupPanel，只有一个 `panel` 样式，天生没有窗口装饰；
+## 而 Dialog 继承自 Window，黑框来自 Window 的 `embedded_border` / `embedded_unfocused_border`
+## 两个 StyleBox，外加 `title_height=36` 的标题栏占位与右上角 `close` 图标——
+## 这些都不受 `panel` 覆盖影响，只改 panel 是去不掉黑框的（Godot 4.7 实测）。
+## 本函数把上述装饰全部压成不可见，使 Dialog 只剩下与详情框同款的米色描边框。
+## title 文字请改由调用方在框内加 Label 呈现（标题栏已不可见）。
+static func setup_detail_frame_dialog(dialog: Window) -> void:
+	if dialog == null or not is_instance_valid(dialog):
+		return
+	## ① 主体：与兵种详情框同款米色描边框
+	dialog.add_theme_stylebox_override("panel", get_detail_frame_style())
+	## ② 窗口装饰边框（黑框本体）：换成完全空的 StyleBoxEmpty
+	dialog.add_theme_stylebox_override("embedded_border", StyleBoxEmpty.new())
+	dialog.add_theme_stylebox_override("embedded_unfocused_border", StyleBoxEmpty.new())
+	## ③ 标题栏高度清零，否则顶部会留 36px 空白
+	dialog.add_theme_constant_override("title_height", 0)
+	## ④ 标题文字与描边设为全透明（双保险：即便还有绘制也看不见）
+	dialog.add_theme_color_override("title_color", Color(0, 0, 0, 0))
+	dialog.add_theme_color_override("title_outline_modulate", Color(0, 0, 0, 0))
+	## ⑤ 右上角关闭图标换成 1x1 全透明贴图，避免悬空的 X
+	var blank := ImageTexture.create_from_image(Image.create(1, 1, false, Image.FORMAT_RGBA8))
+	dialog.add_theme_icon_override("close", blank)
+	dialog.add_theme_icon_override("close_pressed", blank)
+
+## 生成与兵种详情框首行同款的标题 Label（深棕、22 号字）
+## 配合 setup_detail_frame_dialog()：窗口标题栏已隐藏，标题改在框内呈现。
+static func make_detail_frame_title(text: String) -> Label:
+	var lbl := Label.new()
+	lbl.text = text
+	lbl.add_theme_font_size_override("font_size", 22)
+	lbl.add_theme_color_override("font_color", Color(0.35, 0.12, 0.08, 1.0))
+	return lbl
+
 ## 显示「获得新兵种！」解锁确认框（#19：通关首通弹窗与战功购买解锁弹窗共用）
 ## 由 campaign_map（关卡首通）与 unit_unlock_window（战功购买）调用，避免两处重复维护。
 ## parent: 弹窗父节点（Window 需挂在场景内节点下）；display_name: 兵种显示名；unit_id: 兵种 ID。
@@ -162,6 +229,30 @@ static func _setup_style(btn: Button, bg_normal: Color, bg_hover: Color,
 	btn.add_theme_color_override("font_hover_color", font_color)
 	btn.add_theme_color_override("font_pressed_color", font_color)
 	btn.add_theme_color_override("font_disabled_color", font_color)
+
+## 为按钮设置米色羊皮卷纸风格（与兵种详情框/面板同款羊皮纸纹理）
+## normal=原色，hover=提亮，pressed=压暗，disabled=半透明；字体统一深棕。
+static func setup_parchment_button(btn: Button, font_color: Color = Color(0.35, 0.12, 0.08, 1.0)) -> void:
+	var states := ["normal", "hover", "pressed", "disabled"]
+	for state in states:
+		var st := StyleBoxTexture.new()
+		st.texture = load(TEX_PANEL_PARCHMENT)
+		st.set_expand_margin_all(4)
+		match state:
+			"normal":
+				st.modulate_color = Color(1.0, 1.0, 1.0, 1.0)
+			"hover":
+				st.modulate_color = Color(1.08, 1.02, 0.9, 1.0)
+			"pressed":
+				st.modulate_color = Color(0.85, 0.8, 0.65, 1.0)
+			"disabled":
+				st.modulate_color = Color(0.7, 0.65, 0.55, 0.6)
+		btn.add_theme_stylebox_override(state, st)
+	btn.add_theme_color_override("font_color", font_color)
+	btn.add_theme_color_override("font_hover_color", font_color)
+	btn.add_theme_color_override("font_pressed_color", font_color)
+	btn.add_theme_color_override("font_disabled_color", font_color)
+	_setup_click_effect(btn)
 
 ## 设置点击闪烁特效（仅改变亮度，不改变大小，避免推动 UI）
 static func _setup_click_effect(btn: Button) -> void:

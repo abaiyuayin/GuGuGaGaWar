@@ -94,13 +94,6 @@ var anim_skill_frames: SpriteFrames = null  ## 技能动画帧资源（#技能�
 var _s1_attack_offsets: Array[Vector2] = []  ## 每帧「画布中心-内容中心」偏移（纹理像素）
 var _s1_attack_compensate: bool = false  ## S1 攻击是否启用补偿
 var _frame_signal_connected: bool = false  ## frame_changed 是否已连接
-## 攻击后摇站定动画（2026-08-17）：后摇站定时段按优先级 待机动画 > 后摇乒乓循环帧 > 冻结当前帧。
-## 循环帧在攻击帧集上手动驱动（_process），按配置顺序到达两端折返：1 2 3 4 5 4 3 2 1...
-var _recovery_playing: bool = false  ## 是否正在播放后摇循环帧
-var _recovery_seq: Array[int] = []  ## 后摇循环帧序列（按配置顺序的帧索引）
-var _recovery_pos: int = 0  ## 当前在序列中的位置索引
-var _recovery_dir: int = 1  ## 乒乓方向（+1 正放 / -1 倒放）
-var _recovery_frame_accum: float = 0.0  ## 帧推进时间累加器
 ## 攻击动画身体锚点补偿（#G2-offset 2026-08-14）：move 与 attack 画布尺寸/角色居中不一致时，
 ## 切换动画会让单位整块横移（G2 attack 703x470 角色偏右 ~129px，move 400x400 居中）。
 ## 计算「攻击首帧角色内容中心」相对「move 首帧角色内容中心」的常量偏移（已折算两套动画缩放比），
@@ -209,6 +202,8 @@ var is_base_unit: bool = false  ## 基地单位标志
 var order_pos: Vector2 = Vector2.INF  ## 玩家移动令目标（世界坐标）
 var hold_position: bool = false  ## 是否站定待命（战场模式专用）
 var combat_enabled: bool = true  ## 战场模式：是否允许交战（和平/停战=false → 完全不攻击）
+## #竞技场（2026-08-24 需求3）：朝移动令目标推进时的「被卡住计时」，见 state_move._advance_to_order
+var _order_stuck_timer: float = 0.0
 ## AI 禁用标志（用于调试模拟，true 时单位不自动切换状态）
 var ai_disabled: bool = false
 ## 出生阵线 Y 坐标（在 _ready 时记录），单位被碰撞挤压后会缓慢回归这条阵线
@@ -605,7 +600,6 @@ func _on_charge_finished() -> void:
 func play_anim(anim_name: String, force: bool = false) -> void:  ## 定义播放动画的方法
 	if unit_sprite == null:  ## 如果精灵节点不存在
 		return  ## 直接返回
-	_recovery_playing = false  ## 任何正常动画切换都终止后摇末段循环（#后摇 2026-08-14）
 	if anim_name == current_anim_state and not force:  ## 如果动画相同且不强制重播
 		return  ## 直接返回
 	current_anim_state = anim_name  ## 更新当前动画状态
@@ -675,60 +669,41 @@ func play_anim(anim_name: String, force: bool = false) -> void:  ## 定义播放
 	## 导致红方攻击时朝左（倒着攻击）。move→attack 切换时尤其明显。
 	_apply_anim_flip()
 
-## 后摇站定动画（2026-08-17 用户拍板）：后摇站定时段（近战范围内站定 / 远程原地不动）按优先级切换：
-##   1. 有待机动画 → 播待机（play_anim 同名守卫幂等）
-##   2. 配了后摇循环帧 → 在攻击帧集上乒乓循环（按配置顺序 1 2 3 4 5 4 3 2 1...，_process 驱动）
-##   3. 都没有 → 冻结当前帧原地站定（保持攻击收尾姿势）
-## 双攻击兵种按 attack_anim_toggle 跟随刚播的那套攻击动画取对应循环帧配置。
-## 幂等：后摇期间（state_attack 每帧调用）只在状态变化时切换，不重置已播进度。
+## 后摇站定动画（2026-08-21 用户拍板）：后摇站定时段（近战范围内站定 / 远程原地不动）按优先级切换：
+##   1. 有待机动画 → 播待机
+##   2. 无待机动画 → 播奔跑
 func play_backswing_stand() -> void:
 	if unit_sprite == null:
 		return
 	if anim_idle_frames != null:
-		play_anim("idle")  ## 优先级1：待机动画（同名守卫下重复调用不重播）
+		play_anim("idle")  ## 有待机动画播放待机
 		return
-	var use_alt: bool = attack_anim_toggle and anim_attack_frames_alt != null
-	var frames: SpriteFrames = anim_attack_frames_alt if use_alt else anim_attack_frames
-	var seq: Array[int] = []
-	if unit_resource != null:
-		seq = unit_resource.attack_recovery_frames_alt if use_alt else unit_resource.attack_recovery_frames
-	if frames == null or not frames.has_animation("attack") or frames.get_frame_count("attack") <= 0 or seq.is_empty():
-		unit_sprite.stop()  ## 优先级3：没配后摇帧 → 冻结当前帧原地站定
-		_recovery_playing = false
+	play_anim("move")  ## 无待机动画播放奔跑
+
+## 竞技场站定定格（#竞技场 2026-08-24 用户拍板）
+## 和平模式站着不动 / 战争模式无目标站着不动时，一律定格在行走动画第一帧；
+## 没有行走动画则定格在攻击动画第一帧。不播待机动画、不循环播放。
+func play_arena_stand() -> void:
+	if unit_sprite == null:
 		return
-	if _recovery_playing and unit_sprite.sprite_frames == frames:
-		return  ## 优先级2：已在循环该帧集，不重复初始化
-	unit_sprite.sprite_frames = frames
-	_apply_anim_scale(frames, "attack")
-	_apply_attack_speed_scale()
+	var frames: SpriteFrames = anim_move_frames
+	var anim_key: String = "move"
+	if frames == null:
+		frames = anim_attack_frames
+		anim_key = "attack"
+	if frames == null:
+		unit_sprite.stop()
+		return
+	if current_anim_state == "arena_stand" and unit_sprite.sprite_frames == frames:
+		return  ## 已定格，避免每帧重设导致抖动
+	current_anim_state = "arena_stand"
 	unit_sprite.offset = Vector2.ZERO
-	_recovery_seq = seq
-	_recovery_pos = 0
-	_recovery_dir = 1
-	_recovery_playing = true
-	_recovery_frame_accum = 0.0
-	unit_sprite.stop()  ## 关闭自动播放，改由 _process 手动驱动乒乓循环
-	unit_sprite.set_frame(clampi(seq[0], 0, frames.get_frame_count("attack") - 1))
-
-## 后摇乒乓步进（纯函数，tests/backswing_loop_test.gd 回归覆盖）：
-## 在 [0, n-1] 内按 dir 前进，撞到两端折返（端点只播一次：0 1 2 3 4 3 2 1 0 1...）；n<=1 原地不动
-## 返回 Vector2i(新位置, 新方向)
-static func pp_step(pos: int, dir: int, n: int) -> Vector2i:
-	if n <= 1:
-		return Vector2i(pos, 1)
-	var p: int = pos + dir
-	var d: int = dir
-	if p >= n:
-		p = n - 2
-		d = -1
-	elif p < 0:
-		p = 1
-		d = 1
-	return Vector2i(p, d)
-
-## 停止后摇末段循环（硬后摇结束 / 状态切换时由 play_anim 自动处理）
-func stop_recovery_tail() -> void:
-	_recovery_playing = false
+	unit_sprite.sprite_frames = frames
+	_apply_anim_scale(frames, anim_key)
+	unit_sprite.animation = anim_key
+	unit_sprite.frame = 0
+	unit_sprite.stop()  ## 定格第一帧
+	_apply_anim_flip()
 
 ## 清空动画缩放缓存（控制台修改显示尺寸后调用，使新尺寸立即生效）
 static func clear_anim_scale_cache() -> void:  ## 定义清空缩放缓存的方法
@@ -1356,26 +1331,7 @@ func _process(delta: float) -> void:  ## 重写 _process 方法
 	## 战斗结束后冻结（不结算 DoT），避免胜负已分后仍在持续掉血
 	if BattleManager.is_battle_active:
 		_update_active_affixes(delta)
-	## 后摇循环帧（2026-08-17）：手动驱动攻击帧集上的乒乓循环（按配置顺序 1 2 3 4 5 4 3 2 1...）
-	if _recovery_playing and unit_sprite != null:
-		var _rframes: SpriteFrames = unit_sprite.sprite_frames
-		if _rframes == null or not _rframes.has_animation("attack") or _recovery_seq.is_empty():
-			_recovery_playing = false  ## 帧集被外部换掉/序列异常，终止循环防卡死
-		else:
-			var _rfps: float = _rframes.get_animation_speed("attack") * maxf(unit_sprite.speed_scale, 0.0001)
-			if _rfps <= 0.0:
-				_rfps = 12.0
-			_recovery_frame_accum += delta
-			var _rfd: float = 1.0 / _rfps
-			var _rfc: int = maxi(1, _rframes.get_frame_count("attack"))
-			while _recovery_frame_accum >= _rfd:
-				_recovery_frame_accum -= _rfd
-				var _st: Vector2i = pp_step(_recovery_pos, _recovery_dir, _recovery_seq.size())
-				_recovery_pos = _st.x
-				_recovery_dir = _st.y
-				unit_sprite.set_frame(clampi(_recovery_seq[_recovery_pos], 0, _rfc - 1))
-
-## 更新信息面板位置（CanvasLayer 中需手动将世界坐标转换为屏幕坐标）
+	## 更新信息面板位置（CanvasLayer 中需手动将世界坐标转换为屏幕坐标）
 ## #1（2026-08-09）：面板在屏幕上保持固定大小（scale=1、字号/尺寸固定），不随镜头 zoom 缩放
 ## 红方（team=0）面板显示在单位左侧，蓝方（team=1）显示在单位右侧
 func _update_info_panel_position() -> void:
@@ -1709,7 +1665,7 @@ func _check_attack_hit_frame() -> void:  ## 定义检查命中帧的方法
 	if ai_disabled:
 		return
 	## 任何命中帧机制都仅在攻击动画中生效
-	if current_anim_state != "attack" or _recovery_playing:  ## 后摇末段循环期间不触发命中/音效（#后摇 2026-08-14）
+	if current_anim_state != "attack":  ## 离开攻击动画即重置命中/音效标志
 		_prev_attack_frame = -1  ## 重置上一帧索引
 		_attack_hit_emitted = false  ## 重置命中标志
 		_attack_sound_frame_played = false  ## 重置帧音效标志
@@ -1861,6 +1817,11 @@ func _physics_process(delta: float) -> void:  ## 重写 _physics_process 方法
 	## 战斗已结束（胜负已分）时冻结所有单位，停止一切移动与攻击
 	if not BattleManager.is_battle_active:
 		return
+	## #索敌卡顿（2026-08-20）：索敌节流计时器改为在此处每帧推进且仅推进一次。
+	## 旧实现把 `+= delta` 写在 _pathfind_ready() 内，而该函数同一帧会被多个调用点各调一次，
+	## 计时器实际按「调用次数」而非「时间」走，且先调用者会消费掉放行配额。
+	## 放到这里后节流窗口才真正等于 PATHFIND_INTERVAL 秒，与调用次数/顺序完全无关。
+	_pathfind_accum += delta
 	## 如果当前状态有效，调用当前状态的每帧更新
 	if current_state:  ## 如果当前状态有效
 		current_state.update(delta)  ## 调用状态的更新方法
@@ -1982,6 +1943,11 @@ func _return_to_lane(delta: float) -> void:  ## 定义阵线回归方法
 		return  ## 直接返回
 	if is_base_unit:  ## 基地单位位置固定，不参与回归
 		return  ## 直接返回
+	## #竞技场（2026-08-24）：沙盒是自由摆阵，敌人可能在任意方位。
+	## 阵线回归每帧把单位往出生 Y 拉回，会抵消追击的纵向位移 →
+	## 表现为「纵向离得远的兵一直贴着自己那条线走，永远追不上敌人」。
+	if GameManager.is_battlefield_mode:
+		return
 	var lane_dy: float = lane_y - global_position.y  ## 与出生阵线的 Y 偏差
 	if absf(lane_dy) > 2.0:  ## 偏差超过容差才回拉
 		var step_len: float = minf(absf(lane_dy), Constants.LANE_RETURN_SPEED * delta)  ## 本帧回拉步长
@@ -2073,18 +2039,39 @@ func is_target_out_of_attack_range(target_pos: Vector2, tolerance_px: float = 0.
 const PATHFIND_INTERVAL: float = 0.1
 ## 索敌节流累计计时器
 var _pathfind_accum: float = 0.0
+## 索敌节流「本帧结论」缓存（2026-08-20）：记录上次算出放行结论的物理帧序号与结论值。
+## 作用是让同一物理帧内的多个调用点（索敌 / 平分锁敌 / 友军分离）共享同一判定，
+## 避免先调用者消费掉配额导致后调用者被迫用旧缓存 —— 那正是「进射程前突然卡一下」的根因。
+var _pathfind_gate_frame: int = -1
+var _pathfind_gate_value: bool = false
 ## 友军分离推力缓存（节流窗口内复用，2026-08-18）
 var _cached_separation: Vector2 = Vector2.ZERO
 
 ## 索敌节流判定：物理帧累计达 PATHFIND_INTERVAL 才放行一次真实扫描
 ## 攻击动画周期（_attack_started 段）不索敌，由 state_attack 不调用本函数保证；
 ## 这里统一节流，覆盖所有索敌调用点（move / attack 后摇 / 守卫等）。
+##
+## #索敌卡顿（2026-08-20 用户反馈「远程兵进入射程前几步会突然卡一下」）：
+## 旧实现每次调用都 `_pathfind_accum += delta` 并在达标时清零，而本函数在**同一物理帧内
+## 会被多个调用点各调一次**（state_move 里 find_best_distributed_target → 未命中则
+## find_nearest_enemy → 再 _compute_ally_separation，最多 3 次）。后果有两个：
+##   ① 计时器按「调用次数」而非「时间」推进，节流窗口被压缩到不确定的长度；
+##   ② 更严重的是**互相抢配额**——先调用者消费掉放行额度并清零，同帧后续调用者必然
+##      拿到 false。远程兵接近敌人时正好从「射程外只调 1~2 次」跳变为「射程边缘调 3 次」，
+##      分离推力那一路被挤掉配额 → _compute_ally_separation 连续多帧返回旧缓存推力，
+##      合速度方向突变，表现就是「进入射程前几步突然卡/顿一下」。
+## 修法：计时推进移到 _physics_process 统一做（每帧且仅一帧一次），本函数只做**只读判定**，
+## 并用物理帧序号让同一帧内的所有调用者拿到一致答案 —— 谁先调都不再影响别人。
 func _pathfind_ready() -> bool:
-	_pathfind_accum += get_physics_process_delta_time()
-	if _pathfind_accum >= PATHFIND_INTERVAL:
-		_pathfind_accum = 0.0
-		return true
-	return false
+	var frame: int = Engine.get_physics_frames()
+	## 同帧内重复调用：直接复用本帧已算出的结论，不再消费/改写任何计时状态
+	if _pathfind_gate_frame == frame:
+		return _pathfind_gate_value
+	_pathfind_gate_frame = frame
+	_pathfind_gate_value = _pathfind_accum >= PATHFIND_INTERVAL
+	if _pathfind_gate_value:
+		_pathfind_accum = 0.0  ## 本帧放行，重新开始累计（一帧只清零一次）
+	return _pathfind_gate_value
 
 ## 在指定半径内查找最近的敌方单位
 ## 直接扫描 UnitContainer 中的所有单位，不依赖 Area2D 物理检测（更可靠）
@@ -2247,6 +2234,13 @@ func perform_attack(hit_index: int = 0) -> void:  ## 定义执行攻击的方法
 	## #13：一次攻击周期开始，重置本次攻击击杀计数（供「大力出奇迹」统计）
 	_attack_kill_count = 0
 
+	## 目标已失效（死亡/释放/为空）时的兜底：多段连击远程单位（attack_hit_frames 非空）
+	## 朝默认方向空发一枚白球，保证连击段数发满（目标中途死亡不吞后续段）。
+	if (target == null or not is_instance_valid(target) or target.is_dead) \
+			and unit_resource.is_ranged and not unit_resource.attack_hit_frames.is_empty():
+		_spawn_projectile_with_entries(_compute_damage_entries("", hit_index), null)
+		return
+
 	## 如果目标有效且存活
 	if target != null and is_instance_valid(target) and not target.is_dead:  ## 如果目标有效且存活
 		## 计算伤害列表：根据 damage_types 和 damage_by_type 生成 [(type, value), ...]
@@ -2330,8 +2324,8 @@ func _spawn_projectile_with_entries(damage_entries: Array, target_unit: Unit) ->
 	## 加载投射物场景
 	var projectile_scene = load("res://scenes/units/projectile.tscn")
 	var projectile = projectile_scene.instantiate()
-	## F1 元素使：投射物为白色发光亮团（直线飞行，取消追踪）
-	if unit_resource.unit_id == "F1":
+	## F1 元素使 / Hero3 菲比Hero：投射物为白色发光亮团（直线飞行，取消追踪）
+	if unit_resource.unit_id == "F1" or unit_resource.unit_id == "Hero3":
 		projectile.is_glow_orb = true
 	## 计算总伤害用于投射物显示（setup 仍用总伤害兼容旧逻辑）
 	var total_damage: int = 0
@@ -2362,6 +2356,8 @@ func _spawn_projectile_with_entries(damage_entries: Array, target_unit: Unit) ->
 	if battlefield:
 		battlefield.add_child(projectile)
 		projectile.global_position = global_position
+		## 应用投射物发射位置 Y 轴偏移（如糯糯Hero 骑射从上身弓弦发射，负值上移）
+		projectile.global_position.y += unit_resource.projectile_spawn_offset_y
 		projectile.init_direction()
 		return projectile
 	return null
@@ -2623,11 +2619,15 @@ func _on_lethal(attacker: Unit = null) -> void:
 
 ## 敌军撤退（军令「围三阙一令」enemy_retreat_pct）：受到伤害本应死亡时逃离战场。
 ## 不计击杀赏金，但会从敌方列表移除使波次可清空（走 BattleManager.retreat_unit）。
+## #对象池（2026-08-20 用户反馈「连续出一百只兵还是会很卡」）：撤退原先直接 queue_free，
+## 实例从对象池永久蒸发。撤退是每次敌方致死都可能触发的高频路径（军令「围三阙一令」），
+## 打几分钟就把预热的 ~90 个实例抽干 → 此后每次 spawn_unit 都退化成 instantiate() +
+## setup()，出兵瞬间卡顿。改为走 recycle_unit 回池（池满时它内部仍会 queue_free 兜底）。
 func _retreat() -> void:
 	is_dead = true
 	if not is_base_unit:
 		BattleManager.retreat_unit(self, team)
-	queue_free()
+	BattleManager.recycle_unit(self)
 
 ## 死亡处理方法
 ## attacker: 击杀者单位（可为 null：环境伤害/词条来源缺失时无击杀归属）
@@ -2892,6 +2892,12 @@ func _clear_pool_residue() -> void:
 	## 复位寻路节流缓存
 	_pathfind_accum = 0.0
 	_cached_separation = Vector2.ZERO
+	## #索敌卡顿（2026-08-20）：本帧结论缓存也必须复位。物理帧序号是全局单调递增的，
+	## 复用出来的实例若带着上一世写入的 _pathfind_gate_frame，虽不会等于当前帧（不会误判），
+	## 但 _pathfind_gate_value 会残留上一世的放行结论；一旦复用发生在同一帧内（清场后立即刷兵
+	## 就是这种时序），同帧调用会直接吃到旧结论。置为 -1 保证新一世的第一次调用必然重新计算。
+	_pathfind_gate_frame = -1
+	_pathfind_gate_value = false
 	## 复位显示：精灵/血条/护盾条恢复可见（死亡时被隐藏或淡出）
 	modulate = Color.WHITE
 	if unit_sprite != null:
@@ -2918,7 +2924,6 @@ func apply_skill_slow(percent: float, duration: float) -> void:
 func play_skill_anim(speed: float = 1.0) -> void:
 	if unit_sprite == null or anim_skill_frames == null:
 		return
-	_recovery_playing = false  ## 终止后摇末段循环，与 play_anim 行为一致
 	current_anim_state = "skill"
 	unit_sprite.offset = Vector2.ZERO
 	unit_sprite.sprite_frames = anim_skill_frames
@@ -3076,6 +3081,11 @@ func _on_detection_body_entered(body: Node2D) -> void:  ## 定义检测区域进
 		return  ## 直接返回
 	## AI 禁用时不自动切换状态（用于调试模拟，防止自动开始战斗）
 	if ai_disabled:
+		return
+	## #竞技场（2026-08-24）：和平模式/停战期间 combat_enabled=false，
+	## 检测区回调不得抢过状态机把单位拽进 attack —— 那正是「和平模式下两个
+	## 靠近的阵营互相冲上去打」的来源（hold_position 只拦 state_move，拦不住这里）。
+	if not combat_enabled:
 		return
 	## 检查是否为敌方且存活的单位
 	if body is Unit and body.team != team and not body.is_dead:  ## 如果是敌方且存活的单位
