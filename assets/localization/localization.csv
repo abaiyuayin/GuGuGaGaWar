@@ -26,6 +26,19 @@ BORDERLESS,无边框窗口,Borderless,Borderless,테두리 없는 창,ボーダ�
 SIMPLIFIED_CHINESE,简体中文,Simplified Chinese,Simplified Chinese,간체 중국어,簡体字,จีนตัวย่อ,Chinois simplifié,Cinese semplificato
 ENGLISH,English,English,English,영어,英語,อังกฤษ,Anglais,Inglese
 MASTER_VOLUME,主音量,Master Volume,Master Volume,마스터 볼륨,マスターボリューム,ระดับเสียงหลัก,Volume principal,Volume principale
+AUDIO_THROTTLE,音频节流（攻击/点击音效并发限制）,Audio Throttle,Audio Throttle,오디오 스로틀,オーディオ喉輪,จำกัดเสียง,Limitation audio,Limitazione audio
+SHOW_DAMAGE,显示伤害数字,Show Damage Numbers,Show Damage Numbers, damage 수치 표시,ダメージ数表示,แสดงตัวเลขดาเมจ,Afficher les dégâts,Mostra i danni
+SHOW_HP_ARMOR,显示血量/护盾数值,Show HP/Armor Values,Show HP/Armor Values,체력/방어 수치 표시,HP/鎧数値表示,แสดงค่าHP/เกราะ,Afficher PV/Armure,Mostra PV/Armatura
+BGM_RANDOM,随机播放BGM,Random BGM,Random BGM,랜덤 BGM,ランダムBGM,สุ่ม BGM,BGM aléatoire,BGM casuale
+MENU_BGM_LABEL,主题BGM,Menu BGM,Menu BGM,메뉴 BGM,テーマBGM,ธีม BGM,BGM menu,BGM menu
+BATTLE_BGM_LABEL,战斗BGM,Battle BGM,Battle BGM,전투 BGM,戦闘BGM,การต่อสู้ BGM,BGM combat,BGM combattimento
+VICTORY_BGM_LABEL,胜利BGM,Victory BGM,Victory BGM,승리 BGM,勝利BGM,ชัยชนะ BGM,BGM victoire,BGM vittoria
+DEFEAT_BGM_LABEL,失败BGM,Defeat BGM,Defeat BGM,패배 BGM,敗北BGM,ความพ่ายแพ้ BGM,BGM défaite,BGM sconfitta
+BATTLE_SETTINGS,战斗设置,Battle,Battle,전투,戦闘,การต่อสู้,Bataille,Battaglia
+BGM_SETTINGS,背景音乐设置,BGM Settings,BGM Settings,BGM 설정,BGM設定,การตั้งค่า BGM,Paramètres BGM,Impostazioni BGM
+WINDOW_SETTINGS,窗口设置,Window,Window,창 설정,ウィンドウ設定,การตั้งค่าหน้าต่าง,Fenêtre,Finestra
+LANGUAGE_SETTINGS,语言设置,Language,Language,언어 설정,言語設定,การตั้งค่าภาษา,Langue,Lingua
+AUDIO_SETTINGS,音频设置,Audio,Audio,오디오 설정,オーディオ設定,การตั้งค่าเสียง,Audio,Audio
 CONFIRM,确认,OK,OK,확인,確認,ตกลง,Confirmer,Conferma
 SAVE,保存,Save,Save,저장,保存,บันทึก,Enregistrer,Salva
 CLOSE,关闭,Close,Close,닫기,閉じる,ปิด,Fermer,Chiudi

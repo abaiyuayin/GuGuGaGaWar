@@ -55,6 +55,13 @@ var _music_player: AudioStreamPlayer = null
 var _music_stream_cache: Dictionary = {}
 ## 当前正在播放的 BGM 名称（用于判断"同一首不重启"）
 var _current_music_name: String = ""
+## 当前 BGM 上下文（"menu" / "battle"），由 play_menu_bgm / play_battle_bgm 设置。
+## 用于监听 SettingsManager.settings_changed 后在 BGM 设置变化（随机播放等）时自动重播当前场景音乐。
+var _bgm_context: String = "menu"
+## 记录当前正在播放的 menu/battle BGM 设置名，用于设置变更时只重播“对应上下文真正变化”的那一路
+## （避免在主菜单改战斗BGM时误重播主菜单BGM，见 #26）
+var _last_menu_bgm: String = ""
+var _last_battle_bgm: String = ""
 
 func _ready() -> void:  ## 节点就绪时自动调用
 	_apply_bus_volumes()  ## 应用音频总线音量
@@ -65,6 +72,11 @@ func _ready() -> void:  ## 节点就绪时自动调用
 	## 刚调用的 play_victory_bgm() 被树暂停冻结（继承模式会随树暂停）
 	_music_player.process_mode = Node.PROCESS_MODE_ALWAYS
 	add_child(_music_player)
+	## #25（2026-08-23）：监听设置变化，BGM 设置（随机播放等）改动后自动重播当前场景音乐。
+	## AudioManager 在 autoload 顺序中位于 SettingsManager 之前，需用 call_deferred 连接，
+	## 否则 SettingsManager 尚未就绪会报错。
+	if not SettingsManager.settings_changed.is_connected(_on_settings_bgm_changed):
+		SettingsManager.settings_changed.connect(_on_settings_bgm_changed)
 	## 预加载所有兵种攻击音效，避免首次攻击时的 load() 卡顿造成音效延迟（#148）
 	for uid in UNIT_IDS:
 		_get_attack_sound(uid)
@@ -148,10 +160,10 @@ func play_attack_sound(unit_id: String) -> void:  ## 播放攻击音效方法
 	_cleanup_finished_players()
 	## 判断是否为优先兵种（镜头锁定单位），优先兵种不受上限限制
 	var is_priority: bool = (_priority_unit_id != "" and unit_id == _priority_unit_id)  ## 是否为优先兵种
-	## #3 音频节流（2026-08-14 修正语义）：开启=「同时只能播放一句」（严格单并发，任一攻击音效在播即跳过）；
-	## 关闭=以前的「触发即播、不做并发限制」。旧实现用 MAX_CONCURRENT_ATTACK_SFX=10 上限，与「一句」不符、
-	## 开关开/关听感几乎无差别，表现为「开关没生效」。
-	if SettingsManager.audio_throttle and not is_priority and _active_attack_players.size() >= 1:
+	## #3 修正（2026-08-23）：节流（audio_throttle）只作用于「点击音效」与「出兵音效」，不作用于攻击音效。
+	## 攻击音效始终走并发池，最多同时播放 MAX_CONCURRENT_ATTACK_SFX 个，超出则忽略；
+	## 优先兵种（镜头锁定单位）不受上限限制，必播放。节流开关对攻击音效无任何影响。
+	if not is_priority and _active_attack_players.size() >= MAX_CONCURRENT_ATTACK_SFX:
 		return
 	## 加载音效资源（带缓存）
 	var stream: AudioStream = _get_attack_sound(unit_id)
@@ -529,12 +541,14 @@ func _play_bgm_from_path(path: String, loop: bool = true) -> void:
 	if stream == null:
 		return
 	## 设置循环模式（MP3 与 WAV 属性不同）
-	## 注意：load() 返回的是共享缓存资源，必须显式写入 false，
-	## 否则上一次被设为 true 的循环标记会残留到下一次播放
+	## 注意：load() 返回的是共享缓存资源，关闭循环时必须显式写回，否则残留标记会延续到下一次播放。
+	## Vorbis 压缩的 AudioStreamWAV 不支持运行时把 loop_mode 设为 LOOP_FORWARD（会整段静音），
+	## 故 WAV 一律只写 LOOP_DISABLED；WAV 的循环依赖导入期烘焙，运行时不再改 LOOP_FORWARD（#26）。
 	if stream is AudioStreamMP3:
 		stream.loop = loop
 	elif stream is AudioStreamWAV:
-		stream.loop_mode = AudioStreamWAV.LOOP_FORWARD if loop else AudioStreamWAV.LOOP_DISABLED
+		if not loop:
+			stream.loop_mode = AudioStreamWAV.LOOP_DISABLED
 	_music_player.stream = stream
 	## 复位 stream_paused：任何历史 pause_music 残留（stream_paused=true）都会让 play() 后
 	## 静音，且 stop()/play() 不会自动清除该标志（#9 防御）
@@ -546,7 +560,9 @@ func _play_bgm_from_path(path: String, loop: bool = true) -> void:
 ## 播放主菜单BGM
 ## 若 SettingsManager.menu_bgm 为"默认"则播放游戏自带 menu BGM，否则播放自定义BGM
 func play_menu_bgm() -> void:
+	_bgm_context = "menu"
 	var bgm_name: String = SettingsManager.menu_bgm
+	_last_menu_bgm = bgm_name
 	## "默认"或空值时回退到游戏自带 menu BGM
 	if bgm_name == "默认" or bgm_name == "":
 		play_music("menu")
@@ -557,10 +573,32 @@ func play_menu_bgm() -> void:
 		return
 	_play_bgm_from_path(path)
 
+## 设置变化后自动重播当前场景 BGM（#25：修复随机播放按钮改完设置后音乐不更新的问题）
+## 随机播放按钮只改 SettingsManager.menu_bgm/battle_bgm 并写盘，本身不负责播放；
+## 原先只有进入场景时的 _ready 调一次 play_menu_bgm，导致设置改了音乐却不切。
+## 这里按当前上下文（_bgm_context）重播对应 BGM；deferred 避免同帧 stop+play 不发声。
+## #26：仅在“与当前上下文对应的那一路 BGM 设置”真正变化时才重播，
+## 避免在主菜单改战斗BGM时误把主菜单BGM也重播一遍。
+func _on_settings_bgm_changed() -> void:
+	if _bgm_context == "battle":
+		if SettingsManager.battle_bgm != _last_battle_bgm:
+			call_deferred("play_battle_bgm")
+	else:
+		if SettingsManager.menu_bgm != _last_menu_bgm:
+			call_deferred("play_menu_bgm")
+
+## 显式设定当前 BGM 上下文（由进入战斗/主菜单的场景在连接 settings_changed 之前调用）。
+## 关键：避免进战斗初始化阶段 emit 的 settings_changed 按"menu"上下文 deferred 播主菜单 BGM，
+## 覆盖了随后同步播放的战斗 BGM（deferred 晚于同步执行 → 覆盖）。
+func set_bgm_context(ctx: String) -> void:
+	_bgm_context = ctx
+
 ## 播放战斗BGM
 ## 若 SettingsManager.battle_bgm 为"默认"则播放游戏自带 battle BGM，否则播放自定义BGM
 func play_battle_bgm() -> void:
+	_bgm_context = "battle"
 	var bgm_name: String = SettingsManager.battle_bgm
+	_last_battle_bgm = bgm_name
 	## "默认"或空值时回退到游戏自带 battle BGM
 	if bgm_name == "默认" or bgm_name == "":
 		play_music("battle")
