@@ -34,6 +34,11 @@ var is_crystal_mode: bool = false
 ## 战役/双人模式的基地水晶默认会攻击射程内敌人；开发工具可一键关闭，测试纯防御水晶
 var crystal_can_attack: bool = true
 
+## #开发工具：水晶无敌开关（默认关）——开无敌后红蓝双方水晶都不掉血（标准模式）
+## 2026-08-21 用户拍板：仅标准模式（战役/全面战争/双人）生效，肉鸽水晶不受此开关影响。
+## 在水晶受伤统一入口 damage_base 处拦截，覆盖所有会打水晶的路径（近战/远程/基地吐息/开发工具扣血）。
+var crystal_invincible: bool = false
+
 ## 基地攻击配置：战场缩小后范围相应缩小
 const BASE_ATTACK_RANGE: float = 160.0  ## 基地攻击范围（像素）
 ## #8（2026-08-09 用户拍板）：双方水晶单次伤害 100 -> 50
@@ -47,6 +52,10 @@ func get_base_attack_range() -> float:  ## 定义获取基地攻击范围的方�
 ## 获取水晶攻击开关（供开发工具菜单读取）
 func get_crystal_can_attack() -> bool:
 	return crystal_can_attack
+
+## 获取水晶无敌开关（供开发工具菜单读取，无战场时返回 false）
+func get_crystal_invincible() -> bool:
+	return crystal_invincible
 
 ## 获取指定圆心半径内的存活单位（不含基地单位）
 ## center: 圆心（世界坐标）
@@ -90,6 +99,10 @@ func _ready() -> void:  ## 重写 _ready 生命周期方法
 		red_base_hp = RoguelikeManager.crystal_hp
 		blue_base_hp = base_max_hp
 		_spawn_roguelike_crystal()
+	elif GameManager.is_battlefield_mode:
+		## #竞技场（2026-08-24 用户拍板）：沙盒无胜负、无基地 → 完全不生成水晶。
+		## has_base() 因 red/blue_base_unit 恒为 null 自然返回 false，单位不会去打空气。
+		pass
 	else:
 		## 生成基地单位（红方=G5, 蓝方=D3）
 		_spawn_base_units()
@@ -300,6 +313,10 @@ func heal_base(team: int, amount: int) -> int:
 func damage_base(team: int, damage: int, attacker: Node = null) -> void:  ## 定义基地受伤的方法
 	## #209：肉鸽水晶模式下敌方没有基地，玩家单位打到战场右端不应误判胜利
 	if is_crystal_mode and team == 1:
+		return
+	## #开发工具：水晶无敌（仅标准模式）。开启时不扣血、不发任何伤害信号，
+	## 覆盖近战/远程/基地吐息/开发工具手动扣血等所有打水晶路径（2026-08-21 用户拍板）。
+	if crystal_invincible and not is_crystal_mode:
 		return
 	## 找到对应的基地单位，直接对其造成伤害
 	var base_unit: Unit = red_base_unit if team == 0 else blue_base_unit

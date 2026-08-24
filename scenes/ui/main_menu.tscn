@@ -144,7 +144,7 @@ offset_right = -200.0
 offset_bottom = -14.0
 grow_horizontal = 0
 grow_vertical = 0
-visible = false
+visible = true
 theme_override_constants/separation = 3
 alignment = 1
 
@@ -177,7 +177,7 @@ offset_right = -108.0
 offset_bottom = -14.0
 grow_horizontal = 0
 grow_vertical = 0
-visible = false
+visible = true
 theme_override_constants/separation = 3
 alignment = 1
 
@@ -211,7 +211,7 @@ offset_right = -16.0
 offset_bottom = -14.0
 grow_horizontal = 0
 grow_vertical = 0
-visible = false
+visible = true
 theme_override_constants/separation = 3
 alignment = 1
 clip_contents = true

@@ -37,6 +37,8 @@ const GITHUB_URL: String = "https://github.com/abaiyuayin/GuGuGaGaWar"
 
 ## 当前打开的设置对话框引用
 var _settings_dialog: AcceptDialog = null
+## 设置对话框框内标题 Label（窗口标题栏已隐藏，标题改在框内呈现，需随语言刷新）
+var _settings_title_label: Label = null
 ## 设置对话框中需要动态更新的标签数组
 var _settings_labels: Array[Label] = []
 ## 设置对话框中需要动态更新的按钮数组
@@ -55,10 +57,14 @@ func _ready() -> void:
 	DevMode.dev_mode_changed.connect(_apply_dev_gating)
 	_apply_dev_gating()
 
-## #新需求：开发者专属入口仅 DevMode 可见（主菜单「控制台」按钮）
-## 非开发者模式隐藏按钮，F11 开启后恢复显示
+## #新需求：开发者专属入口仅 DevMode 可见（主菜单「控制台」「竞技场模式」按钮）
+## 非开发者模式隐藏按钮，开启开发者模式后恢复显示。
+## #竞技场（2026-08-21 用户拍板）：竞技场是无胜负的 RTS 沙盒，定位为开发/调试用，
+## 故与控制台同列为开发者专属入口。入口全项目仅此一处（BtnBattlefield），
+## 因此隐藏此按钮即等于普通玩家无法进入竞技场模式。
 func _apply_dev_gating(_on: bool = false) -> void:
 	btn_debug.visible = DevMode.enabled
+	btn_battlefield.visible = DevMode.enabled
 
 ## 开发者模式专属快捷键：F12 切换「局内」上方按钮整排（游戏帮助/游戏设置/调整/退出/开发工具）显隐
 ## 仅开发者模式下生效；切换的是全局标志 DevMode.hide_in_battle_top_buttons，因此主菜单按 F12 也能预隐藏，
@@ -120,16 +126,38 @@ func _on_btn_settings_pressed() -> void:
 	_show_settings_dialog()
 
 ## 退出游戏按钮回调：弹二次确认框，确认后退出游戏
+## 风格统一为兵种详情框同款米色描边框（与局内退出确认框一致），压掉 Godot 默认黑框/标题栏/关闭图标
 func _on_btn_quit_pressed() -> void:
 	var confirm := ConfirmationDialog.new()
-	confirm.title = tr("TIP_TITLE")
-	confirm.dialog_text = tr("QUIT_CONFIRM")
+	confirm.title = ""  ## 隐藏 Godot 默认标题栏
+	confirm.dialog_text = ""  ## 隐藏 Godot 默认正文区
 	confirm.ok_button_text = tr("CONFIRM")
 	confirm.get_cancel_button().text = tr("CANCEL")
-	confirm.confirmed.connect(get_tree().quit)
-	confirm.canceled.connect(confirm.queue_free)
+	confirm.process_mode = Node.PROCESS_MODE_ALWAYS
+	UIButtonHelper.setup_detail_frame_dialog(confirm)
 	add_child(confirm)
 	confirm.popup_centered()
+	## 在对话框弹出后，在内部构建上下两级结构（标题在上、正文在下）
+	var exit_vbox := VBoxContainer.new()
+	exit_vbox.set_anchors_preset(Control.PRESET_FULL_RECT)
+	exit_vbox.add_theme_constant_override("separation", 8)
+	exit_vbox.add_theme_constant_override("margin_top", 20)
+	exit_vbox.add_theme_constant_override("margin_bottom", 20)
+	exit_vbox.add_theme_constant_override("margin_left", 20)
+	exit_vbox.add_theme_constant_override("margin_right", 20)
+	var exit_title := UIButtonHelper.make_detail_frame_title(tr("TIP_TITLE"))
+	exit_vbox.add_child(exit_title)
+	var exit_text := Label.new()
+	exit_text.text = tr("QUIT_CONFIRM")
+	exit_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	exit_text.custom_minimum_size = Vector2(240, 0)
+	exit_text.add_theme_font_size_override("font_size", 14)
+	exit_text.add_theme_color_override("font_color", Color(0.30, 0.22, 0.12, 1.0))
+	exit_vbox.add_child(exit_text)
+	confirm.add_child(exit_vbox)
+	confirm.confirmed.connect(get_tree().quit)
+	confirm.canceled.connect(confirm.queue_free)
+	confirm.close_requested.connect(confirm.queue_free)
 
 ## 调试按钮回调：进入兵种尺寸调试界面
 func _on_btn_debug_pressed() -> void:
@@ -241,8 +269,10 @@ func _show_settings_dialog() -> void:
 		ok_btn.custom_minimum_size = Vector2(180, 56)
 	_settings_dialog.confirmed.connect(_on_settings_dialog_closed)
 	_settings_dialog.canceled.connect(_on_settings_dialog_closed)
-	## 应用木质面板底图
-	UIButtonHelper.setup_wood_panel(_settings_dialog)
+	## 2026-08-22：弹框风格彻底统一为「长按兵种按钮 → 兵种详情框」同款
+	## Dialog 继承自 Window，那圈黑框来自 Window 的 embedded_border 而非 panel，
+	## 故用 setup_detail_frame_dialog 一并压掉边框/标题栏/关闭图标，标题改在框内以 Label 呈现。
+	UIButtonHelper.setup_detail_frame_dialog(_settings_dialog)
 	## 对话框最小尺寸 450x600，内容超出可滚动
 	_settings_dialog.min_size = Vector2i(450, 600)
 	add_child(_settings_dialog)
@@ -251,13 +281,21 @@ func _show_settings_dialog() -> void:
 	_settings_labels.clear()
 	_settings_buttons.clear()
 
+	## 框内标题（窗口标题栏已隐藏，标题在此呈现；与详情框首行同款深棕大字）
+	_settings_title_label = UIButtonHelper.make_detail_frame_title(tr("SETTINGS_TITLE"))
+	_settings_dialog.add_child(_settings_title_label)
+
 	## 创建滚动容器包裹唯一设置面板组件（全部设置项统一由 SettingsPanel 提供）
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.custom_minimum_size = Vector2(430, 520)
 	_settings_dialog.add_child(scroll)
-	scroll.add_child(SettingsPanel.new())
+	## 弹框本身已是详情框同款米色底，面板内不再叠羊皮纸纹理，否则会盖掉底色
+	var panel := SettingsPanel.new()
+	panel.show_parchment_bg = false
+	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(panel)
 
 	## 居中弹出设置对话框
 	_settings_dialog.popup_centered()
@@ -267,6 +305,7 @@ func _on_settings_dialog_closed() -> void:
 	if _settings_dialog != null and is_instance_valid(_settings_dialog):
 		_settings_dialog.queue_free()
 	_settings_dialog = null
+	_settings_title_label = null
 	_settings_labels.clear()
 	_settings_buttons.clear()
 
@@ -278,6 +317,9 @@ func _update_settings_dialog_localization() -> void:
 	## 更新标题和关闭按钮
 	_settings_dialog.title = tr("SETTINGS_TITLE")
 	_settings_dialog.ok_button_text = tr("CLOSE")
+	## 标题栏已隐藏，框内标题 Label 需同步刷新
+	if _settings_title_label != null and is_instance_valid(_settings_title_label):
+		_settings_title_label.text = tr("SETTINGS_TITLE")
 	## 更新动态标签文本（基于元数据中的翻译键）
 	for lbl in _settings_labels:
 		if is_instance_valid(lbl) and lbl.has_meta("tr_key"):
