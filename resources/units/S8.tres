@@ -1,0 +1,39 @@
+[gd_resource type="Resource" script_class="UnitResource" format=3]
+
+[ext_resource type="Script" path="res://resources/units/unit_base_resource.gd" id="1_base"]
+[ext_resource type="Script" path="res://resources/affixes/affix_resource.gd" id="1_utr1v"]
+
+[resource]
+script = ExtResource("1_base")
+unit_id = "S8"
+display_name = "丽贝卡"
+description = "特殊阵营兵种。丽贝卡，来自异次元的特殊单位，奔跑/待机/攻击动画已就位（行走动画待补）。"
+tier = 4
+supply_cost = 3
+cost = 400
+max_hp = 450
+armor_value = 180
+move_speed = 3.2
+damage = 38
+damage_types = Array[int]([0])
+damage_by_type = {
+0: 38
+}
+attack_range = 1.5
+attack_range_h = 2.0
+attack_range_v = 0.5
+attack_speed = 2.0
+damage_by_hit = [{
+1: 300
+}]
+attack_hit_frame_start = 4
+attack_sound_frame = 4
+display_height = 50.0
+move_display_height = 63.0
+move_display_width = 63.0
+attack_display_height = 90.0
+attack_display_width = 90.0
+idle_display_height = 60.0
+idle_display_width = 60.0
+color_red = Color(0.85, 0.4, 0.65, 1)
+color_blue = Color(0.55, 0.35, 0.85, 1)

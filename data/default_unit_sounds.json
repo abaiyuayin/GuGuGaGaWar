@@ -1,0 +1,334 @@
+{
+	"G1": {
+		"click_sound": [
+			"res://assets/audio/shared/故嘎嘎嘎~.ogg"
+		],
+		"spawn_sound": "res://assets/audio/shared/咕嘎！.ogg",
+		"attack_sound": "res://assets/audio/shared/咕嘎G1攻击.ogg",
+		"spawn_rules": [
+			{
+				"type": 1,
+				"count": 1,
+				"sound": ""
+			}
+		]
+	},
+	"G2": {
+		"click_sound": [
+			"res://assets/audio/shared/故嘎嘎嘎~.ogg"
+		],
+		"spawn_sound": "res://assets/audio/shared/咕嘎！.ogg",
+		"attack_sound": "res://assets/audio/shared/咕嘎G2攻击.ogg",
+		"spawn_rules": [
+			{
+				"type": 0,
+				"count": 1,
+				"sound": ""
+			},
+			{
+				"type": 1,
+				"count": 3,
+				"sound": ""
+			}
+		]
+	},
+	"G3": {
+		"click_sound": [
+			"res://assets/audio/shared/故嘎嘎嘎~.ogg"
+		],
+		"spawn_sound": "res://assets/audio/shared/咕嘎！.ogg",
+		"attack_sound": "res://assets/audio/shared/咕嘎G3攻击.ogg",
+		"spawn_rules": [
+			{
+				"type": 0,
+				"count": 1,
+				"sound": ""
+			},
+			{
+				"type": 1,
+				"count": 3,
+				"sound": ""
+			}
+		]
+	},
+	"G4": {
+		"click_sound": [
+			"res://assets/audio/shared/故嘎嘎嘎~.ogg"
+		],
+		"spawn_sound": "res://assets/audio/shared/咕嘎！.ogg",
+		"attack_sound": "res://assets/audio/shared/咕嘎G4攻击.ogg",
+		"spawn_rules": [
+			{
+				"type": 0,
+				"count": 1,
+				"sound": ""
+			},
+			{
+				"type": 1,
+				"count": 3,
+				"sound": ""
+			}
+		]
+	},
+	"G5": {
+		"click_sound": [
+			"res://assets/audio/shared/故嘎嘎嘎~.ogg"
+		],
+		"spawn_sound": "res://assets/audio/shared/咕嘎！.ogg",
+		"attack_sound": "res://assets/audio/shared/咕嘎G5攻击.ogg",
+		"spawn_rules": [
+			{
+				"type": 0,
+				"count": 1,
+				"sound": ""
+			},
+			{
+				"type": 1,
+				"count": 3,
+				"sound": ""
+			}
+		]
+	},
+	"G6": {
+		"click_sound": [
+			"res://assets/audio/shared/故嘎嘎嘎~.ogg"
+		],
+		"spawn_sound": "res://assets/audio/shared/咕嘎！.ogg",
+		"attack_sound": "res://assets/audio/shared/咕嘎G6二连攻击.ogg",
+		"spawn_rules": [
+			{
+				"type": 1,
+				"count": 3,
+				"sound": ""
+			}
+		]
+	},
+	"D1": {
+		"click_sound": [
+			"res://assets/audio/shared/Doro~.ogg"
+		],
+		"spawn_sound": "res://assets/audio/units/D1/doro—！.ogg",
+		"attack_sound": "res://assets/audio/shared/DoroD1攻击.ogg",
+		"spawn_rules": []
+	},
+	"D2": {
+		"click_sound": [
+			"res://assets/audio/shared/Doro~.ogg"
+		],
+		"spawn_sound": "res://assets/audio/units/D1/dorodoro！.ogg",
+		"attack_sound": "res://assets/audio/shared/DoroD2攻击.ogg",
+		"spawn_rules": []
+	},
+	"D3": {
+		"click_sound": [
+			"res://assets/audio/shared/Doro~.ogg"
+		],
+		"spawn_sound": "res://assets/audio/units/D1/doro—！.ogg",
+		"attack_sound": "res://assets/audio/shared/DoroD3攻击.ogg",
+		"spawn_rules": []
+	},
+	"D4": {
+		"click_sound": [
+			"res://assets/audio/shared/Doro~.ogg"
+		],
+		"spawn_sound": "res://assets/audio/units/D1/dorodoro！.ogg",
+		"attack_sound": "res://assets/audio/shared/DoroD4攻击.ogg",
+		"spawn_rules": []
+	},
+	"D5": {
+		"click_sound": [
+			"res://assets/audio/shared/Doro~.ogg"
+		],
+		"spawn_sound": "res://assets/audio/units/D1/doro—！.ogg",
+		"attack_sound": "",
+		"spawn_rules": []
+	},
+	"D6": {
+		"click_sound": [
+			"res://assets/audio/shared/Doro~.ogg"
+		],
+		"spawn_sound": "res://assets/audio/units/D1/dorodoro！.ogg",
+		"attack_sound": "res://assets/audio/shared/DoroD6攻击.ogg",
+		"spawn_rules": []
+	},
+	"F1": {
+		"click_sound": [
+			"res://assets/audio/shared/菲比~.ogg"
+		],
+		"spawn_sound": "res://assets/audio/shared/菲比丘比_processed (1).ogg",
+		"attack_sound": "",
+		"spawn_rules": [
+			{
+				"type": 0,
+				"count": 1,
+				"sound": "res://assets/audio/shared/菲比丘比_processed (1).ogg"
+			}
+		]
+	},
+	"F2": {
+		"click_sound": [
+			"res://assets/audio/shared/菲八丘比_processed.ogg"
+		],
+		"spawn_sound": "res://assets/audio/shared/菲叭丘比.ogg",
+		"attack_sound": "res://assets/audio/shared/菲比F2攻击.ogg",
+		"spawn_rules": [
+			{
+				"type": 0,
+				"count": 1,
+				"sound": "res://assets/audio/shared/菲叭丘比.ogg"
+			},
+			{
+				"type": 1,
+				"count": 3,
+				"sound": "res://assets/audio/shared/菲叭秋秋比！.ogg"
+			}
+		]
+	},
+	"F3": {
+		"click_sound": [
+			"res://assets/audio/shared/菲比~.ogg",
+			"res://assets/audio/shared/菲比丘比_processed (1).ogg"
+		],
+		"spawn_sound": "res://assets/audio/shared/菲比丘比_processed (1).ogg",
+		"attack_sound": "res://assets/audio/shared/菲比F3攻击.ogg",
+		"spawn_rules": [
+			{
+				"type": 0,
+				"count": 1,
+				"sound": "res://assets/audio/shared/菲比丘比_processed.ogg"
+			}
+		]
+	},
+	"F4": {
+		"click_sound": [
+			"res://assets/audio/shared/菲比~.ogg",
+			"res://assets/audio/shared/菲比丘比_processed (2).ogg"
+		],
+		"spawn_sound": "res://assets/audio/shared/菲比丘比_processed (1).ogg",
+		"attack_sound": "res://assets/audio/shared/菲比F4攻击.ogg",
+		"spawn_rules": [
+			{
+				"type": 0,
+				"count": 1,
+				"sound": "res://assets/audio/shared/菲比丘比_processed (1).ogg"
+			}
+		]
+	},
+	"F5": {
+		"click_sound": [
+			"res://assets/audio/shared/菲比~.ogg",
+			"res://assets/audio/shared/菲比丘比_processed.ogg"
+		],
+		"spawn_sound": "res://assets/audio/shared/菲比丘比_processed (1).ogg",
+		"attack_sound": "res://assets/audio/shared/菲比F5攻击.ogg",
+		"spawn_rules": [
+			{
+				"type": 0,
+				"count": 1,
+				"sound": "res://assets/audio/shared/菲比，丘比！.ogg"
+			}
+		]
+	},
+	"N1": {
+		"click_sound": [
+			"res://assets/audio/shared/糯糯，平静_processed.ogg"
+		],
+		"spawn_sound": "res://assets/audio/shared/糯糯_processed (1).ogg",
+		"attack_sound": "",
+		"spawn_rules": [
+			{
+				"type": 0,
+				"count": 1,
+				"sound": "res://assets/audio/shared/糯糯_processed (1).ogg"
+			}
+		]
+	},
+	"N2": {
+		"click_sound": [
+			"res://assets/audio/shared/糯糯，平静_processed.ogg"
+		],
+		"spawn_sound": "res://assets/audio/shared/糯糯_processed (1).ogg",
+		"attack_sound": "res://assets/audio/shared/糯糯N2攻击动画_processed.ogg",
+		"spawn_rules": [
+			{
+				"type": 0,
+				"count": 1,
+				"sound": "res://assets/audio/shared/糯糯_processed (2).ogg"
+			}
+		]
+	},
+	"N3": {
+		"click_sound": [
+			"res://assets/audio/shared/糯糯，平静_processed.ogg"
+		],
+		"spawn_sound": "res://assets/audio/shared/糯糯_processed (1).ogg",
+		"attack_sound": "res://assets/audio/shared/糯糯N3攻击动画_processed.ogg",
+		"spawn_rules": [
+			{
+				"type": 0,
+				"count": 1,
+				"sound": "res://assets/audio/shared/糯糯_processed.ogg"
+			}
+		]
+	},
+	"N4": {
+		"click_sound": [
+			"res://assets/audio/shared/糯糯，平静_processed.ogg",
+			"res://assets/audio/shared/糯糯N4攻击动画_processed.ogg"
+		],
+		"spawn_sound": "res://assets/audio/shared/糯糯_processed (1).ogg",
+		"attack_sound": "res://assets/audio/shared/糯糯N4攻击动画_processed.ogg",
+		"spawn_rules": [
+			{
+				"type": 0,
+				"count": 1,
+				"sound": "res://assets/audio/shared/糯糯_processed (1).ogg"
+			}
+		]
+	},
+	"N5": {
+		"click_sound": [
+			"res://assets/audio/shared/糯糯，平静_processed.ogg",
+			"res://assets/audio/shared/糯糯N5攻击动画_processed.ogg"
+		],
+		"spawn_sound": "res://assets/audio/shared/糯糯_processed (1).ogg",
+		"attack_sound": "res://assets/audio/shared/糯糯N5攻击动画_processed.ogg",
+		"spawn_rules": [
+			{
+				"type": 0,
+				"count": 1,
+				"sound": "res://assets/audio/shared/糯糯，嘶吼_processed.ogg"
+			}
+		]
+	},
+	"Hero1": {
+		"click_sound": [],
+		"spawn_sound": "",
+		"attack_sound": "res://assets/audio/shared/爱弥丝攻击动画_processed.ogg",
+		"spawn_rules": []
+	},
+	"Hero2": {
+		"click_sound": [],
+		"spawn_sound": "",
+		"attack_sound": "res://assets/audio/shared/DoroHero攻击动画_processed.ogg",
+		"spawn_rules": [
+			{
+				"type": 0,
+				"count": 1,
+				"sound": ""
+			}
+		]
+	},
+	"S2": {
+		"click_sound": [],
+		"spawn_sound": "",
+		"attack_sound": "res://assets/audio/shared/仓鼠士兵攻击音效.ogg",
+		"spawn_rules": []
+	},
+	"Y2": {
+		"click_sound": [],
+		"spawn_sound": "res://assets/audio/shared/hey？.ogg",
+		"attack_sound": "res://assets/audio/shared/凑企鹅攻击音效1.ogg",
+		"spawn_rules": []
+	}
+}

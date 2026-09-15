@@ -39,7 +39,7 @@ func update(delta: float) -> void:  ## 重写每帧更新方法
 			unit.play_anim("idle")  ## 播放待机
 		return  ## 直接返回
 
-	## 攻击周期中：走完前后摇（期间不索敌、不移动）
+## 攻击动画中：走完整动画（期间不索敌、不移动）
 	if _attack_started:  ## 如果在攻击周期中
 		_attack_cycle(delta)  ## 执行攻击周期
 		return  ## 直接返回
@@ -58,24 +58,29 @@ func update(delta: float) -> void:  ## 重写每帧更新方法
 		attack_range_px = battlefield_node.get_base_attack_range()  ## 从战场获取
 	var enemy: Unit = unit.find_nearest_enemy_in_range(attack_range_px)  ## 射程内最近敌人
 	if enemy == null:  ## 无敌人
+		## 修复（2026-09-11 水晶打空气）：索敌节流窗口内 find_nearest_enemy_in_range
+		## 会原样返回「仍存活但已脱靶」的旧 target。不清掉旧目标会让水晶在节流帧里
+		## 拿着脱靶目标反复开周期、朝范围外发投射物，范围空了仍持续打空气。
+		unit.target = null  ## 清掉陈旧目标，节流帧拿不到旧值
 		if unit.anim_idle_frames != null:  ## 有 idle 动画
 			unit.play_anim("idle")  ## 播放待机
 		return  ## 直接返回
 	## 有敌人：锁定并开始攻击周期
 	unit.target = enemy  ## 锁定目标
-	unit.attack_timer = 0.0  ## 重置计时器
+	unit.attack_anim_elapsed = 0.0  ## 重置攻击动画计时器
 	_attack_started = true  ## 标记进入攻击周期
 	_attack_performed = false  ## 重置攻击标志
 	_attack_cycle(delta)  ## 执行攻击周期
 
-## 攻击周期（前摇 + 命中 + 后摇，期间不移动）
-## 命中点在前摇结束处（attack_speed 的 40%），命中时发射小型方块投射物
+## 攻击动画（期间不移动）；动画结束后由 attack_recovery_time 负责后摇
 func _attack_cycle(delta: float) -> void:  ## 定义攻击周期方法
-	unit.attack_timer += delta  ## 计时器累加
+	unit.attack_anim_elapsed += delta  ## 计时器累加
 	var res: UnitResource = unit.unit_resource  ## 获取兵种资源
 	if res == null:  ## 无资源兜底
 		return  ## 直接返回
-	var hit_point: float = res.attack_speed * 0.4  ## 命中时间点
+	## 水晶没有独立攻击动画，使用其历史周期作为防御投射物节奏。
+	var anim_duration: float = unit.get_legacy_attack_cycle_duration()
+	var hit_point: float = anim_duration * 0.4
 
 	## 设置朝向（面朝目标）
 	if unit.target != null and is_instance_valid(unit.target):  ## 目标有效
@@ -86,21 +91,27 @@ func _attack_cycle(delta: float) -> void:  ## 定义攻击周期方法
 	unit.move_and_slide()  ## 执行移动（实际不移动）
 
 	## 前摇阶段：播放攻击动画，不攻击
-	if unit.attack_timer < hit_point:  ## 如果在前摇阶段
+	if unit.attack_anim_elapsed < hit_point:  ## 如果在前摇阶段
 		return  ## 直接返回
 
 	## 命中点：发射方块投射物（仅执行一次）
 	if not _attack_performed:  ## 如果本周期尚未攻击
 		_attack_performed = true  ## 标记已攻击
-		## 目标仍有效才攻击；投射物直线飞行不追踪，目标中途死亡会自然落空
-		if unit.target != null and is_instance_valid(unit.target) and not unit.target.is_dead:  ## 目标有效
+		## 目标仍有效且仍在射程内才攻击；投射物直线飞行不追踪，
+		## 目标中途死亡/离场会自然落空（离场脱靶的这次不发射，见修复 2026-09-11）
+		var fire_range_px: float = 160.0  ## 与 update 索敌同源的射程
+		var bf_node: Node = get_battlefield()
+		if bf_node != null and bf_node.has_method("get_base_attack_range"):
+			fire_range_px = bf_node.get_base_attack_range()
+		if unit.target != null and is_instance_valid(unit.target) and not unit.target.is_dead \
+				and unit.global_position.distance_to(unit.target.global_position) <= fire_range_px:  ## 目标有效且在射程内
 			unit.perform_attack(0)  ## 执行攻击（is_ranged=true → 发射小型方块投射物）
 
 	## 后摇阶段：继续等待
-	if unit.attack_timer < res.attack_speed:  ## 如果在后摇阶段
-		return  ## 直接返回
+	if unit.attack_anim_elapsed < anim_duration:
+		return  ## 无攻击动画时使用兜底周期
 
 	## 攻击周期结束，重置计时器和标志（下一帧重新索敌，目标死亡/脱射程会自动换锁）
-	unit.attack_timer = 0.0  ## 重置计时器
+	unit.attack_anim_elapsed = 0.0  ## 重置计时器
 	_attack_performed = false  ## 重置攻击标志
 	_attack_started = false  ## 退出攻击周期

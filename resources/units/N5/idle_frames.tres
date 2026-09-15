@@ -1,4 +1,4 @@
-[gd_resource type="SpriteFrames" load_steps=30 format=3]
+[gd_resource type="SpriteFrames" load_steps=29 format=3]
 
 [ext_resource type="Texture2D" path="res://resources/units/N5/idle_sheet.png" id="1_idle_sheet"]
 

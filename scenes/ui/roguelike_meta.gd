@@ -43,9 +43,12 @@ func _ready() -> void:
 	_map = MAP_SCENE.instantiate() as RoguelikeMap
 	add_child(_map)
 	_map.node_chosen.connect(_on_node_chosen)
-	## [临时调试] 直接进入肉鸽 run 以便验证地图生成（验证后删除）
-	if RoguelikeManager.map_nodes.is_empty():
-		RoguelikeManager.start_run()
+	## 无有效 run 时先尝试读档（从战斗中途退出 / 场景异常回到 hub 的情况），
+	## 读档也失败才退回战役地图重走英雄选择 —— 绝不自建 run，那会绕过英雄选择
+	if RoguelikeManager.map_nodes.is_empty() and not RoguelikeManager.load_run():
+		push_warning("RoguelikeMeta: 无有效肉鸽 run 且无可用存档，返回战役地图重新选择英雄")
+		call_deferred("_on_return_pressed")
+		return
 	## 旧标题已被常驻信息面板取代，隐藏避免与地图层重叠
 	title_label.visible = false
 	## 先建 HUD 层（layer>5），再把顶部 UI 放进该层，否则会被地图 CanvasLayer 盖住
@@ -289,12 +292,90 @@ func _on_node_chosen(index: int) -> void:
 
 # ---------- 非战斗节点结算 ----------
 
+## 休息节点：先恢复 30% 水晶耐久，再让玩家选「强化一张卡」或「精简牌库（弃一张）」
 func _open_rest() -> void:
-	## #213：休息处 = 恢复 30% 水晶最大耐久 + 升级一张卡牌（英雄卡不可升级）
 	RoguelikeManager.heal_crystal(0.30)
 	var cur_hp: int = RoguelikeManager.crystal_hp
 	var max_hp: int = RoguelikeManager.crystal_max_hp
-	_open_train_picker("休息：水晶已恢复 30%% 耐久（%d/%d）。选择一张卡牌升级（英雄卡不可升级）：" % [cur_hp, max_hp])
+	var options: Array[Dictionary] = [
+		{"label": "整训：强化一张卡（召唤人数 +2）", "action": _rest_open_train},
+		{"label": "精简：从牌库移除一张卡", "action": _rest_open_discard},
+		{"label": "只休整，不做别的", "action": _after_noncombat},
+	]
+	_open_choice("休息：水晶已恢复 30%% 耐久（%d/%d）" % [cur_hp, max_hp], options)
+
+## 休息 → 整训分支
+func _rest_open_train() -> void:
+	_open_train_picker("整训：选择一张卡强化（召唤人数 +2，英雄卡不可强化）：")
+
+## 休息 → 精简分支：列出牌库中可弃的卡（英雄卡受保护），点选即移除
+func _rest_open_discard() -> void:
+	var layer := CanvasLayer.new()
+	layer.layer = POPUP_LAYER
+	add_child(layer)
+	var backdrop := ColorRect.new()
+	backdrop.color = Color(0.0, 0.0, 0.0, 0.72)
+	backdrop.set_anchors_preset(Control.PRESET_FULL_RECT)
+	backdrop.mouse_filter = Control.MOUSE_FILTER_STOP
+	layer.add_child(backdrop)
+	var scroll := ScrollContainer.new()
+	scroll.set_anchors_preset(Control.PRESET_FULL_RECT)
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	layer.add_child(scroll)
+	var vbox := VBoxContainer.new()
+	vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	vbox.add_theme_constant_override("separation", 10)
+	scroll.add_child(vbox)
+
+	var title := Label.new()
+	title.text = "精简：选择要从牌库移除的一张卡（英雄卡除外）"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 22)
+	title.add_theme_color_override("font_color", Color(1.0, 0.9, 0.6, 1.0))
+	vbox.add_child(title)
+
+	## 按卡 ID 聚合并显示份数，同名卡不刷满一屏
+	var counts: Dictionary = {}
+	for card_id in RoguelikeManager.deck:
+		if UnitDatabase.is_hero_unit(card_id):
+			continue
+		counts[card_id] = int(counts.get(card_id, 0)) + 1
+	if counts.is_empty():
+		var hint := Label.new()
+		hint.text = "牌库中没有可移除的卡（英雄卡除外）"
+		hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		hint.add_theme_font_size_override("font_size", 16)
+		hint.add_theme_color_override("font_color", Color(0.75, 0.75, 0.7, 1.0))
+		vbox.add_child(hint)
+	for card_id in counts.keys():
+		var btn := Button.new()
+		btn.text = "%s  ×%d" % [_deck_card_name(String(card_id)), int(counts[card_id])]
+		btn.add_theme_font_size_override("font_size", 18)
+		btn.pressed.connect(_on_rest_discard_picked.bind(String(card_id), layer))
+		vbox.add_child(btn)
+
+	var cancel := Button.new()
+	cancel.text = "取消"
+	cancel.add_theme_font_size_override("font_size", 18)
+	cancel.pressed.connect(_on_train_cancelled.bind(layer))
+	vbox.add_child(cancel)
+
+## 牌库中某张卡的展示名（兵种取兵种名，军令卡取军令名 + 后缀）
+func _deck_card_name(card_id: String) -> String:
+	if RoguelikeManager.is_order_card(card_id):
+		var od := ItemDatabase.get_order(RoguelikeManager.order_id_of(card_id))
+		return "%s（军令卡）" % od.display_name if od != null else card_id
+	var res := UnitDatabase.get_unit(card_id) as UnitResource
+	return res.get_display_name() if res != null else card_id
+
+## 确认弃卡并收尾
+func _on_rest_discard_picked(card_id: String, layer: CanvasLayer) -> void:
+	if layer != null and is_instance_valid(layer):
+		layer.queue_free()
+	RoguelikeManager.remove_card(card_id)
+	_show_toast("已从牌库移除：%s" % _deck_card_name(card_id))
+	_after_noncombat()
 
 ## 低级卡牌等级前缀：G、D（卡牌等级体系 G < D < F < N，由弱到强、获得难度递增）
 const LOW_TIER_PREFIXES: Array[String] = ["G", "D"]
@@ -317,7 +398,7 @@ func _roll_low_tier_unit_id() -> String:
 		return ""
 	return pool[randi() % pool.size()]
 
-## 训练：打开卡牌强化选择器，列出牌库中所有兵种（爱弥斯除外），点选其一使召唤人数 +2（#213 休息处复用）
+## 训练：打开卡牌强化选择器，列出牌库中所有兵种（英雄卡除外），点选其一使召唤人数 +2
 func _open_train_picker(title_text: String = "训练：选择一张卡强化（召唤人数 +2）") -> void:
 	var layer := CanvasLayer.new()
 	layer.layer = POPUP_LAYER  ## 必须高于地图层，否则弹窗被羊皮纸背景整个盖住
@@ -343,8 +424,10 @@ func _open_train_picker(title_text: String = "训练：选择一张卡强化（�
 	var seen: Dictionary = {}
 	var trained_any: bool = false
 	for uid in RoguelikeManager.deck:
-		if uid == "Hero1":
-			continue  ## 爱弥斯（特殊英雄）不可训练
+		if UnitDatabase.is_hero_unit(uid):
+			continue  ## 英雄卡不可训练强化
+		if RoguelikeManager.is_order_card(uid):
+			continue  ## 军令卡没有召唤人数概念，不可强化
 		if seen.has(uid):
 			continue
 		seen[uid] = true
@@ -365,7 +448,7 @@ func _open_train_picker(title_text: String = "训练：选择一张卡强化（�
 		vbox.add_child(btn)
 	if not trained_any:
 		var hint := Label.new()
-		hint.text = "牌库中没有可强化的卡牌（爱弥斯除外）"
+		hint.text = "牌库中没有可强化的卡牌（英雄卡除外）"
 		hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		hint.add_theme_font_size_override("font_size", 16)
 		hint.add_theme_color_override("font_color", Color(0.75, 0.75, 0.7, 1.0))
@@ -374,8 +457,16 @@ func _open_train_picker(title_text: String = "训练：选择一张卡强化（�
 	var cancel := Button.new()
 	cancel.text = "取消"
 	cancel.add_theme_font_size_override("font_size", 18)
-	cancel.pressed.connect(layer.queue_free)
+	## 必须走 _on_train_cancelled：只 queue_free 不刷新地图会让 hub 卡死
+	## （节点已 visited、current_node_index 已推进，但按钮仍是上一层的禁用状态）
+	cancel.pressed.connect(_on_train_cancelled.bind(layer))
 	vbox.add_child(cancel)
+
+## 取消训练：关闭选择器并照常收尾刷新地图（否则 hub 无法继续推进）
+func _on_train_cancelled(layer: CanvasLayer) -> void:
+	if layer != null and is_instance_valid(layer):
+		layer.queue_free()
+	_after_noncombat()
 
 ## 确认训练某兵种卡（召唤人数 +2）并关闭选择器
 func _on_train_picked(uid: String, layer: CanvasLayer) -> void:
@@ -457,15 +548,28 @@ func _open_chest_event() -> void:
 		var effect_type: String = String(opt.get("effect_type", "nothing"))
 		var value: float = float(opt.get("value", 0.0))
 		var result_text: String = String(opt.get("result", ""))
+		## cost_gold：付费换取型选项（先扣钱再兑现主效果），金币不足时标注并禁用
+		var cost_gold: int = maxi(int(opt.get("cost_gold", 0)), 0)
+		if cost_gold > 0 and not RoguelikeManager.can_afford(cost_gold):
+			options.append({
+				"label": "%s（金币不足，需 %d）" % [label, cost_gold],
+				"action": Callable(),
+			})
+			continue
 		options.append({
 			"label": label,
-			"action": _apply_chest_event.bind(effect_type, value, result_text),
+			"action": _apply_chest_event.bind(effect_type, value, result_text, cost_gold),
 		})
 	_open_choice("%s\n%s" % [ev.title, ev.description], options)
 
 ## 执行宝箱事件选项的效果，随后给出结果反馈并收尾
 ## effect_type 由 data/chest_events.json 定义；未知类型按「无事发生」处理
-func _apply_chest_event(effect_type: String, value: float, result_text: String) -> void:
+## cost_gold > 0 时先扣金币，扣款失败（余额不足）则整条选项不生效
+func _apply_chest_event(effect_type: String, value: float, result_text: String, cost_gold: int = 0) -> void:
+	if cost_gold > 0 and not RoguelikeManager.spend_gold(cost_gold):
+		_show_toast("金币不足，交易未成。")
+		_after_noncombat()
+		return
 	match effect_type:
 		"gain_card":
 			var uid: String = RoguelikeManager.roll_random_unit_id(maxi(int(value), 1))
@@ -489,19 +593,27 @@ func _apply_chest_event(effect_type: String, value: float, result_text: String) 
 			RoguelikeManager.add_gold(-maxi(int(value), 0))
 		"lose_card":
 			_remove_random_card()
+		"lose_card_for_gold":
+			## 复合：先随机弃一张（英雄卡受保护），再按 value 给金币
+			_remove_random_card()
+			RoguelikeManager.add_gold(maxi(int(value), 0))
 		"upgrade_random":
 			_upgrade_random_card()
+		"gain_crystal_max_hp":
+			RoguelikeManager.boost_crystal_max_hp(maxi(int(value), 0))
 		_:
 			pass  ## nothing / 未知类型：无事发生
 	if not result_text.is_empty():
 		_show_toast(result_text)
 	_after_noncombat()
 
-## 随机升级牌库中一张卡（爱弥斯除外），训练等级 +1（召唤人数 +2）
+## 随机升级牌库中一张兵种卡（英雄卡 / 军令卡除外），训练等级 +1（召唤人数 +2）
 func _upgrade_random_card() -> void:
 	var candidates: Array[String] = []
 	for uid in RoguelikeManager.deck:
-		if uid != "Hero1" and not candidates.has(uid):
+		if UnitDatabase.is_hero_unit(uid) or RoguelikeManager.is_order_card(uid):
+			continue
+		if not candidates.has(uid):
 			candidates.append(uid)
 	if candidates.is_empty():
 		return
@@ -525,32 +637,59 @@ func _show_toast(text: String) -> void:
 	layer.add_child(lbl)
 	get_tree().create_timer(2.0).timeout.connect(layer.queue_free)
 
-## 获得一张随机军令（排除已持有的）。军令池耗尽时静默忽略，不报错。
+## 获得一张随机军令卡（优先排除牌库里已有的）。军令池耗尽时静默忽略，不报错。
 func _gain_order() -> void:
-	var rolled := ItemDatabase.roll_orders(1, RoguelikeManager.owned_orders)
+	var rolled := ItemDatabase.roll_orders(1, RoguelikeManager.get_owned_order_ids())
 	if not rolled.is_empty():
 		RoguelikeManager.add_order(rolled[0].order_id)
 	_after_noncombat()
 
+## 随机移除牌库中一张卡；英雄卡受保护不会被移除（否则本局英雄直接消失）
 func _remove_random_card() -> void:
-	if RoguelikeManager.deck.is_empty():
+	var candidates: Array[String] = []
+	for uid in RoguelikeManager.deck:
+		if not UnitDatabase.is_hero_unit(uid):
+			candidates.append(uid)
+	if candidates.is_empty():
 		return
-	var uid: String = RoguelikeManager.deck[randi() % RoguelikeManager.deck.size()]
-	RoguelikeManager.remove_card(uid)
+	RoguelikeManager.remove_card(candidates[randi() % candidates.size()])
 
-## 非战斗结算收尾：刷新地图路径与信息面板
+## 非战斗结算收尾：刷新地图路径与信息面板，并把 hub 状态写盘
+## （休息 / 商店 / 事件 / 宝箱都会改牌库、金币、文物，结算完立刻存档才不会白做）
 func _after_noncombat() -> void:
 	_refresh_info_panel()
 	if _map != null and is_instance_valid(_map):
 		_map.refresh()
+	RoguelikeManager.save_run()
 
+## 返回战役地图：肉鸽 run 未完成时先确认，避免一键丢掉整局进度
 func _on_return_pressed() -> void:
+	if RoguelikeManager.is_active and not RoguelikeManager.map_nodes.is_empty():
+		_confirm_abandon_run(func() -> void:
+			RoguelikeManager.end_run()
+			GameManager.change_scene_with_loading("res://scenes/ui/campaign_map.tscn")
+		)
+		return
 	RoguelikeManager.end_run()
 	GameManager.change_scene_with_loading("res://scenes/ui/campaign_map.tscn")
 
 func _on_exit_pressed() -> void:
+	if RoguelikeManager.is_active and not RoguelikeManager.map_nodes.is_empty():
+		_confirm_abandon_run(func() -> void:
+			RoguelikeManager.end_run()
+			GameManager.return_to_menu()
+		)
+		return
 	RoguelikeManager.end_run()
 	GameManager.return_to_menu()
+
+## 放弃本局确认弹窗：确认后执行 on_confirm，取消则留在 hub
+func _confirm_abandon_run(on_confirm: Callable) -> void:
+	var options: Array[Dictionary] = [
+		{"label": "确认放弃本局", "action": on_confirm},
+		{"label": "继续本局", "action": func() -> void: pass},
+	]
+	_open_choice("离开肉鸽模式将丢失本局全部进度（牌库 / 文物 / 军令 / 金币），确定吗？", options)
 
 func _on_settings_pressed() -> void:
 	var layer := CanvasLayer.new()

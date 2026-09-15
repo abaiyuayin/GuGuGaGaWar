@@ -20,6 +20,11 @@ const UNIT_IDS: Array[String] = [
 	"F1", "F2", "F3", "F4", "F5",
 	"N1", "N2", "N3", "N4", "N5",
 ]
+## 音频扩展名兜底顺序（#音效 2026-09-02）：资源整体 WAV→OGG 后，历史存档里保存的 .wav 路径
+## 全部指向已不存在的文件，导致出兵/攻击/点击音效全部静音。播放前按此顺序探测同名文件，命中即用。
+const AUDIO_EXT_FALLBACK: Array[String] = [".ogg", ".mp3", ".wav"]
+## 音频路径解析缓存（原路径 -> 实际可用路径）。未命中不入缓存，避免文件稍后被导入时永久静音。
+var _resolved_path_cache: Dictionary = {}
 ## 攻击音效资源缓存（unit_id -> AudioStream）
 var _attack_sound_cache: Dictionary = {}
 ## 当前正在播放攻击音效的播放器列表
@@ -199,20 +204,42 @@ func _get_attack_sound(unit_id: String) -> AudioStream:
 	_attack_sound_cache[unit_id] = stream
 	return stream
 
-## 解析兵种攻击音效的最终路径（配置自定义 > 默认 attack.mp3 > attack.wav 兼容）
+## 解析音频路径（#音效 2026-09-02）：原路径存在则原样返回；不存在时尝试同名的其它扩展名
+## （.ogg/.mp3/.wav），命中返回实际路径；全都没有返回 ""。
+## 用途：历史存档（user://settings.cfg）里保存的 .wav 配置在资源转 OGG 后仍能正常播放。
+func resolve_audio_path(path: String) -> String:
+	if path == "":
+		return ""
+	if _resolved_path_cache.has(path):
+		return _resolved_path_cache[path]
+	var result: String = ""
+	if ResourceLoader.exists(path):
+		result = path
+	else:
+		var base: String = path.get_basename()
+		for ext in AUDIO_EXT_FALLBACK:
+			var alt: String = base + ext
+			if alt != path and ResourceLoader.exists(alt):
+				result = alt
+				break
+	## 只缓存命中结果：未命中的文件可能尚未被导入，下次仍需重新探测
+	if result != "":
+		_resolved_path_cache[path] = result
+	return result
+
+## 解析兵种攻击音效的最终路径（配置自定义 > 默认 attack.ogg/.mp3/.wav）
 ## 返回 "" 表示不存在可用音效；供 _get_attack_sound 与 #17 的 per-file 音量查询共用
+## 自定义路径与默认路径都走扩展名兜底，避免存档里的 .wav 配置在资源转 OGG 后静音
 func _get_attack_sound_path(unit_id: String) -> String:
 	var config: Dictionary = SettingsManager.get_unit_sound_config(unit_id)
-	var custom_path: String = str(config.get("attack_sound", ""))
-	if custom_path != "" and ResourceLoader.exists(custom_path):
-		return custom_path
-	var path := "res://assets/audio/units/%s/attack.mp3" % unit_id
-	if not ResourceLoader.exists(path):
-		## 兼容 .wav 命名的攻击音效（如 G1 的攻击音效为 shared 目录下的 wav）
-		path = "res://assets/audio/units/%s/attack.wav" % unit_id
-		if not ResourceLoader.exists(path):
-			return ""
-	return path
+	var custom_resolved: String = resolve_audio_path(str(config.get("attack_sound", "")))
+	if custom_resolved != "":
+		return custom_resolved
+	for ext in AUDIO_EXT_FALLBACK:
+		var path: String = "res://assets/audio/units/%s/attack%s" % [unit_id, ext]
+		if ResourceLoader.exists(path):
+			return path
+	return ""
 
 ## 播放兵种点击音效（局内点击兵种按钮/展开信息面板时调用）
 ## unit_id: 兵种 ID（如 "G1"），从 SettingsManager 读取配置的音频路径
@@ -346,9 +373,11 @@ func _play_one_shot(path: String, is_click: bool = false, force: bool = false) -
 
 ## 实际播放一段一次性音效（不处理节流/防抖，由调用方决定）
 func _play_oneshot_now(path: String, is_click: bool) -> void:
+	## #音效（2026-09-02）：先做扩展名兜底解析，历史存档里的 .wav 路径改指现存的 .ogg
+	var real_path: String = resolve_audio_path(path)
 	var stream: AudioStream = null
-	if ResourceLoader.exists(path):
-		stream = load(path) as AudioStream
+	if real_path != "":
+		stream = load(real_path) as AudioStream
 	## 未导入 → 尝试直接读文件字节解析 WAV（拖动上传后尚未被编辑器重新导入的场景）
 	if stream == null:
 		stream = _load_raw_wav(path)
@@ -358,7 +387,11 @@ func _play_oneshot_now(path: String, is_click: bool) -> void:
 	player.stream = stream
 	player.bus = "SFX" if AudioServer.get_bus_index("SFX") >= 0 else "Master"
 	## #17：应用该音效文件的独立音量（叠加在 SFX 总线音量之上）
-	player.volume_db = linear_to_db(SettingsManager.get_sound_volume(path))
+	## 音量表可能仍以旧扩展名为键（老存档），故原路径优先、解析后路径兜底
+	var vol: float = SettingsManager.get_sound_volume(path)
+	if is_equal_approx(vol, 1.0) and real_path != "" and real_path != path:
+		vol = SettingsManager.get_sound_volume(real_path)
+	player.volume_db = linear_to_db(vol)
 	## 节流开启时才占用并发锁（关闭时纯触发即播，不占锁）
 	if is_click:  ## 点击优先：记录压制窗口，期间出兵音不播放（所有模式通用）
 		_click_supremacy_until = Time.get_ticks_msec() / 1000.0 + CLICK_SUPREMACY_WINDOW
@@ -610,10 +643,10 @@ func play_battle_bgm() -> void:
 	_play_bgm_from_path(path)
 
 ## 游戏自带的默认胜利音乐（一次性播放，不循环）
-const DEFAULT_VICTORY_BGM: String = "res://assets/audio/bgm/victory.wav"
+const DEFAULT_VICTORY_BGM: String = "res://assets/audio/bgm/victory.ogg"
 
 ## 播放胜利BGM（先停止当前BGM）
-## "无" → 静音；"默认"/空 → 播放自带 victory.wav；其它 → 播放设置里选定的自定义BGM
+## "无" → 静音；"默认"/空 → 播放自带 victory.ogg；其它 → 播放设置里选定的自定义BGM
 ## 修复：旧实现在"默认"分支直接 stop_music()，导致默认设置下胜利后完全没有音乐
 func play_victory_bgm() -> void:
 	if SettingsManager.victory_bgm == "无":

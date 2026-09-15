@@ -66,6 +66,7 @@ const EFFECT_LABELS: Dictionary = {
 	"base_hp_bonus": "CODEX_ATTR_BASE_HP_BONUS",
 	"death_explosion_damage": "CODEX_ATTR_DEATH_EXPLOSION_DAMAGE",
 	"skip_wave": "CODEX_ATTR_SKIP_WAVE",
+	"revive_once": "CODEX_ATTR_REVIVE_ONCE",
 }
 
 ## 节点引用：右侧面板路径前缢�（因新�? RightScroll 滚动容器�?
@@ -141,23 +142,23 @@ func _ready() -> void:  ## 节点就绪时自动调�?
 	## #霢��?4：兵种介绍右侧的「编辑��按�?��仅开发��模式显示，点击展开编辑框）
 	_setup_desc_edit_btn()
 	back_btn.pressed.connect(_on_back_pressed)  ## 连接返回按钮信号
-	UIButtonHelper.setup_button(back_btn)  ## 设置返回按钮样式
-	UIButtonHelper.setup_button(idle_btn)  ## 设置待机按钮样式
-	UIButtonHelper.setup_button(walk_btn)  ## 设置行走按钮样式
-	UIButtonHelper.setup_button(run_btn)  ## 设置奔跑按钮样式
-	UIButtonHelper.setup_button(attack_btn)  ## 设置攻击按钮样式
+	UIButtonHelper.setup_detail_frame_button(back_btn)  ## 设置返回按钮样式
+	UIButtonHelper.setup_detail_frame_button(idle_btn)  ## 设置待机按钮样式
+	UIButtonHelper.setup_detail_frame_button(walk_btn)  ## 设置行走按钮样式
+	UIButtonHelper.setup_detail_frame_button(run_btn)  ## 设置奔跑按钮样式
+	UIButtonHelper.setup_detail_frame_button(attack_btn)  ## 设置攻击按钮样式
 	idle_btn.pressed.connect(_on_idle_btn_pressed)  ## 连接待机按钮信号
 	walk_btn.pressed.connect(_on_walk_btn_pressed)  ## 连接行走按钮信号
 	run_btn.pressed.connect(_on_run_btn_pressed)  ## 连接奔跑按钮信号
 	attack_btn.pressed.connect(_on_attack_btn_pressed)  ## 连接攻击按钮信号
 	_setup_style()  ## 设置面板样式
-	UIButtonHelper.setup_button(save_edit_btn)  ## 设置保存按钮样式
+	UIButtonHelper.setup_detail_frame_button(save_edit_btn)  ## 设置保存按钮样式
 	save_edit_btn.pressed.connect(_on_save_edit_pressed)  ## 连接保存按钮
 	DevMode.dev_mode_changed.connect(_on_dev_mode_toggled)  ## 监听弢�发��模式切�?
-	UIButtonHelper.setup_button(tab_unit_btn)  ## 设置兵�?选项卡样�?
-	UIButtonHelper.setup_button(tab_artifact_btn)  ## 设置文物选项卡样�?
-	UIButtonHelper.setup_button(tab_order_btn)  ## 设置军令选项卡样�?
-	UIButtonHelper.setup_button(tab_event_btn)  ## 设置事件选项卡样�?
+	UIButtonHelper.setup_detail_frame_button(tab_unit_btn)  ## 设置兵�?选项卡样�?
+	UIButtonHelper.setup_detail_frame_button(tab_artifact_btn)  ## 设置文物选项卡样�?
+	UIButtonHelper.setup_detail_frame_button(tab_order_btn)  ## 设置军令选项卡样�?
+	UIButtonHelper.setup_detail_frame_button(tab_event_btn)  ## 设置事件选项卡样�?
 	tab_unit_btn.pressed.connect(_on_tab_unit_pressed)  ## 连接兵�?选项�?
 	tab_artifact_btn.pressed.connect(_on_tab_artifact_pressed)  ## 连接文物选项�?
 	tab_order_btn.pressed.connect(_on_tab_order_pressed)  ## 连接军令选项�?
@@ -268,22 +269,23 @@ func _apply_localization() -> void:  ## 应用�?��化文�?
 	_update_unit_button_texts()  ## 更新兵�?按钮文本
 
 func _setup_style() -> void:  ## 设置面板样式
-	var panel_style = StyleBoxFlat.new()  ## 创建扁平样式�?
-	panel_style.bg_color = Color(0.12, 0.12, 0.15, 0.95)  ## 深灰半��明背景
-	panel_style.border_color = Color(0.3, 0.3, 0.35, 0.8)  ## 边�?�?
-	panel_style.set_border_width_all(1)  ## 边�?宽度
-	panel_style.set_corner_radius_all(6)  ## 圆�?
-	## 预�?面板使用稍深的背�?
-	var preview_style = StyleBoxFlat.new()  ## 创建预�?面板样式
-	preview_style.bg_color = Color(0.06, 0.06, 0.08, 1)  ## 更深的背�?
-	preview_style.border_color = Color(0.25, 0.25, 0.3, 0.6)  ## 边�?
-	preview_style.set_border_width_all(1)  ## 边�?宽度
-	preview_style.set_corner_radius_all(4)  ## 圆�?
-	preview_panel.add_theme_stylebox_override("panel", preview_style)  ## 应用样式
-	## 三个列表面板与右侧�?情面板共用同丢�套面板样�?
+	$Background.color = Color(0.93, 0.86, 0.70, 1.0)
+	var panel_style := UIButtonHelper.get_detail_frame_style()
+	var preview_style := UIButtonHelper.get_detail_frame_style()
+	preview_style.set_border_width_all(2)
+	preview_panel.add_theme_stylebox_override("panel", preview_style)
+	## 图鉴所有面板统一为图二同款米色底、深棕描边和圆角
 	var content_path := "MarginContainer/VBoxContainer/Content"
-	get_node("%s/ListPanel" % content_path).add_theme_stylebox_override("panel", panel_style)  ## 列表面板
-	get_node("%s/RightPanel" % content_path).add_theme_stylebox_override("panel", panel_style)  ## 右侧详情面板
+	get_node("%s/ListPanel" % content_path).add_theme_stylebox_override("panel", panel_style)
+	get_node("%s/RightPanel" % content_path).add_theme_stylebox_override("panel", panel_style)
+	title_label.add_theme_color_override("font_color", Color(0.35, 0.12, 0.08, 1.0))
+	name_label.add_theme_color_override("font_color", Color(0.35, 0.12, 0.08, 1.0))
+	rarity_label.add_theme_color_override("font_color", Color(0.45, 0.25, 0.12, 1.0))
+	no_anim_label.add_theme_color_override("font_color", Color(0.45, 0.25, 0.12, 1.0))
+	for header in [intro_header, appearance_header, tips_header, stats_header, effect_header]:
+		header.add_theme_color_override("font_color", Color(0.38, 0.16, 0.06, 1.0))
+	for label in [desc_label, appearance_label, tips_label, price_label, effect_label]:
+		label.add_theme_color_override("font_color", Color(0.30, 0.20, 0.12, 1.0))
 
 ## 根据兵�? ID 前缀获取阵营标识
 func _get_faction_prefix(unit_id: String) -> String:  ## 获取阵营前缀
@@ -334,10 +336,10 @@ func _build_unit_buttons(container: VBoxContainer) -> void:  ## 构建兵种列�
 			faction_label.text = tr(faction_key)  ## 设置阵营名
 		faction_label.add_theme_font_size_override("font_size", 16)  ## 字体大小
 		if is_special:
-			## 特殊行：明亮青金色，区别于常规金色
-			faction_label.add_theme_color_override("font_color", Color(0.4, 1.0, 0.9))  ## 青绿色
+			## 特殊行使用低饱和绿色，保持纸张配色
+			faction_label.add_theme_color_override("font_color", Color(0.24, 0.42, 0.25))
 		else:
-			faction_label.add_theme_color_override("font_color", Color(1, 0.85, 0.4))  ## 金黄色
+			faction_label.add_theme_color_override("font_color", Color(0.45, 0.25, 0.12))
 		faction_label.custom_minimum_size = Vector2(0, 30)  ## 最小高度
 		faction_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER  ## 垂直居中
 		container.add_child(faction_label)  ## 添加到列表
@@ -348,7 +350,7 @@ func _build_unit_buttons(container: VBoxContainer) -> void:  ## 构建兵种列�
 			btn.text = res.get_display_name()  ## 设置兵种名
 			btn.alignment = HORIZONTAL_ALIGNMENT_LEFT  ## 左对齐
 			btn.focus_mode = Control.FOCUS_NONE  ## 禁用焦点
-			UIButtonHelper.setup_button(btn)  ## 设置按钮样式
+			UIButtonHelper.setup_detail_frame_button(btn)  ## 统一图二按钮风格
 			btn.set_meta("sel_kind", "unit")  ## 标记选中类型
 			btn.set_meta("sel_id", res.unit_id)  ## 标记选中 ID
 			btn.set_meta("unit_resource", res)  ## 存储兵种资源
@@ -396,8 +398,7 @@ func _make_item_button(text: String, color: Color) -> Button:  ## 道具按钮
 	btn.text = text  ## 设置文本
 	btn.alignment = HORIZONTAL_ALIGNMENT_LEFT  ## 左�?�?
 	btn.focus_mode = Control.FOCUS_NONE  ## 禁用焦点
-	UIButtonHelper.setup_button(btn)  ## 设置基�?样式
-	btn.add_theme_color_override("font_color", color)  ## 按稀有度睢��?
+	UIButtonHelper.setup_detail_frame_button(btn, color)  ## 按稀有度着色的图二按钮
 	return btn  ## 返回按钮
 
 func _update_unit_button_texts() -> void:  ## 更新按钮文本
@@ -409,8 +410,8 @@ func _update_unit_button_texts() -> void:  ## 更新按钮文本
 		## #14：锁定兵种锁定显示 🔒 前缀 + 暗灰文字；已解锁正常显示
 		## #5：锁定兵种点击不再显示详情（右侧占位），图鉴只读展示已解锁兵种
 		var unlocked: bool = is_hidden or CampaignProgress.is_unit_unlocked(res.unit_id)
-		btn.text = res.get_display_name() if unlocked else "🔒 " + res.get_display_name()
-		btn.add_theme_color_override("font_color", Color(0.88, 0.88, 0.88, 1.0) if unlocked else Color(0.45, 0.45, 0.5, 1.0))
+		btn.text = res.get_display_name() if unlocked else "锁 " + res.get_display_name()
+		btn.add_theme_color_override("font_color", Color(0.35, 0.12, 0.08, 1.0) if unlocked else Color(0.48, 0.43, 0.35, 1.0))
 func _on_unit_button_pressed(res: UnitResource) -> void:  ## 兵�?按钮按下回调
 	## #自由事件（2026-08-15）：隐藏特殊/异象兵种直接查看（不参与解锁体系）
 	if not UnitDatabase.HIDDEN_UNITS.has(res.unit_id) and not CampaignProgress.is_unit_unlocked(res.unit_id):
@@ -583,7 +584,7 @@ func _build_attributes_table(res: UnitResource) -> void:  ## 构建属性表格
 	rows.append([tr("HP_LABEL"), "%d" % res.max_hp])  ## 生命值
 	rows.append([tr("ARMOR_LABEL"), "%d" % res.armor_value])  ## 护甲
 	rows.append([tr("DAMAGE_LABEL"), "%d" % res.damage])  ## 攻击力
-	rows.append([tr("ATTACK_SPEED_LABEL"), "%.2f" % res.attack_speed])  ## 攻击速度
+	rows.append([tr("ATTACK_RECOVERY_LABEL"), "%.2f" % res.get_attack_recovery_time()])  ## 攻击后摇
 	rows.append([tr("ATTACK_RANGE_LABEL"), "%.1f" % res.attack_range])  ## 攻击距离
 	rows.append([tr("MOVE_SPEED_LABEL"), "%.2f" % res.move_speed])  ## 移动速度
 	rows.append([tr("SUPPLY_LABEL"), "%d" % res.supply_cost])  ## 人口
@@ -592,7 +593,7 @@ func _build_attributes_table(res: UnitResource) -> void:  ## 构建属性表格
 		var name_lbl = Label.new()  ## 属性名标签
 		name_lbl.text = row[0]  ## 设置属性名
 		name_lbl.add_theme_font_size_override("font_size", 14)  ## 字体大小
-		name_lbl.add_theme_color_override("font_color", Color(0.75, 0.75, 0.8))  ## 浅灰色
+		name_lbl.add_theme_color_override("font_color", Color(0.45, 0.25, 0.12))  ## 深棕色
 		name_lbl.custom_minimum_size = Vector2(120, 28)  ## 最小尺寸
 		name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER  ## 水平居中
 		name_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER  ## 垂直居中
@@ -600,7 +601,7 @@ func _build_attributes_table(res: UnitResource) -> void:  ## 构建属性表格
 		var value_lbl = Label.new()  ## 属性值标签
 		value_lbl.text = row[1]  ## 设置属性值
 		value_lbl.add_theme_font_size_override("font_size", 14)  ## 字体大小
-		value_lbl.add_theme_color_override("font_color", Color(1, 0.95, 0.7))  ## 暖白色
+		value_lbl.add_theme_color_override("font_color", Color(0.35, 0.12, 0.08))  ## 深棕色
 		value_lbl.custom_minimum_size = Vector2(100, 28)  ## 最小尺寸
 		value_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER  ## 水平居中
 		value_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER  ## 垂直居中
@@ -749,26 +750,19 @@ func _update_anim_button_styles() -> void:  ## 更新动画按钮样式
 
 ## 为单�?��画按�?��用样�?## has_resource: �?��有�?应动画资源；is_current: �?��为当前��中模式
 func _apply_anim_button_style(btn: Button, has_resource: bool, is_current: bool) -> void:  ## 应用按钮样式
-	var style = StyleBoxFlat.new()  ## 创建样式
-	style.set_corner_radius_all(4)  ## 圆�?
-	style.set_content_margin_all(8)  ## 内边�?
-	if not has_resource:  ## 无资源：红色边�?提示
-		style.bg_color = Color(0.16, 0.08, 0.08, 0.95)  ## 暗红�?
-		style.border_color = Color(1.0, 0.25, 0.25, 1.0)  ## 红色边�?
-		style.set_border_width_all(2)  ## 边�?宽度
-	elif is_current:  ## 当前选中：金色边�?
-		style.bg_color = Color(0.25, 0.25, 0.3, 0.95)  ## 选中�?
-		style.border_color = Color(1.0, 0.85, 0.4, 1.0)  ## 金色边�?
-		style.set_border_width_all(2)  ## 边�?宽度
-	else:  ## 有资源且非��中：默认样�?
-		style.bg_color = Color(0.16, 0.16, 0.18, 0.95)  ## 默�?�?
-		style.border_color = Color(0.3, 0.3, 0.3, 0.5)  ## 默�?边�?
-		style.set_border_width_all(1)  ## 边�?宽度
-	btn.add_theme_stylebox_override("normal", style)  ## 应用�?��状�?
-	btn.add_theme_stylebox_override("hover", style)  ## 应用�?��状��?
-	btn.add_theme_stylebox_override("pressed", style)  ## 应用按下状��?
-	btn.add_theme_stylebox_override("disabled", style)  ## 应用禁用状��?
-## #霢��?4：创建兵种介绍右侧的「编辑��按�?��仅开发��模式显示，点击展开/收起编辑框）
+	var style := UIButtonHelper.get_detail_frame_style()
+	style.set_border_width_all(3 if is_current else 2)
+	if not has_resource:
+		style.bg_color = Color(0.82, 0.70, 0.64, 1.0)
+		style.border_color = Color(0.55, 0.20, 0.14, 1.0)
+	else:
+		style.bg_color = Color(0.84, 0.91, 0.76, 1.0) if is_current else Color(0.93, 0.86, 0.70, 1.0)
+	btn.add_theme_stylebox_override("normal", style)
+	btn.add_theme_stylebox_override("hover", style)
+	btn.add_theme_stylebox_override("pressed", style)
+	btn.add_theme_stylebox_override("disabled", style)
+	btn.add_theme_color_override("font_color", Color(0.35, 0.12, 0.08, 1.0))
+
 func _setup_desc_edit_btn() -> void:  ## 创建兵种介绍右侧的「编辑」按钮（仅开发模式显示）
 	_edit_desc_btn = Button.new()
 	_edit_desc_btn.name = "DescEditBtn"
@@ -777,7 +771,7 @@ func _setup_desc_edit_btn() -> void:  ## 创建兵种介绍右侧的「编辑」
 	_edit_desc_btn.add_theme_font_size_override("font_size", 12)
 	_edit_desc_btn.size_flags_horizontal = Control.SIZE_SHRINK_END  ## 靠右
 	_edit_desc_btn.visible = false  ## 默认隐藏，仅开发模式显示
-	UIButtonHelper.setup_button(_edit_desc_btn)
+	UIButtonHelper.setup_detail_frame_button(_edit_desc_btn)
 	_edit_desc_btn.pressed.connect(_on_desc_edit_pressed)
 	## 插入到 IntroHeader 之后（DescLabel 之前），视觉上与介绍标签同行
 	var parent: Container = intro_header.get_parent()
@@ -1047,19 +1041,16 @@ func _highlight_tab_buttons() -> void:  ## 高亮选项�?
 	_style_tab_button(tab_order_btn, _current_tab == "order")  ## 军令选项�?
 	_style_tab_button(tab_event_btn, _current_tab == "event")  ## 事件选项�?
 ## 为单�?��项卡按�?��用样�?
-func _style_tab_button(btn: Button, active: bool) -> void:  ## 应用选项卡样�?
-	var style = StyleBoxFlat.new()  ## 创建样式
-	style.set_corner_radius_all(6)  ## 圆�?
-	style.set_border_width_all(2)  ## 边�?宽度
-	if active:  ## 选中�?
-		style.bg_color = Color(0.25, 0.25, 0.3, 1.0)  ## 选中�?
-		style.border_color = Color(1.0, 0.85, 0.4, 1.0)  ## 金色边�?
-	else:  ## �?����?
-		style.bg_color = Color(0.16, 0.16, 0.18, 0.95)  ## 默�?�?
-		style.border_color = Color(0.3, 0.3, 0.3, 0.5)  ## 默�?边�?
-	btn.add_theme_stylebox_override("normal", style)  ## 应用�?����?
-	btn.add_theme_stylebox_override("hover", style)  ## 应用�?���?
-	btn.add_theme_stylebox_override("pressed", style)  ## 应用按下�?
+func _style_tab_button(btn: Button, active: bool) -> void:  ## 应用选项卡样式
+	var style := UIButtonHelper.get_detail_frame_style()
+	style.set_border_width_all(3)
+	style.bg_color = Color(0.84, 0.91, 0.76, 1.0) if active else Color(0.93, 0.86, 0.70, 1.0)
+	btn.add_theme_stylebox_override("normal", style)
+	btn.add_theme_stylebox_override("hover", style)
+	btn.add_theme_stylebox_override("pressed", style)
+	btn.add_theme_color_override("font_color", Color(0.35, 0.12, 0.08, 1.0))
+	btn.add_theme_color_override("font_hover_color", Color(0.35, 0.12, 0.08, 1.0))
+	btn.add_theme_color_override("font_pressed_color", Color(0.35, 0.12, 0.08, 1.0))
 func _on_tab_unit_pressed() -> void:  ## 兵�?选项卡按�?
 	_switch_tab("unit")  ## 切换到兵�?
 func _on_tab_artifact_pressed() -> void:  ## 文物选项卡按�?
@@ -1069,19 +1060,14 @@ func _on_tab_order_pressed() -> void:  ## 军令选项卡按�?
 func _on_tab_event_pressed() -> void:  ## 事件选项卡按�?
 	_switch_tab("event")  ## 切换到事�?
 func _highlight_in_list(buttons: Array[Button], _kind: String) -> void:  ## 高亮指定列表
-	for btn in buttons:  ## 遍历按钮
-		var style = StyleBoxFlat.new()  ## 创建样式
-		style.set_corner_radius_all(4)  ## 圆角
-		style.set_border_width_all(1)  ## 边框宽度
-		if btn.get_meta("sel_kind", "") == _selected_kind and btn.get_meta("sel_id", "") == _selected_id:  ## 命中选中
-			style.bg_color = Color(0.25, 0.25, 0.3)  ## 选中背景
-			style.border_color = Color(1, 0.85, 0, 0.9)  ## 金色边框
-		else:  ## 未选中
-			style.bg_color = Color(0.16, 0.16, 0.18)  ## 默认背景
-			style.border_color = Color(0.3, 0.3, 0.3, 0.5)  ## 默认边框
-		btn.add_theme_stylebox_override("normal", style)  ## 应用样式
-		btn.add_theme_stylebox_override("hover", style)  ## 应用样式
-		btn.add_theme_stylebox_override("pressed", style)  ## 应用样式
+	for btn in buttons:
+		var style := UIButtonHelper.get_detail_frame_style()
+		var selected: bool = String(btn.get_meta("sel_kind", "")) == _selected_kind and String(btn.get_meta("sel_id", "")) == _selected_id
+		style.set_border_width_all(3 if selected else 2)
+		style.bg_color = Color(0.84, 0.91, 0.76, 1.0) if selected else Color(0.93, 0.86, 0.70, 1.0)
+		btn.add_theme_stylebox_override("normal", style)
+		btn.add_theme_stylebox_override("hover", style)
+		btn.add_theme_stylebox_override("pressed", style)
 
 func _on_back_pressed() -> void:  ## 返回按钮回调
 	closed.emit()  ## 发出关闭信号

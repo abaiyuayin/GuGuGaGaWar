@@ -17,7 +17,10 @@ const UNIT_ORDER: Array[String] = [
 	"Hero5",  ## 糯糯Hero（成就「糯糯大军」+20 星解锁），归入第 5 阵营「英雄」
 	"S1",  ## 蓝女巫：特殊阵营，归入第 6 阵营「特殊」
 	"S2",  ## 仓鼠士兵：特殊阵营（G1 替换事件兵种）
-	"S3",  ## 天命人：特殊阵营（占位，素材待补）
+	"S4",  ## 动力菲比：特殊阵营（红方友军事件，无攻击动画，奔跑撞击）
+	"S5",  ## 咕嘎工钢：特殊阵营（红方友军事件，无攻击动画，接近敌转待机）
+	"S7",  ## 大肥鱼：特殊阵营（奔跑/待机/攻击/行走四套动画）
+	"S8",  ## 丽贝卡：特殊阵营（奔跑/待机/攻击三套动画，行走待补）
 	"Y1",  ## 死亡使者：异象阵营，归入第 7 阵营「异象」
 	"Y2",  ## 凑企鹅：异象阵营（回合触发敌兵，双攻击轮流）
 	"Y3",  ## 香蕉猫：异象阵营（占位，素材待补）
@@ -208,7 +211,7 @@ func _build_size_grid() -> void:
 			row.add_child(_create_size_card(unit_id, res))
 		grid.add_child(row)
 
-## 为单个兵种创建尺寸卡片（水平行布局：标题 + 行走 + 奔跑 + 攻击）
+## 为单个兵种创建尺寸卡片（水平行布局：标题 + 待机/行走/奔跑/攻击，实际列数按该兵种已有动画决定）
 func _create_size_card(unit_id: String, res: UnitResource) -> Control:
 	## 整个卡片为一行 HBoxContainer
 	var card := HBoxContainer.new()
@@ -240,17 +243,22 @@ func _create_size_card(unit_id: String, res: UnitResource) -> Control:
 	title.add_theme_font_size_override("font_size", 14)
 	title_col.add_child(title)
 
-	## 加载动画帧（仅展示：行走、奔跑、攻击；待机和冲刺已隐藏）
-	var walk_frames := _load_anim_frames(unit_id, "walk")
-	var move_frames := _load_anim_frames(unit_id, "move")
-	var attack_frames := _load_anim_frames(unit_id, "attack")
-	## 三列动画：行走、奔跑、攻击（每列有独立的翻转按钮，可分别设置不同朝向）
-	var walk_col := _create_anim_column("行走", walk_frames, "walk", res, unit_id)
-	var move_col := _create_anim_column("奔跑", move_frames, "move", res, unit_id)
-	var attack_col := _create_anim_column("攻击", attack_frames, "attack", res, unit_id)
-	card.add_child(walk_col)
-	card.add_child(move_col)
-	card.add_child(attack_col)
+	## 动画列按固定顺序展示：待机、行走、奔跑、攻击。
+	## 有哪套就显示哪套 —— _load_anim_frames 返回 null（tres 不存在 / 无该动画 / 纹理未导入）时跳过该列，不占位。
+	## sprint（冲刺）与 attack2（备用攻击）仍不在尺寸页展示，保持既有行为。
+	var anim_specs: Array = [
+		["idle", "待机"],
+		["walk", "行走"],
+		["move", "奔跑"],
+		["attack", "攻击"],
+	]
+	for spec in anim_specs:
+		var anim_key: String = spec[0]
+		var anim_label: String = spec[1]
+		var anim_frames := _load_anim_frames(unit_id, anim_key)
+		if anim_frames == null:
+			continue
+		card.add_child(_create_anim_column(anim_label, anim_frames, anim_key, res, unit_id))
 
 	## 方向状态标签（显示当前 default_facing 基础朝向，仅供参考）
 	## 每个动画的独立翻转由各自列内的按钮控制（绑定 xxx_flip_override）
@@ -541,13 +549,13 @@ func _create_anim_column(label_text: String, frames: SpriteFrames, anim_name: St
 		preview.add_child(no_anim)
 
 	## 播放速度调整行（task 8 / #4）
-	## 注意：这里调的是「动画播放速度」，与数值页的「攻速(秒)」是两个独立概念
+	## 注意：这里调的是纯视觉「动画播放速度」，不参与伤害与后摇计时
 	var speed_row := HBoxContainer.new()
 	speed_row.alignment = BoxContainer.ALIGNMENT_CENTER
 	speed_row.add_theme_constant_override("separation", 4)
 	col.add_child(speed_row)
 	var speed_label := Label.new()
-	speed_label.text = "播放速度:"
+	speed_label.text = "动画倍率:"
 	speed_label.add_theme_color_override("font_color", Color(0.8, 0.8, 0.8, 1))
 	speed_label.add_theme_font_size_override("font_size", 10)
 	speed_row.add_child(speed_label)
@@ -558,7 +566,7 @@ func _create_anim_column(label_text: String, frames: SpriteFrames, anim_name: St
 	## #4：读取资源里已保存的倍率，而不是永远显示 1.0
 	speed_spin.value = res.get_anim_speed(anim_name)
 	speed_spin.custom_minimum_size = Vector2(56, 0)
-	speed_spin.tooltip_text = "动画播放速度倍率（1.0=按原始帧率播放）\n只影响动画播多快，不影响出手频率（出手频率见数值页「攻速(秒)」）\n修改后立即写入 .tres，局内同步生效"
+	speed_spin.tooltip_text = "仅影响攻击动作播放快慢（1.0=原始帧率）。\n普通单位：动画播完后进入攻击后摇；无攻击动画特殊单位才使用兼容周期。"
 	speed_row.add_child(speed_spin)
 	## #4：写回兵种资源并保存，局内才能吃到（旧版只改了预览的 speed_scale，进局就丢）
 	speed_spin.value_changed.connect(func(v: float) -> void:
@@ -569,19 +577,6 @@ func _create_anim_column(label_text: String, frames: SpriteFrames, anim_name: St
 	)
 	if sprite != null:
 		sprite.speed_scale = speed_spin.value
-	## #4：攻击动画额外提供「跟随攻速」开关——勾上=一次攻击刚好播完一遍动画（攻速加成同步影响动画）
-	if anim_name == "attack":
-		var sync_chk := CheckBox.new()
-		sync_chk.text = "跟随攻速"
-		sync_chk.button_pressed = res.attack_anim_sync_interval
-		sync_chk.add_theme_font_size_override("font_size", 10)
-		sync_chk.tooltip_text = "勾选：攻击动画被拉伸到与攻击间隔等长，攻速变快动画也变快\n取消：攻击动画只按上面的播放速度倍率播放，与攻速完全解耦"
-		speed_row.add_child(sync_chk)
-		sync_chk.toggled.connect(func(on: bool) -> void:
-			res.attack_anim_sync_interval = on
-			_save_resource(unit_id, res)
-		)
-
 	## 帧尺寸信息
 	var frame_info := Label.new()
 	if frames != null and frames.get_frame_count(anim_name) > 0:
@@ -1006,8 +1001,7 @@ func _create_stats_card(unit_id: String, res: UnitResource) -> Control:
 		["攻击距离", "attack_range", 0.1, 20.0, 0.1, false],
 		["横范围(H)", "attack_range_h", 0.0, 20.0, 0.1, false],
 		["纵范围(V)", "attack_range_v", 0.0, 20.0, 0.1, false],
-		["攻速(秒)", "attack_speed", 0.1, 10.0, 0.1, false],
-		["后摇(秒)", "attack_recovery_time", 0.0, 5.0, 0.05, false],
+		["攻击后摇(秒)", "attack_recovery_time", 0.0, 5.0, 0.05, false],
 	]
 
 	for field in fields:
@@ -1032,7 +1026,7 @@ func _create_stats_card(unit_id: String, res: UnitResource) -> Control:
 		spin.min_value = min_val
 		spin.max_value = max_val
 		spin.step = step
-		## 后摇字段特殊处理：资源里 -1 表示「跟随兵种类型默认」（远程 0.5 / 近战 0），
+		## 后摇字段特殊处理：资源里 -1 表示「跟随兵种类型默认」（中远程 1.5 / 近战 1.0），
 		## SpinBox 直接显示生效值，用户调校时所见即所得（改动后写入显式值）
 		if prop_name == "attack_recovery_time":
 			spin.value = res.get_attack_recovery_time()
@@ -1042,7 +1036,7 @@ func _create_stats_card(unit_id: String, res: UnitResource) -> Control:
 		spin.custom_minimum_size = Vector2(100, 0)
 		spin.tooltip_text = "%s（%s）%s" % [
 			label_text, "整数" if is_int else "小数",
-			"\n后摇=攻击周期结束后的固定僵直（中远程默认 0.5s，近战 0）" if prop_name == "attack_recovery_time" else "",
+			"\n后摇=攻击周期结束后的固定僵直（中远程默认 1.5s，近战 1.0s）" if prop_name == "attack_recovery_time" else "",
 		]
 		row.add_child(spin)
 
@@ -3658,7 +3652,6 @@ func _on_reset_pressed() -> void:
 			res.attack_anim_speed = 1.0
 			res.sprint_anim_speed = 1.0
 			res.idle_anim_speed = 1.0
-			res.attack_anim_sync_interval = true
 			_save_resource(unit_id, res)
 		_build_size_grid()
 	elif current_tab == 2:

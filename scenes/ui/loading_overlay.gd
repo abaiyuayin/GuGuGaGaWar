@@ -208,7 +208,8 @@ func _do_switch() -> void:
 func _play_random_unit_anim() -> void:
 	_anim_frames = null
 	_anim_tex.texture = null
-	var units = UnitDatabase.unit_list
+	## 池子：常规兵种 + 隐藏事件/加载专用兵种（含 S6 小猫臭臭舞等过场动画）
+	var units: Array = UnitDatabase.unit_list + UnitDatabase.hidden_units
 	if units.is_empty():
 		return
 	var res = units[randi() % units.size()]

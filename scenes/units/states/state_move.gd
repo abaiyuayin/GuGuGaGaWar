@@ -30,15 +30,26 @@ func update(delta: float) -> void:  ## 重写每帧更新方法
 	if unit.order_pos.is_finite():
 		_advance_to_order(delta, speed_px)
 		return
-	## #竞技场（2026-08-24 用户拍板）：沙盒索敌与站定统一在此处理。
-	## ① 未开战（和平 / 停战）：站定定格行走动画第一帧，绝不攻击、绝不移动。
-	## ② 已开战：全场索敌锁最近敌人 → 进射程打，未进射程全向追击；
-	##    场上无敌人则原地站定（沙盒无基地可推，不再沿水平方向平推）。
-	if GameManager.is_battlefield_mode:
-		if not unit.combat_enabled:
-			unit.velocity = Vector2.ZERO
-			unit.play_arena_stand()
+	## #竞技场（2026-08-24 用户拍板）：未开战（和平 / 停战）站定定格行走动画第一帧，
+	## 绝不攻击、绝不移动。此判定必须早于攻击锁定 —— 和平模式下玩家的攻击令也不该生效。
+	if GameManager.is_battlefield_mode and not unit.combat_enabled:
+		unit.velocity = Vector2.ZERO
+		unit.play_arena_stand()
+		return
+	## #框选攻击锁定（2026-09-04）：玩家指定的目标优先于一切自动索敌 ——
+	## 进射程就打，没进射程就全向追（不锁水平方向、不做阵线回归），直到目标阵亡或玩家改令
+	var forced: Unit = unit.sync_forced_target()
+	if forced != null:
+		unit.target = forced
+		if unit.is_target_in_attack_range(forced.global_position, 10.0):
+			unit.change_state("attack")
 			return
+		_advance_to_target(delta, forced.global_position, speed_px)
+		return
+	## #竞技场（2026-08-24 用户拍板）：沙盒索敌与站定统一在此处理。
+	## 已开战：全场索敌锁最近敌人 → 进射程打，未进射程全向追击；
+	## 场上无敌人则原地站定（沙盒无基地可推，不再沿水平方向平推）。
+	if GameManager.is_battlefield_mode:
 		var arena_target: Unit = unit.find_nearest_enemy()
 		if arena_target == null or not is_instance_valid(arena_target):
 			unit.velocity = Vector2.ZERO
@@ -53,7 +64,14 @@ func update(delta: float) -> void:  ## 重写每帧更新方法
 	## 站定待命：hold_position 且无移动令时原地站住，仅敌人进入自身攻击范围才还击
 	if unit.hold_position:
 		if unit.combat_enabled:
-			var near: Unit = unit.find_nearest_enemy()
+			## #性能（2026-08-27）：索敌半径由 INF 收窄到自身攻击范围（含 10px 滞回容差）。
+			## 下一行的闸门就是 is_target_in_attack_range(±10)，攻击范围外的最近敌人一律
+			## 通不过 —— 收窄后行为逐条等价。椭圆射程取 h/v 较大者以覆盖整个椭圆。
+			var reach_px: float = unit.unit_resource.attack_range * Constants.UNIT_TO_PIXELS + 10.0
+			if unit.unit_resource.use_elliptical_range:
+				reach_px = maxf(unit.unit_resource.get_attack_range_h_px(),
+						unit.unit_resource.get_attack_range_v_px()) + 10.0
+			var near: Unit = unit.find_nearest_enemy_in_range(reach_px)
 			if near != null and unit.is_target_in_attack_range(near.global_position, 10.0):
 				unit.target = near
 				unit.change_state("attack")
@@ -67,6 +85,12 @@ func update(delta: float) -> void:  ## 重写每帧更新方法
 
 	## 设置移动方向：红方（team=0）向右，蓝方（team=1）向左
 	var direction: float = 1.0 if unit.team == 0 else -1.0  ## 根据阵营设置方向
+	## 肉鸽：水晶在地图正中央（x=0），敌军从左右两侧刷新 —— 推进方向必须朝水晶实时计算，
+	## 沿用「蓝方一律向左」会让左侧出生的敌人朝反方向走到空气墙前站死，永远打不到水晶。
+	if RoguelikeManager.is_active and unit.team == 1:
+		var dx: float = get_enemy_base_position().x - unit.global_position.x
+		if absf(dx) > 1.0:
+			direction = signf(dx)
 
 	## 安全校验：单位引用失效时停止处理
 	if unit == null or not is_instance_valid(unit):
@@ -81,22 +105,20 @@ func update(delta: float) -> void:  ## 重写每帧更新方法
 		## #5（2026-08-09）：有效射程统一为 attack_range_px + 10.0（与 state_attack 的退出判定一致）。
 		## 旧逻辑 move 用精确射程、attack 用 +10 容差，敌人在射程边缘时两状态判定裂缝 →
 		## 「进入射程也不攻击、原地抖动」。统一后敌人一进有效射程立即攻击。
-		var effective_range_px: float = res.attack_range * Constants.UNIT_TO_PIXELS + 10.0
 		## ① 锁定保持（#25修复）：已持有有效且在有效射程内的 target 时直接保持，
 		##    不再每帧重新平分索敌——其他远程的 target 每帧变化会让自己跟着每帧换锁，
 		##    目标在射程边缘反复进出 attack / 超射程防抖 → 原地抽搐（10v3 march 模拟实测）。
 		##    target 失效（死亡/释放/超射程）时必须走下方平分换锁，不能锁死不换目标。
 		if unit.target != null and is_instance_valid(unit.target) and not unit.target.is_dead:
-			if unit.global_position.distance_to(unit.target.global_position) <= effective_range_px:
+			if unit.is_target_in_attack_range(unit.target.global_position, 10.0):
 				target = unit.target
 		## ② 射程内平分索敌（#25）—— 多个敌人在射程内时按被锁数最少分散锁定（2:1 / 各打各），
 		##    只有一个敌人则集火。替代旧「射程内最近」，避免多远程无脑集火后排浪费火力。
 		if target == null:
-			target = unit.find_best_distributed_target(effective_range_px)
+			target = unit.find_best_distributed_target_in_attack_range(10.0)
 		## ③ 分配器目标在攻击范围内才采用（否则忽略，避免锁后排导致往前送）
 		if target == null and unit.target != null and is_instance_valid(unit.target) and not unit.target.is_dead:
-			var dist_to_assigned: float = unit.global_position.distance_to(unit.target.global_position)
-			if dist_to_assigned <= effective_range_px:
+			if unit.is_target_in_attack_range(unit.target.global_position, 10.0):
 				target = unit.target  ## 分配器目标在射程内，采用
 		## ④ 兜底：全场最近索敌（敌人在检测范围但不在攻击范围 → 继续推进不追击）
 		if target == null:
@@ -165,7 +187,7 @@ func _advance(delta: float, direction: float, speed_px: float) -> void:
 		unit.move_and_slide()  ## 走碰撞系统移动
 		unit.set_facing_hysteresis(unit.velocity.x, maxf(0.25, speed_px * 0.4))  ## 意图方向 + 滞回
 		unit.play_anim("move")  ## 播放移动动画
-		unit.queue_redraw()  ## 请求重绘
+		unit.request_debug_redraw()  ## 请求重绘
 		return  ## 绕步分支已处理移动
 
 	## 正常推进：使用 velocity + move_and_slide() 移动，启用 CharacterBody2D 的碰撞系统
@@ -214,10 +236,10 @@ func _advance(delta: float, direction: float, speed_px: float) -> void:
 	## 若以后需要朝向区分，只翻转专门的 Sprite2D/ColorRect，而不是整体 scale.x。
 
 	## 强制更新 visual 位置（如果 Control 节点滞后）
-	unit.queue_redraw()  ## 请求重绘
+	unit.request_debug_redraw()  ## 请求重绘
 
-## 朝玩家下达的 order_pos 移动（战场模式专用）
-## 复用速度/分离/朝向逻辑；到达目标点（阈值内）后置 hold_position 转站定。
+## 朝玩家下达的 order_pos 移动（框选指挥共用：竞技场 + 肉鸽）
+## 复用速度/分离/朝向逻辑；到达目标点（阈值内）后交给 _finish_order 收尾。
 ## delta: 帧间隔（秒）；speed_px: 像素移速
 func _advance_to_order(delta: float, speed_px: float) -> void:
 	if unit == null or not is_instance_valid(unit):
@@ -228,10 +250,7 @@ func _advance_to_order(delta: float, speed_px: float) -> void:
 	## #竞技场（2026-08-24 需求3 修）：原阈值 6px 过严——编队间距 30px 小于友军分离
 	## 感知半径 40px，相邻单位永远互推，谁都进不到 6px → 原地狂奔。放宽到 14px。
 	if dist <= maxf(14.0, speed_px * delta):
-		unit.order_pos = Vector2.INF
-		unit.hold_position = true
-		unit.velocity = Vector2.ZERO
-		unit.play_anim("idle")
+		_finish_order()
 		return
 	var dir: Vector2 = to_target / dist
 	var sep: Vector2 = unit._compute_ally_separation()
@@ -241,20 +260,93 @@ func _advance_to_order(delta: float, speed_px: float) -> void:
 	var prev: Vector2 = unit.global_position
 	unit.move_and_slide()
 	## #竞技场（2026-08-24 需求3 修）：卡住检测——想去目标点却被友军顶死推不动时，
-	## 连续 1.2s 几乎无推进 → 强制视为已到位站定，停止原地奔跑动画。
+	## 连续 1.2s 几乎无推进 → 强制视为已到位，停止原地奔跑动画。
 	var progress: float = (unit.global_position - prev).dot(dir)
 	if progress < maxf(2.0, speed_px * delta * 0.3):
 		unit._order_stuck_timer += delta
 		if unit._order_stuck_timer >= 1.2:
-			unit.order_pos = Vector2.INF
-			unit.hold_position = true
-			unit.velocity = Vector2.ZERO
-			unit.play_anim("idle")
+			_finish_order()
 			return
 	else:
 		unit._order_stuck_timer = 0.0
 	unit.play_anim("move")
-	unit.queue_redraw()
+	unit.request_debug_redraw()
+
+## 移动令执行完毕（到位 / 被友军顶死判定为到位）后的收尾。
+##
+## 竞技场：保持原语义 —— 原地站定（hold_position），只反击进入自身攻击范围的敌人。
+## 肉鸽守卫单位：走「到位后线性判定」（2026-09-05 用户拍板），优先级从上到下：
+##   ① 自身攻击范围内有敌人 → 就地打它（近战/远程都不必回防）
+##   ② 否则看水晶周围（以水晶为圆心辐射 _crystal_alert_radius）有没有敌人 → 折返迎击
+##      近战直接切 attack 冲过去；远程切 guard 走回水晶附近，进射程后由 guard 自行开火
+##      （远程若在此硬切 attack，会先在超射程原地空等一个防抖窗口才回防，纯浪费时间）
+##   ③ 都没有 → 切 guard 自动返回水晶周围驻守
+func _finish_order() -> void:
+	unit.order_pos = Vector2.INF
+	unit.velocity = Vector2.ZERO
+	unit._order_stuck_timer = 0.0
+	## 竞技场（含常规战斗）：到位即站定，语义不变
+	if not unit.is_guard_mode():
+		unit.hold_position = true
+		unit.play_anim("idle")
+		return
+	## 肉鸽：到位后不再永久站定，按三级链决定是打、是折返还是回防
+	unit.hold_position = false
+	unit.target = null  ## 到位判定重新选目标，避免对象池/内部调用残留旧锁定
+	var engage: Unit = _pick_post_order_target()
+	if engage == null:
+		unit.change_state("guard")  ## ③ 场面干净 → 回水晶周围驻守
+		return
+	unit.target = engage
+	var res: UnitResource = unit.unit_resource
+	if res != null and res.is_ranged and not unit.is_target_in_attack_range(engage.global_position, 10.0):
+		unit.change_state("guard")  ## ② 远程且未进射程 → 走回防线，靠近后自然开火
+		return
+	unit.change_state("attack")  ## ① 已进射程 / ② 近战折返冲锋
+
+## 到位后的接敌判定（三级链的 ①②，见 _finish_order）；两级都没有则返回 null
+## 返回值: 应该交战的敌方单位，或 null
+func _pick_post_order_target() -> Unit:
+	## ① 自身攻击范围内（+10px 滞回容差，与进入攻击状态的判定同口径）
+	var res: UnitResource = unit.unit_resource
+	if res != null:
+		var reach: float = res.attack_range * Constants.UNIT_TO_PIXELS + 10.0
+		if res.use_elliptical_range:
+			reach = maxf(res.get_attack_range_h_px(), res.get_attack_range_v_px()) + 10.0
+		var near: Unit = _find_enemy_near(unit.global_position, reach)
+		if near != null and unit.is_target_in_attack_range(near.global_position, 10.0):
+			return near
+	## ② 水晶周围：以水晶自身为圆心向两侧辐射一个兵种的锁定攻击范围
+	return _find_enemy_near(get_home_base_position(), _crystal_alert_radius())
+
+## 水晶警戒半径（像素）= 肉鸽统一锁定 / 追击半径 × 警戒倍率。
+## 用 chase_range_px 而不是另立一个数：肉鸽下所有兵种共用这一个「锁定攻击范围」（#210），
+## 且它能在肉鸽控制台里调，警戒圈会跟着一起变，不会出现两套互相打架的半径。
+func _crystal_alert_radius() -> float:
+	return maxf(RoguelikeManager.chase_range_px * Constants.ROGUELIKE_CRYSTAL_ALERT_RATIO, 1.0)
+
+## 找出距 [param point] 指定半径内最近的敌方存活单位（排除基地 / 水晶本体与自己）
+## 一次移动令只在「到位」这一帧调用一次，故直接线性扫容器，不走 find_nearest_enemy_in_range ——
+## 后者是「以自身为圆心」且带索敌节流，圆心换不了，节流窗口内还可能返回 null 造成误判。
+## point: 判定圆心（自身位置 / 水晶位置）；radius: 判定半径（像素）
+## 返回值: 半径内最近的敌方单位，没有则 null
+func _find_enemy_near(point: Vector2, radius: float) -> Unit:
+	var container: Node = unit.get_parent()
+	if container == null:
+		return null
+	var nearest: Unit = null
+	var nearest_d: float = radius
+	for body in container.get_children():
+		if body == unit or not (body is Unit) or not is_instance_valid(body):
+			continue
+		var other: Unit = body as Unit
+		if other.is_dead or other.is_base_unit or other.team == unit.team:
+			continue
+		var d: float = point.distance_to(other.global_position)
+		if d < nearest_d:
+			nearest_d = d
+			nearest = other
+	return nearest
 
 ## 朝指定敌人位置全向接近一帧（竞技场沙盒专属）
 ## 与 _advance 的区别：不锁固定水平方向、不做阵线回归（lane_y 回拉），
@@ -277,4 +369,4 @@ func _advance_to_target(_delta: float, target_pos: Vector2, speed_px: float) -> 
 	unit.set_facing_hysteresis(unit.velocity.x, maxf(0.25, speed_px * 0.4))
 	unit.move_and_slide()
 	unit.play_anim("move")
-	unit.queue_redraw()
+	unit.request_debug_redraw()

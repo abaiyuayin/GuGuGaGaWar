@@ -8,10 +8,11 @@ script = ExtResource("1_base")
 unit_id = "Hero2"
 display_name = "Doro勇士"
 description = "Doro 阵营英雄单位。为 Doro 一族而战的勇士，挥舞重兵近身搏杀，身板与输出皆为顶尖。由隐藏成就「为了欧润橘！」解锁。"
-cost = 300
+tier = 4
+cost = 400
 units_per_card = 1
 max_hp = 300
-armor_value = 200
+armor_value = 250
 move_speed = 2.5
 damage = 30
 damage_type = 1
@@ -29,9 +30,9 @@ damage_by_hit = [{
 0: 150,
 2: 50
 }]
-attack_hit_frame_start = 14
+attack_hit_frame_start = 17
 attack_hit_frame_end = 15
-attack_sound_frame = 14
+attack_sound_frame = 17
 display_height = 64.0
 display_width = 64.0
 move_display_height = 58.0

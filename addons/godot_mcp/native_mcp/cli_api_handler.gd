@@ -128,7 +128,7 @@ func _doctor() -> Dictionary:
 	return {
 		"api_version": API_VERSION,
 		"schema_version": SCHEMA_VERSION,
-		"plugin_version": _get_plugin_version(),
+		"plugin_version": "1.0.7",
 		"godot_version": str(version.get("string", version)),
 		"project_path": ProjectSettings.globalize_path("res://"),
 		"editor_connected": _plugin != null,
@@ -136,12 +136,6 @@ func _doctor() -> Dictionary:
 		"catalog_hash": _registry.get_catalog_hash(),
 		"auth": {"required": _auth_required, "source": "bearer" if _auth_required else "localhost"},
 	}
-
-func _get_plugin_version() -> String:
-	var config := ConfigFile.new()
-	if config.load("res://addons/godot_mcp/plugin.cfg") == OK:
-		return str(config.get_value("plugin", "version", "unknown"))
-	return "unknown"
 
 func _parse_path(raw_path: String) -> Dictionary:
 	var question: int = raw_path.find("?")

@@ -66,18 +66,6 @@ func _apply_dev_gating(_on: bool = false) -> void:
 	btn_debug.visible = DevMode.enabled
 	btn_battlefield.visible = DevMode.enabled
 
-## 开发者模式专属快捷键：F12 切换「局内」上方按钮整排（游戏帮助/游戏设置/调整/退出/开发工具）显隐
-## 仅开发者模式下生效；切换的是全局标志 DevMode.hide_in_battle_top_buttons，因此主菜单按 F12 也能预隐藏，
-## 进入战斗后自动套用——主菜单自身的按钮（战役/单人/多人/攻略/设置/退出/控制台）不受任何影响（F11 已禁用）
-func _unhandled_input(event: InputEvent) -> void:
-	if not DevMode.enabled:
-		return
-	if not (event is InputEventKey) or not event.pressed or event.echo:
-		return
-	if event.keycode == KEY_F12:
-		DevMode.hide_in_battle_top_buttons = not DevMode.hide_in_battle_top_buttons
-		_show_toast("局内按钮栏：%s" % ("隐藏" if DevMode.hide_in_battle_top_buttons else "显示"))
-
 func _apply_localization() -> void:
 	## 标题使用图片，无需设置文本
 	## 同步更新设置对话框本地化
@@ -135,6 +123,9 @@ func _on_btn_quit_pressed() -> void:
 	confirm.get_cancel_button().text = tr("CANCEL")
 	confirm.process_mode = Node.PROCESS_MODE_ALWAYS
 	UIButtonHelper.setup_detail_frame_dialog(confirm)
+	## 与局内退出框共用紧凑长方形操作按钮，避免详情框内边距把按钮撑大
+	UIButtonHelper.setup_dialog_action_button(confirm.get_ok_button())
+	UIButtonHelper.setup_dialog_action_button(confirm.get_cancel_button())
 	add_child(confirm)
 	confirm.popup_centered()
 	## 在对话框弹出后，在内部构建上下两级结构（标题在上、正文在下）
@@ -195,16 +186,23 @@ func _on_github_label_clicked(event: InputEvent) -> void:
 func _show_difficulty_dialog() -> void:
 	## 创建对话框
 	var dialog = AcceptDialog.new()
-	dialog.title = tr("SELECT_DIFFICULTY")
+	dialog.title = ""  ## 标题栏已隐藏，标题改在框内以 Label 呈现
 	dialog.dialog_text = ""
 	dialog.ok_button_text = tr("CANCEL")
 	add_child(dialog)
+	## #7：难度选择框统一为退出提示框同款「兵种详情框」米色描边框
+	UIButtonHelper.setup_detail_frame_dialog(dialog)
+	## #5（2026-08-26）：框内「取消」按钮同步米色描边样式
+	UIButtonHelper.setup_detail_frame_button(dialog.get_ok_button())
 
 	## 创建垂直容器放置难度按钮
 	var vbox = VBoxContainer.new()
 	vbox.custom_minimum_size = Vector2(200, 0)
 	vbox.add_theme_constant_override("separation", 10)
 	dialog.add_child(vbox)
+	## 标题栏已隐藏，标题在框内呈现（与退出提示框一致）
+	vbox.add_child(UIButtonHelper.make_detail_frame_title(tr("SELECT_DIFFICULTY")))
+	vbox.add_child(Control.new())
 
 	## 定义三个难度选项
 	var difficulties = [
@@ -218,7 +216,8 @@ func _show_difficulty_dialog() -> void:
 		var btn = Button.new()
 		btn.text = diff.text
 		btn.custom_minimum_size = Vector2(180, 40)
-		UIButtonHelper.setup_button(btn)
+		## #5（2026-08-26）：难度模式按钮统一为「兵种详情框」同款米色描边样式
+		UIButtonHelper.setup_detail_frame_button(btn)
 		## #5：悬停显示当前难度介绍
 		match diff.diff:
 			0: btn.tooltip_text = "简单：AI 每 2 秒随机出兵，不分析克制、不运营，新手友好"

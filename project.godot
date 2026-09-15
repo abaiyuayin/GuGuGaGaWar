@@ -23,6 +23,10 @@ boot_splash/bg_color=Color(1, 1, 1, 1)
 boot_splash/show_image=false
 config/icon="res://assets/ui/app_icon.png"
 
+[audio]
+
+general/default_playback_type.web=0
+
 [autoload]
 
 GameManager="*res://autoload/game_manager.gd"
@@ -38,6 +42,7 @@ RoguelikeManager="*res://autoload/roguelike_manager.gd"
 HeroSkillManager="*res://autoload/hero_skill_manager.gd"
 DevMode="*res://autoload/dev_mode.gd"
 MCPRuntimeProbe="*uid://bsg12huaf1u5i"
+McpInteractionServer="*res://autoload/mcp_interaction_server.gd"
 
 [display]
 
@@ -49,7 +54,7 @@ window/stretch/aspect="expand"
 
 [editor_plugins]
 
-enabled=PackedStringArray("godot_mcp")
+enabled=PackedStringArray("res://addons/godot_mcp/plugin.cfg", "res://addons/minimize_html_build/plugin.cfg")
 
 [gui]
 
@@ -125,6 +130,10 @@ locale/translations=PackedStringArray("res://assets/localization/localization.zh
 2d_physics/layer_2="enemy_units"
 2d_physics/layer_3="buildings"
 2d_physics/layer_4="projectiles"
+
+[physics]
+
+common/max_physics_steps_per_frame=1
 
 [rendering]
 

@@ -17,7 +17,7 @@ damage = 40
 attack_range = 7.0
 attack_speed = 3.0
 damage_by_hit = [{
-1: 30
+1: 25
 }]
 attack_hit_frame_start = 14
 attack_sound_frame = 14
@@ -27,6 +27,7 @@ move_display_height = 39.0
 move_display_width = 40.0
 attack_display_height = 137.0
 attack_display_width = 137.0
+walk_flip_override = 1
 attack_flip_override = 1
 projectile_texture = ExtResource("1_bolt")
 color_red = Color(0.75, 0.25, 0.55, 1)

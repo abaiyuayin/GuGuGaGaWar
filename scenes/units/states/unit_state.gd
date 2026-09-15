@@ -118,7 +118,14 @@ func try_ranged_retreat(anim: String = "move") -> bool:  ## 定义远程后退�
 	if res == null or not res.is_ranged:  ## 无资源或非远程
 		return false  ## 不后退
 	## 风筝对象是「全场最近的敌人」，不再局限于近战——被敌方远程顶到脸上同样要拉开身位
-	var threat: Unit = unit.find_nearest_enemy()  ## 查找最近敌人
+	## #性能（2026-08-27）：索敌半径由 INF 收窄到 RETREAT_SAFE_DISTANCE_PX。
+	## 下面第一道闸门就是「威胁 ≥ 安全距离即不后撤」，超出该距离的最近敌人对本函数的
+	## 返回值毫无影响，全场扫描纯属浪费（竞技场 300 兵时每帧每个远程兵都要扫一遍）。
+	## 肉鸽模式原本走 get_chase_range_px() 限半径，这里取两者较小值，行为逐条不变。
+	var seek_r: float = Constants.RETREAT_SAFE_DISTANCE_PX
+	if RoguelikeManager.is_active:
+		seek_r = minf(seek_r, unit.get_chase_range_px())
+	var threat: Unit = unit.find_nearest_enemy_in_range(seek_r)  ## 安全距离内最近敌人
 	if threat == null or not is_instance_valid(threat):  ## 没有有效敌人
 		return false  ## 不后退
 	var threat_vec: Vector2 = unit.global_position - threat.global_position  ## 由威胁指向自己的向量
@@ -137,6 +144,6 @@ func try_ranged_retreat(anim: String = "move") -> bool:  ## 定义远程后退�
 	## 改为朝向与位移一致（面朝己方基地转身后撤），视觉上就是正常的逃跑/后撤。
 	## #5（2026-08-08）：改用带滞回死区的朝向设置——retreat_dir.x 在近垂直后撤时会在 ±阈值间抖动，
 	## 旧 set_facing_direction(±1) 每帧硬翻转 → 「疯狂左右抽搐」。传原始方向分量 + 速度相关死区。
-	unit.set_facing_hysteresis(retreat_dir.x, maxf(0.25, speed_px * 0.4))  ## 意图方向 + 滞回死区
+	unit.set_facing_hysteresis(retreat_dir.x * speed_px, maxf(0.25, speed_px * 0.4))  ## 传像素速度 X，避免归一化方向落入死区
 	unit.play_anim(anim)  ## 播放动画（后摇时传 "attack" 保持攻击姿态）
 	return true  ## 本帧已后退

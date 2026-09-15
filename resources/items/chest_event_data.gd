@@ -12,10 +12,13 @@ class_name ChestEventData extends Resource
 @export var title: String = ""
 ## 事件描述（玩家视角的场景叙述）
 @export var description: String = ""
-## 三个选项：每个为 Dictionary { "label": String, "effect_type": String, "value": float, "result": String }
+## 三个选项：每个为 Dictionary
+##   { "label": String, "effect_type": String, "value": float, "result": String, "cost_gold": int }
 ## effect_type 取值（由 RoguelikeMeta._apply_chest_event 执行）：
 ##   gain_card / gain_low_card / gain_artifact / gain_order
 ##   gain_gold / lose_gold / lose_card / upgrade_random / nothing
+## cost_gold（可选，>0）表示「先付费再兑现主效果」的复合选项：
+##   金币不足时该选项禁用；付费成功后才执行 effect_type。
 @export var options: Array[Dictionary] = []
 
 ## 从字典（JSON 一条记录）填充本资源字段

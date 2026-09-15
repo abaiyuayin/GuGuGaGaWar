@@ -122,11 +122,10 @@ func _build_top_navbar() -> void:
 
 ## 设置按钮样式与事件
 func _setup_buttons() -> void:
-	UIButtonHelper.setup_button(back_btn)
-	## #25：兵种解锁/成就按钮统一为米色羊皮卷纸风格，与详情框/面板保持一致
-	UIButtonHelper.setup_parchment_button(unlock_btn)
-	UIButtonHelper.setup_parchment_button(achievements_btn)
-	UIButtonHelper.setup_button(random_mode_btn)
+	UIButtonHelper.setup_detail_frame_button(back_btn)
+	for nav_btn: Button in [unlock_btn, achievements_btn, random_mode_btn]:
+		UIButtonHelper.setup_topbar_button(nav_btn, Color(1, 1, 1, 1), UIButtonHelper.TEX_BUTTON_TOPBAR_3)
+
 	## #20：右上角导航按钮放大 ×2，便于触屏点击（尺寸 160×64，字号 26）
 	for nav_btn: Button in [unlock_btn, achievements_btn, random_mode_btn]:
 		nav_btn.custom_minimum_size = Vector2(160, 64)
@@ -383,7 +382,7 @@ func _create_level_marker(level: int, pos: Vector2, is_unlocked: bool) -> Contro
 		btn.text = ""
 		## 未解锁显示锁图标
 		var lock := Label.new()
-		lock.text = "🔒"
+		lock.text = "锁"
 		lock.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		lock.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		lock.add_theme_font_size_override("font_size", 22)
@@ -485,16 +484,22 @@ func _show_difficulty_dialog(level: int) -> void:
 		_difficulty_dialog = null
 	
 	_difficulty_dialog = AcceptDialog.new()
-	_difficulty_dialog.title = tr("CAMPAIGN_SELECT_DIFF") % level
+	_difficulty_dialog.title = ""  ## 标题栏已隐藏，标题改在框内以 Label 呈现
 	_difficulty_dialog.dialog_text = ""
 	_difficulty_dialog.ok_button_text = tr("CAMPAIGN_CANCEL")
 	add_child(_difficulty_dialog)
-	UIButtonHelper.setup_wood_panel(_difficulty_dialog)
+	## #7：难度选择框统一为退出提示框同款「兵种详情框」米色描边框
+	UIButtonHelper.setup_detail_frame_dialog(_difficulty_dialog)
+	## #5（2026-08-26）：框内「取消」按钮同步米色描边样式
+	UIButtonHelper.setup_detail_frame_button(_difficulty_dialog.get_ok_button())
 	
 	var vbox := VBoxContainer.new()
 	vbox.custom_minimum_size = Vector2(300, 0)
 	vbox.add_theme_constant_override("separation", 8)
 	_difficulty_dialog.add_child(vbox)
+	## 标题栏已隐藏，标题在框内呈现（与退出提示框一致）
+	vbox.add_child(UIButtonHelper.make_detail_frame_title(tr("CAMPAIGN_SELECT_DIFF") % level))
+	vbox.add_child(Control.new())
 
 	var unlocked_diff: int = CampaignProgress.get_unlocked_difficulty(level)
 
@@ -514,24 +519,28 @@ func _show_difficulty_dialog(level: int) -> void:
 		if is_diff_completed:
 			btn_text += " ✓"
 		if not is_diff_unlocked:
-			btn_text = "🔒 " + btn_text
+			btn_text = "锁 " + btn_text
 		btn.text = btn_text
 		btn.custom_minimum_size = Vector2(170, 40)
 		btn.disabled = not is_diff_unlocked
 		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		UIButtonHelper.setup_button(btn)
+		## #5（2026-08-26）：难度模式按钮统一为「兵种详情框」同款米色描边样式。
+		## 难度区分改用字色（原 modulate 会把米色底整体染色，无法与返回/取消同款）。
+		var diff_font: Color = Color(0.35, 0.12, 0.08, 1.0)
+		if is_diff_completed:
+			diff_font = Color(0.13, 0.42, 0.15, 1.0)
+		elif is_diff_unlocked:
+			diff_font = diff_color.darkened(0.45)
+		else:
+			diff_font = Color(0.45, 0.4, 0.35, 1.0)
+		UIButtonHelper.setup_detail_frame_button(btn, diff_font)
 		## #12：难度提示支持开发者模式自定义编辑，悬停显示 tooltip（Godot 4 无 tooltip_delay 属性，
 		## 延迟用引擎默认值，已删除 Godot 3 遗留的 tooltip_delay 赋值，避免运行时 Invalid assignment）
 		btn.tooltip_text = _get_diff_tip(level, i)
 		if not is_diff_unlocked:
 			btn.tooltip_text = tr("CAMPAIGN_LOCKED_HINT")
 
-		if is_diff_completed:
-			btn.modulate = Color(0.6, 1.0, 0.6)
-		elif is_diff_unlocked:
-			btn.modulate = diff_color
-		else:
-			btn.modulate = Color(0.5, 0.5, 0.5)
+		## 难度区分已改为字色（见上方 setup_detail_frame_button），不再整体 modulate 染色
 
 		btn.pressed.connect(func():
 			## #需求20：难度按钮点击直接开战（原 #12 的开发者模式「编辑难度提示」弹框已删除）
@@ -547,8 +556,8 @@ func _show_difficulty_dialog(level: int) -> void:
 		win_btn.custom_minimum_size = Vector2(110, 40)
 		win_btn.disabled = not is_diff_unlocked
 		win_btn.visible = DevMode.enabled
-		UIButtonHelper.setup_button(win_btn)
-		win_btn.modulate = Color(0.9, 0.9, 0.9)
+		UIButtonHelper.setup_detail_frame_button(win_btn)
+		win_btn.modulate = Color(1, 1, 1)
 		win_btn.pressed.connect(func():
 			AudioManager.play_ui_click()
 			_close_difficulty_dialog()
@@ -648,15 +657,24 @@ func _on_random_mode_pressed() -> void:
 	## 先弹出英雄选择界面，选完英雄才能开局（#208）
 	_open_hero_select()
 
-## 打开肉鸽英雄选择界面；确认后由界面回调负责 start_run + 进入地图
+## 打开肉鸽英雄选择界面；确认后由界面回调负责 start_run + 进入地图。
+## 界面同时承载「继续上次征程」（读档）与进阶难度选择。
 func _open_hero_select() -> void:
 	var hero_select := RoguelikeHeroSelect.new()
 	add_child(hero_select)
 	hero_select.hero_confirmed.connect(_on_hero_confirmed)
+	hero_select.continue_run_requested.connect(_on_roguelike_continue_requested)
 
-## 英雄选择确认：拿到英雄 ID，开启 run 并进入地图总控台
-func _on_hero_confirmed(hero_id: String) -> void:
-	RoguelikeManager.start_run(hero_id)
+## 英雄选择确认：拿到英雄 ID 与进阶等级，开启 run 并进入地图总控台
+func _on_hero_confirmed(hero_id: String, ascension: int) -> void:
+	RoguelikeManager.start_run(hero_id, ascension)
+	GameManager.enter_roguelike_map()
+
+## 继续上次征程：读档成功才切到 hub；存档损坏时留在战役地图并提示
+func _on_roguelike_continue_requested() -> void:
+	if not RoguelikeManager.load_run():
+		push_warning("CampaignMap: 肉鸽存档读取失败，已忽略")
+		return
 	GameManager.enter_roguelike_map()
 
 ## 刷新关卡标记（通关后调用）

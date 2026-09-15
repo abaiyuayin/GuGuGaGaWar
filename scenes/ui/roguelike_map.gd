@@ -6,6 +6,8 @@ extends CanvasLayer
 signal node_chosen(index: int)
 
 const TYPE_LABELS: Array[String] = ["战", "强", "休", "?", "商", "宝", "决战"]
+## 节点类型全名（悬停提示用）
+const TYPE_NAMES: Array[String] = ["普通战斗", "精英战斗", "休息处", "随机事件", "军需商店", "宝箱奇遇", "决战 Boss"]
 const TYPE_COLORS: Array[Color] = [
 	Color(0.95, 0.55, 0.42),  # 0 战斗 橙红
 	Color(0.88, 0.25, 0.25),  # 1 精英 深红
@@ -24,6 +26,8 @@ const BOSS_SIZE: Vector2 = Vector2(76, 76)
 
 var _node_buttons: Array[Button] = []
 var _node_positions: Dictionary = {}
+## resized 重建合并标记：拖拽窗口时 resized 每帧连发，合并到帧末只重建一次
+var _rebuild_queued: bool = false
 
 func _ready() -> void:
 	line_drawer.draw.connect(_on_line_drawer_draw)
@@ -37,11 +41,22 @@ func refresh() -> void:
 	_build_map()
 
 func _on_resized() -> void:
+	if _rebuild_queued:
+		return
+	_rebuild_queued = true
+	call_deferred("_flush_resize_rebuild")
+
+func _flush_resize_rebuild() -> void:
+	_rebuild_queued = false
+	if not is_inside_tree():
+		return
 	_build_map()
 
 func _build_map() -> void:
 	for b in _node_buttons:
-		b.queue_free()
+		if is_instance_valid(b):
+			map_root.remove_child(b)
+			b.queue_free()
 	_node_buttons.clear()
 	_node_positions.clear()
 	if RoguelikeManager.map_nodes.is_empty():
@@ -101,6 +116,7 @@ func _create_buttons() -> void:
 
 		var is_reachable: bool = i in reachable
 		btn.disabled = not is_reachable or node.visited
+		btn.tooltip_text = _node_tooltip(node)
 		if node.visited:
 			btn.modulate = Color(0.55, 0.55, 0.55, 0.7)
 		elif is_reachable:
@@ -109,6 +125,46 @@ func _create_buttons() -> void:
 		btn.pressed.connect(_on_node_pressed.bind(i))
 		map_root.add_child(btn)
 		_node_buttons.append(btn)
+
+## 战前敌情预览：节点悬停提示，战斗类节点给出波数 / 敌军阶层 / 预估总兵力
+func _node_tooltip(node: RoguelikeMapNode) -> String:
+	var name_text: String = TYPE_NAMES[node.node_type] if node.node_type < TYPE_NAMES.size() else "未知"
+	var lines: Array[String] = ["%s（第 %d 层）" % [name_text, node.floor_index + 1]]
+	match node.node_type:
+		RoguelikeManager.NodeType.COMBAT, RoguelikeManager.NodeType.ELITE, RoguelikeManager.NodeType.BOSS:
+			var boss_mult: float = RoguelikeDirector.BOSS_COUNT_MULT \
+					if node.node_type == RoguelikeManager.NodeType.BOSS else 1.0
+			var total: int = 0
+			var per_wave: Array[String] = []
+			for w in range(1, node.wave_count + 1):
+				var n: int = int(round(float(RoguelikeDirector.ENEMY_BASE_COUNT + w) * boss_mult))
+				total += n
+				per_wave.append(str(n))
+			lines.append("波数：%d 波（每波 %s）" % [node.wave_count, " / ".join(per_wave)])
+			lines.append("预估总兵力：约 %d 名" % total)
+			lines.append("敌军阶层上限：T%d" % node.enemy_tier)
+			var stat_mult: float = 1.0
+			if node.node_type == RoguelikeManager.NodeType.BOSS:
+				stat_mult = Constants.ROGUELIKE_BOSS_STAT_MULT
+			elif node.node_type == RoguelikeManager.NodeType.ELITE:
+				stat_mult = Constants.ROGUELIKE_ELITE_STAT_MULT
+			var depth: int = maxi(node.floor_index, 0)
+			var hp_mult: float = (1.0 + float(depth) * Constants.ROGUELIKE_ENEMY_HP_PER_FLOOR) \
+					* stat_mult * RoguelikeManager.ascension_enemy_hp_mult()
+			lines.append("敌军强度：血量 ×%.2f" % hp_mult)
+			if node.node_type != RoguelikeManager.NodeType.COMBAT:
+				lines.append("战利品：兵种卡三选一 + 文物三选一")
+			else:
+				lines.append("战利品：兵种卡三选一")
+		RoguelikeManager.NodeType.REST:
+			lines.append("恢复 30% 水晶耐久，并可整训一张卡或精简牌库")
+		RoguelikeManager.NodeType.SHOP:
+			lines.append("购买兵员卡 / 文物 / 军令卡，或付费精简牌库")
+		RoguelikeManager.NodeType.TREASURE:
+			lines.append("随机奇遇事件，三选一")
+		RoguelikeManager.NodeType.EVENT:
+			lines.append("随机事件，四选一")
+	return "\n".join(lines)
 
 func _make_node_style(node_type: int, radius: float) -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()

@@ -19,6 +19,13 @@ const REROLL_COST: int = 20
 const CARD_STOCK: int = 3
 ## 下方随机上架的文物 / 军令槽位数量
 const MIX_STOCK: int = 3
+## 兵员卡的最低售价（低于此值按此值收费，避免白送）
+const CARD_MIN_PRICE: int = 20
+## 首层商店（tier 1）额外提供的廉价补给：一张低价兵员卡的折扣比例
+## 开局只有 50 金，若全场最低价 60 起会让入口商店变成死格
+const ENTRY_FLOOR_DISCOUNT: float = 0.5
+## 「精简队列」服务的基础价格（付费从牌库移除一张卡）
+const REMOVE_CARD_COST: int = 40
 
 ## 本次进店允许出现的最高兵种阶层（由 RoguelikeMeta 传入）
 var _max_tier: int = 4
@@ -33,9 +40,10 @@ var _sold: Dictionary = {}
 var _gold_label: Label = null
 ## 刷新商品按钮（_build_ui 创建）
 var _reroll_btn: Button = null
-## 上排兵员卡行与下排文物/军令行
+## 上排兵员卡行、中排文物/军令卡行、下排服务行（精简队列）
 var _card_row: HBoxContainer = null
 var _mix_row: HBoxContainer = null
+var _service_row: HBoxContainer = null
 
 func _ready() -> void:
 	## 商店本身不暂停游戏，但保证即便外部处于暂停态按钮依然可点
@@ -82,9 +90,12 @@ func _build_ui() -> void:
 	## 上方：固定三张兵员卡
 	_add_section_label(root, "兵 员 卡（固定三张）", Color(0.68, 0.86, 1.0, 1.0))
 	_card_row = _make_row(root)
-	## 下方：随机三个文物或军令
-	_add_section_label(root, "文 物 / 军 令（随机三件）", Color(0.9, 0.8, 0.6, 1.0))
+	## 中间：随机三个文物或军令卡
+	_add_section_label(root, "文 物 / 军 令 卡（随机三件）", Color(0.9, 0.8, 0.6, 1.0))
 	_mix_row = _make_row(root)
+	## 下方：牌库管理服务
+	_add_section_label(root, "军 需 服 务", Color(0.95, 0.7, 0.6, 1.0))
+	_service_row = _make_row(root)
 
 	var footer := HBoxContainer.new()
 	footer.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -139,18 +150,19 @@ func _restock() -> void:
 			_stock_mix.append(item)
 	_rebuild_shelves()
 
-## 随机掷出一格下方商品：50% 文物 / 50% 军令；所选类别池耗尽时退回另一类
+## 随机掷出一格下方商品：50% 文物 / 50% 军令卡；所选类别池耗尽时退回另一类
 func _roll_mix_item() -> Dictionary:
 	var want_artifact: bool = randf() < 0.5
+	var owned_orders: Array[String] = RoguelikeManager.get_owned_order_ids()
 	if want_artifact:
 		var arts := ItemDatabase.roll_artifacts(1, RoguelikeManager.owned_artifacts)
 		if not arts.is_empty():
 			return {"kind": "artifact", "data": arts[0]}
-		var orders := ItemDatabase.roll_orders(1)
+		var orders := ItemDatabase.roll_orders(1, owned_orders)
 		if not orders.is_empty():
 			return {"kind": "order", "data": orders[0]}
 	else:
-		var orders := ItemDatabase.roll_orders(1)
+		var orders := ItemDatabase.roll_orders(1, owned_orders)
 		if not orders.is_empty():
 			return {"kind": "order", "data": orders[0]}
 		var arts := ItemDatabase.roll_artifacts(1, RoguelikeManager.owned_artifacts)
@@ -167,11 +179,18 @@ func _rebuild_shelves() -> void:
 		var res := UnitDatabase.get_unit(_stock_cards[i]) as UnitResource
 		if res == null:
 			continue
-		var price: int = RoguelikeManager.get_shop_price(maxi(res.cost, 20))
+		var base_cost: int = maxi(res.cost, CARD_MIN_PRICE)
+		## 入口层（tier 1）第一张卡半价：开局仅 50 金，否则首层商店会变成完全买不动的死格
+		if _max_tier <= 1 and i == 0:
+			base_cost = maxi(int(round(float(base_cost) * ENTRY_FLOOR_DISCOUNT)), CARD_MIN_PRICE)
+		var price: int = RoguelikeManager.get_shop_price(base_cost)
 		var key: String = "card:%s:%d" % [res.unit_id, i]
+		var sub_text: String = "T%d · HP%d · ATK%d" % [res.tier, res.max_hp, res.damage]
+		if _max_tier <= 1 and i == 0:
+			sub_text += "  ·  开拔特价"
 		var card := _create_card(
 			res.get_display_name(),
-			"T%d · HP%d · ATK%d" % [res.tier, res.max_hp, res.damage],
+			sub_text,
 			price,
 			_tier_color(res.tier),
 			key
@@ -205,7 +224,7 @@ func _rebuild_shelves() -> void:
 			key = "order:%s" % od.order_id
 			price = RoguelikeManager.get_shop_price(od.cost)
 			card = _create_card(
-				"%s〔%s〕" % [od.display_name, od.get_rarity_name()],
+				"%s〔军令卡·%s〕" % [od.display_name, od.get_rarity_name()],
 				"%s（%s）" % [od.description, od.get_duration_text()],
 				price,
 				od.get_rarity_color(),
@@ -214,7 +233,109 @@ func _rebuild_shelves() -> void:
 			card.pressed.connect(_on_buy_mix.bind("order", od.order_id, price, key))
 		_mix_row.add_child(card)
 
+	_rebuild_service_row()
 	_refresh_gold()
+
+## 重建底部服务行：付费移除牌库中一张卡（牌库管理）
+func _rebuild_service_row() -> void:
+	_clear_row(_service_row)
+	if _service_row == null:
+		return
+	var price: int = RoguelikeManager.get_shop_price(REMOVE_CARD_COST)
+	var removable: int = _removable_card_count()
+	var key: String = "service:remove_card"
+	var card := _create_card(
+		"精简队列",
+		"从牌库中移除一张卡（英雄卡除外，当前可移除 %d 张）" % removable,
+		price,
+		Color(0.95, 0.55, 0.45, 1.0),
+		key
+	)
+	if removable <= 0:
+		card.disabled = true
+	card.pressed.connect(_on_remove_card_pressed.bind(price, key))
+	_service_row.add_child(card)
+
+## 牌库中可被移除的卡数量（英雄卡受保护）
+func _removable_card_count() -> int:
+	var n: int = 0
+	for card_id in RoguelikeManager.deck:
+		if not UnitDatabase.is_hero_unit(card_id):
+			n += 1
+	return n
+
+## 点「精简队列」：扣款后弹出选卡列表
+func _on_remove_card_pressed(price: int, key: String) -> void:
+	if _sold.has(key):
+		return
+	if not RoguelikeManager.can_afford(price):
+		return
+	_open_remove_card_picker(price, key)
+
+## 弹出「选择要移除的卡」列表；确认后才扣款并移除
+func _open_remove_card_picker(price: int, key: String) -> void:
+	var layer := CanvasLayer.new()
+	layer.layer = 12
+	layer.process_mode = Node.PROCESS_MODE_ALWAYS
+	add_child(layer)
+	var backdrop := ColorRect.new()
+	backdrop.color = Color(0.0, 0.0, 0.0, 0.78)
+	backdrop.set_anchors_preset(Control.PRESET_FULL_RECT)
+	backdrop.mouse_filter = Control.MOUSE_FILTER_STOP
+	layer.add_child(backdrop)
+	var scroll := ScrollContainer.new()
+	scroll.set_anchors_preset(Control.PRESET_FULL_RECT)
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	layer.add_child(scroll)
+	var vbox := VBoxContainer.new()
+	vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	vbox.add_theme_constant_override("separation", 10)
+	scroll.add_child(vbox)
+
+	var title := Label.new()
+	title.text = "精简队列：选择要移除的一张卡（花费 %d 金币）" % price
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 22)
+	title.add_theme_color_override("font_color", Color(1.0, 0.9, 0.6, 1.0))
+	vbox.add_child(title)
+
+	## 按卡 ID 聚合，显示持有份数，避免同名卡刷满一屏
+	var counts: Dictionary = {}
+	for card_id in RoguelikeManager.deck:
+		if UnitDatabase.is_hero_unit(card_id):
+			continue
+		counts[card_id] = int(counts.get(card_id, 0)) + 1
+	for card_id in counts.keys():
+		var btn := Button.new()
+		btn.text = "%s  ×%d" % [_card_display_name(String(card_id)), int(counts[card_id])]
+		btn.add_theme_font_size_override("font_size", 18)
+		btn.pressed.connect(_on_remove_card_confirmed.bind(String(card_id), price, key, layer))
+		vbox.add_child(btn)
+
+	var cancel := Button.new()
+	cancel.text = "取消"
+	cancel.add_theme_font_size_override("font_size", 18)
+	cancel.pressed.connect(layer.queue_free)
+	vbox.add_child(cancel)
+
+## 卡 ID 的展示名（兵种取兵种名，军令卡取军令名 + 后缀）
+func _card_display_name(card_id: String) -> String:
+	if RoguelikeManager.is_order_card(card_id):
+		var od := ItemDatabase.get_order(RoguelikeManager.order_id_of(card_id))
+		return "%s（军令卡）" % od.display_name if od != null else card_id
+	var res := UnitDatabase.get_unit(card_id) as UnitResource
+	return res.get_display_name() if res != null else card_id
+
+## 确认移除：扣款 → 移卡 → 该服务本次进店内售罄
+func _on_remove_card_confirmed(card_id: String, price: int, key: String, layer: CanvasLayer) -> void:
+	if layer != null and is_instance_valid(layer):
+		layer.queue_free()
+	if _sold.has(key) or not RoguelikeManager.spend_gold(price):
+		return
+	RoguelikeManager.remove_card(card_id)
+	_sold[key] = true
+	_rebuild_shelves()
 
 ## 清空一行容器内的所有商品卡（先摘出再延迟释放，避免本帧重影）
 func _clear_row(row: HBoxContainer) -> void:

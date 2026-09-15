@@ -16,7 +16,7 @@
       "description": "一座半塌的军械库藏在断墙后，门口躺着两具白骨，甲胄锈得只剩轮廓。库内昏暗，隐约可见刀枪架。",
       "options": [
         {"label": "挑选兵器：获得一张随机卡牌", "effect_type": "gain_card", "value": 2, "result": "你挑出一柄尚能用的兵刃，收入行囊。"},
-        {"label": "深挖暗格：花 25 金币获得一张高阶卡牌", "effect_type": "lose_gold", "value": 25, "result": "暗格里藏着精锻兵器，但你需要贿赂守库的幽魂。"},
+        {"label": "深挖暗格：花 25 金币获得一张高阶卡牌", "effect_type": "gain_card", "value": 4, "cost_gold": 25, "result": "暗格里藏着精锻兵器，你贿赂了守库的幽魂。"},
         {"label": "扫兴离开", "effect_type": "nothing", "value": 0, "result": "尘土重新落回刀枪架，军械库恢复死寂。"}
       ]
     },
@@ -25,7 +25,7 @@
       "title": "饥饿流民",
       "description": "一队面黄肌瘦的流民挤在破庙里，见到你便围上来，七嘴八舌求一口吃的。他们衣衫褴褛，却目光炯炯。",
       "options": [
-        {"label": "施舍粮草：失去 30 金币，获得一张低级卡牌", "effect_type": "gain_low_card", "value": 0, "result": "流民千恩万谢，青壮年自愿从军相报。"},
+        {"label": "施舍粮草：花 30 金币获得一张低级卡牌", "effect_type": "gain_low_card", "value": 0, "cost_gold": 30, "result": "流民千恩万谢，青壮年自愿从军相报。"},
         {"label": "招募壮丁：获得一张低级卡牌", "effect_type": "gain_low_card", "value": 0, "result": "几个精壮汉子跟你走了，别的流民继续挨饿。"},
         {"label": "绕开而行", "effect_type": "nothing", "value": 0, "result": "你低头绕过破庙，身后传来压抑的哭声。"}
       ]
@@ -106,7 +106,7 @@
       "description": "渡口的船被冻在河中央，冰面闪着幽蓝的光。对岸有灯火，却不知深浅。艄公说冰已结了三尺。",
       "options": [
         {"label": "冒险踏冰：获得 45 金币", "effect_type": "gain_gold", "value": 45, "result": "你顺利过河，在岸边拾到一袋货钱。"},
-        {"label": "凿冰开道：花 20 金币买柴火", "effect_type": "lose_gold", "value": 20, "result": "火烤冰开，你帮着艄公把船拖了出来。"},
+        {"label": "凿冰开道：花 20 金币换取 45 金币货钱", "effect_type": "gain_gold", "value": 45, "cost_gold": 20, "result": "火烤冰开，你帮着艄公把船拖了出来，得了一份酬劳。"},
         {"label": "沿河绕行", "effect_type": "nothing", "value": 0, "result": "你多走了半天路，倒也不算吃亏。"}
       ]
     },
@@ -136,7 +136,7 @@
       "description": "村口立着「募」字旗，几个壮汉围在火堆旁磨刀。募兵官见你佩刀带甲，眼睛一亮，问你要不要搭伙。",
       "options": [
         {"label": "投军入伙：获得一张低级卡牌", "effect_type": "gain_low_card", "value": 0, "result": "几个刀客跟着你走了，队伍又壮了几分。"},
-        {"label": "资助军饷：花 30 金币获得一张高阶卡牌", "effect_type": "lose_gold", "value": 30, "result": "募兵官亲自挑了精锐编入你的麾下。"},
+        {"label": "资助军饷：花 30 金币获得一张高阶卡牌", "effect_type": "gain_card", "value": 4, "cost_gold": 30, "result": "募兵官亲自挑了精锐编入你的麾下。"},
         {"label": "婉言谢绝", "effect_type": "nothing", "value": 0, "result": "募兵官拱拱手，继续招呼别的路人。"}
       ]
     },
@@ -155,7 +155,7 @@
       "title": "荒村祭坛",
       "description": "荒村的中央立着一座石祭坛，坛上摆着牲礼与血酒。村长说今年收成差，求的是「兵不犯境」。",
       "options": [
-        {"label": "献上战利品：失去一张卡牌，获得 60 金币", "effect_type": "lose_card", "value": 0, "result": "祭坛显灵，村民凑出犒劳你的银钱。"},
+        {"label": "献上战利品：失去一张卡牌，换取 60 金币", "effect_type": "lose_card_for_gold", "value": 60, "result": "祭坛显灵，村民凑出犒劳你的银钱。"},
         {"label": "虔诚祈福：随机一张卡获得强化", "effect_type": "upgrade_random", "value": 0, "result": "烟雾中你仿佛看见了旗开得胜的预兆。"},
         {"label": "绕过祭坛", "effect_type": "nothing", "value": 0, "result": "你不在祭坛前停留，径直穿村而过。"}
       ]
@@ -165,8 +165,8 @@
       "title": "铁矿工匠",
       "description": "镇上的铁匠铺炉火正旺，老铁匠赤着上身锻打一柄陌刀，火星四溅。他说手艺传了三代，专打军器。",
       "options": [
-        {"label": "订做军器：花 30 金币，随机一张卡获得强化", "effect_type": "lose_gold", "value": 30, "result": "好刀配好兵，你的队伍战力更上一层。"},
-        {"label": "买现成甲胄：花 25 金币获得一张随机军令", "effect_type": "lose_gold", "value": 25, "result": "老铁匠还附赠了一条排兵布阵的锦囊。"},
+        {"label": "订做军器：花 30 金币，随机一张卡获得强化", "effect_type": "upgrade_random", "value": 0, "cost_gold": 30, "result": "好刀配好兵，你的队伍战力更上一层。"},
+        {"label": "买现成甲胄：花 25 金币获得一张随机军令", "effect_type": "gain_order", "value": 0, "cost_gold": 25, "result": "老铁匠还附赠了一条排兵布阵的锦囊。"},
         {"label": "只看不买", "effect_type": "nothing", "value": 0, "result": "铁匠摇摇头，继续打他的铁。"}
       ]
     },
@@ -176,7 +176,7 @@
       "description": "伤兵营外支着几顶白布帐篷，军医正用烈酒给伤兵剜腐肉。药香与血腥气混在一起，火盆烧得通红。",
       "options": [
         {"label": "求一剂补药：获得一张随机军令", "effect_type": "gain_order", "value": 0, "result": "军医塞给你一卷伤兵营的军令文书。"},
-        {"label": "捐赠药材：花 25 金币获得一件文物", "effect_type": "lose_gold", "value": 25, "result": "军医感念你的慷慨，送了你一件护身旧物。"},
+        {"label": "捐赠药材：花 25 金币获得一件文物", "effect_type": "gain_artifact", "value": 0, "cost_gold": 25, "result": "军医感念你的慷慨，送了你一件护身旧物。"},
         {"label": "转身离开", "effect_type": "nothing", "value": 0, "result": "伤兵的呻吟声渐渐被风吹散。"}
       ]
     },

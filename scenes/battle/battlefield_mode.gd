@@ -14,6 +14,9 @@ var grid_layer: Node2D = null
 var ground_layer: Node2D = null   ## 阵营光圈层（单位之下、网格之上）
 var selection_layer: Node2D = null
 const DRAW_LAYER_SCRIPT := preload("res://scenes/battle/battle_draw_layer.gd")
+## #框选（2026-09-04）：框选判定 / 编队移动令 / 攻击锁定令的共享实现（与肉鸽指挥层同源，
+## 保证两个模式的指挥手感完全一致）
+const UNIT_COMMAND := preload("res://scripts/battle/unit_command.gd")
 
 ## ── 摄像机参数（照搬 battle_root）────────────────────────────
 const CAMERA_SPEED: float = 600.0
@@ -86,6 +89,12 @@ const ORDER_MARK_DURATION: float = 1.0
 var _order_mark_pos: Vector2 = Vector2.INF
 var _order_mark_time: float = 0.0
 var _order_mark_team: int = 0
+## #框选攻击锁定（2026-09-04）：本次反馈是攻击令（红）还是移动令（阵营色）
+var _order_mark_is_attack: bool = false
+## 当前全体锁定的敌人：有效期内常驻画红圈，供玩家确认在集火谁
+var _attack_lock_target: Unit = null
+## 攻击锁定标记配色（红，与阵营色区分开）
+const ATTACK_MARK_COLOR: Color = Color(1.0, 0.30, 0.24, 1.0)
 
 ## 撤回：每次出兵（单击 1 只 / 一次框选铺兵 N 只）记为一批，可连续撤回多步
 var _deploy_batches: Array = []   ## Array[Array]，末尾为最近一批
@@ -117,8 +126,10 @@ func _ready() -> void:
 
 	## 单位生成接线：加入 UnitContainer 并连接死亡；不连 base_destroyed（无胜负）
 	BattleManager.unit_spawned.connect(_on_unit_spawned)
-	if DevMode.enabled:
-		Unit.show_attack_ranges = true
+	## #性能（2026-08-27）：不再进场就开攻击范围圈。竞技场是 DevMode 专属入口，
+	## 旧代码等于「一进沙盒就给每个远程兵每帧画 64 段 draw_arc」，300 兵时纯粹白烧帧。
+	## 需要看范围圈时从开发工具菜单「显示兵种攻击距离」手动开（F3 判定框同理，不受影响）。
+	Unit.show_attack_ranges = false
 
 	## 创建绘制层：grid 与 ground 插到 UnitContainer 之前（背景之上、单位之下），
 	## selection 追加到最后（单位之上）。
@@ -153,11 +164,14 @@ func _ready() -> void:
 ## ── 出兵范围持久化（项目内 data/arena_deploy_zone.json）──────────────
 ## 编辑器运行时可写 res://；导出版 res:// 只读 → 写失败只打日志不报错。
 func _load_deploy_zone() -> void:
+	## #6（2026-08-26）：竞技场默认全程全图可放置兵种。
+	## 旧行为：data/ 里存在配置文件即视为「已配置」→ 进场就带着上次保存的出兵范围限制。
+	## 现改为：开局一律不生效（deploy_zone_configured 保持 false），仅本局手动进出
+	## 「出兵范围」编辑并落盘（_save_deploy_zone）后才开始限制。格子数据照常读取，
+	## 这样打开编辑模式仍能看到/续编上次画的区域。
+	deploy_zone_configured = false
 	if not FileAccess.file_exists(DEPLOY_ZONE_PATH):
-		deploy_zone_configured = false
 		return
-	## 文件存在即视为「配置过」（即使内容为空或损坏，也按用户配置处理）
-	deploy_zone_configured = true
 	var f := FileAccess.open(DEPLOY_ZONE_PATH, FileAccess.READ)
 	if f == null:
 		return
@@ -203,6 +217,9 @@ func _on_unit_spawned(unit: Node2D, _player_id: int) -> void:
 
 func _on_unit_died(unit: Unit, _killer_team: int, _killer_id: String) -> void:
 	selected_units.erase(unit)
+	## 集火目标阵亡 → 撤掉红圈（forced_target 由各单位的 sync_forced_target 自行清理）
+	if _attack_lock_target == unit:
+		_attack_lock_target = null
 
 ## 切换网格显隐（G 键 / HUD 按钮共用），并同步刷新 HUD 按钮文案
 func toggle_grid() -> void:
@@ -257,11 +274,13 @@ func is_combat_active() -> bool:
 ## 将当前战斗状态应用到所有已存在单位（和平=站定不攻击；开战=主动出击）
 func _apply_combat_state() -> void:
 	var active = is_combat_active()
+	_attack_lock_target = null  ## 切换和平/开战即撤销全体集火令
 	for u in unit_container.get_children():
 		if u is Unit and is_instance_valid(u) and not u.is_dead:
 			u.hold_position = not active
 			u.combat_enabled = active
 			u.order_pos = Vector2.INF
+			u.clear_forced_target()  ## #框选攻击锁定：切换战斗状态时一并撤销玩家指定的目标
 			## #竞技场（2026-08-24）：切回和平/停战时，正处于攻击状态的单位必须立刻拉回
 			## move（沙盒站定分支），否则它会把当前攻击周期打完才停手。
 			if not active:
@@ -334,10 +353,17 @@ func _input(event: InputEvent) -> void:
 			elif _is_left_down and not _left_dragged:
 				## #竞技场（2026-08-24 用户拍板）：单击优先「取消框选」；
 				## 无选中单位时才出 1 兵。
+				## #框选攻击锁定（2026-09-04）：有选中单位且点到敌方单位 → 全体集火，
+				## 优先级高于「取消框选」（点空地才是取消）。
 				if not selected_units.is_empty():
-					selected_units.clear()
-					if ground_layer != null and is_instance_valid(ground_layer):
-						ground_layer.queue_redraw()
+					var picked: Unit = UNIT_COMMAND.pick_enemy_at(
+							unit_container, battlefield.get_global_mouse_position(), selected_team)
+					if picked != null:
+						_issue_attack_order(picked)
+					else:
+						selected_units.clear()
+						if ground_layer != null and is_instance_valid(ground_layer):
+							ground_layer.queue_redraw()
 				else:
 					_spawn_one_at_mouse()
 			elif _is_left_down and _left_dragged:
@@ -373,10 +399,18 @@ func _process(delta: float) -> void:
 	## 右键移动令反馈计时（阵营色椭圆 1 秒渐隐）
 	if _order_mark_time > 0.0:
 		_order_mark_time = maxf(0.0, _order_mark_time - delta)
-	if selection_layer != null and is_instance_valid(selection_layer):
+	## #框选攻击锁定（2026-09-04）：集火目标失效（回池/阵亡）时撤掉红圈
+	if _attack_lock_target != null and (not is_instance_valid(_attack_lock_target) \
+			or _attack_lock_target.is_dead):
+		_attack_lock_target = null
+	## #性能（2026-08-27）：两层重绘加内容守卫。
+	## _draw_selection 只在拖框时有内容，_draw_team_rings 只在有选中单位或移动令反馈时有内容 ——
+	## 旧代码无条件每帧各排一次重绘，空场也在白付两次 CanvasItem 重绘调度。
+	if _left_dragged and selection_layer != null and is_instance_valid(selection_layer):
 		selection_layer.queue_redraw()
-	## 阵营光圈随单位移动，必须与 selection_layer 一样每帧重绘
-	if ground_layer != null and is_instance_valid(ground_layer):
+	## 阵营光圈随单位移动，有选中单位（或移动令反馈未渐隐完 / 集火红圈仍在）时必须每帧重绘
+	if (not selected_units.is_empty() or _order_mark_time > 0.0 or _attack_lock_target != null) \
+			and ground_layer != null and is_instance_valid(ground_layer):
 		ground_layer.queue_redraw()
 
 ## ── 出兵 / 框选 / 移动 ─────────────────────────────────────
@@ -447,7 +481,11 @@ func undo_last_deploy() -> bool:
 			continue
 		selected_units.erase(u)
 		BattleManager.remove_unit(u, u.team if u.team <= 1 else 1)
-		u.queue_free()
+		## #性能（2026-08-27）：撤回改为回收进对象池，替代 queue_free。
+		## 旧实现每次撤回都把实例永久销毁，撤回后再铺兵只能重新 instantiate ——
+		## 与 2026-08-20「清空后再出兵特别卡」同一类问题（见 clear_all_units 注释）。
+		u.is_dead = true  ## 标记死亡，避免回池后残留状态机继续跑（recycle 会关物理处理）
+		BattleManager.recycle_unit(u)
 	_refresh_undo_btn()
 	if selection_layer != null and is_instance_valid(selection_layer):
 		selection_layer.queue_redraw()
@@ -469,11 +507,7 @@ func _on_drag_release() -> void:
 	var box: Rect2 = _drag_box
 	## 框内是否有当前选中阵营的存活（非基地）单位 → 框选它们
 	## 2026-08-18 用户确认：选择阵营 = 只控制该阵营兵种，框选按 selected_team 过滤
-	var inside: Array[Unit] = []
-	for u in unit_container.get_children():
-		if u is Unit and is_instance_valid(u) and not u.is_dead and not u.is_base_unit \
-				and u.team == selected_team and _is_unit_boxed(u, box):
-			inside.append(u)
+	var inside: Array[Unit] = UNIT_COMMAND.collect_boxed_units(unit_container, box, selected_team)
 	if not inside.is_empty():
 		selected_units = inside
 		selection_layer.queue_redraw()
@@ -554,31 +588,35 @@ static func compute_grid_deploy_positions(box: Rect2, grid_size: float) -> Array
 ## 相邻编队位永远处在互推范围内 → 分离推力抵消前进速度（表现为「某只兵移速特别慢」），
 ## 且两兵目标点互相在分离半径内时谁都进不到到达阈值 → 永远播 move 动画原地狂奔。
 ## 改为间距 = max(GRID_SIZE, SEPARATION_RADIUS + 4)，让编队位彼此落在分离感知范围之外。
-const FORMATION_SPACING: float = 44.0
+## #框选（2026-09-04）：编队分配与下令本体已抽到 UNIT_COMMAND（与肉鸽共用），此处只做反馈
+const FORMATION_SPACING: float = UNIT_COMMAND.FORMATION_SPACING
 func _issue_move_order() -> void:
 	if selected_units.is_empty():
 		return
 	var center: Vector2 = _clamp_to_map(battlefield.get_global_mouse_position())
-	var n: int = selected_units.size()
-	var cols: int = int(ceil(sqrt(float(n))))
-	var rows: int = int(ceil(float(n) / float(cols)))
-	var idx: int = 0
-	for u in selected_units:
-		if not is_instance_valid(u) or u.is_dead:
-			continue
-		var gx: int = idx % cols
-		var gy: int = idx / cols
-		## 纵向居中按实际行数算（原用 cols 导致行数≠列数时整个阵列偏心）
-		var offset: Vector2 = Vector2(
-			(float(gx) - float(cols - 1) * 0.5) * FORMATION_SPACING,
-			(float(gy) - float(rows - 1) * 0.5) * FORMATION_SPACING)
-		u.order_pos = _clamp_to_map(center + offset)
-		u.hold_position = true
-		idx += 1
+	var map_bounds := Rect2(Vector2(MAP_LEFT, MAP_TOP),
+			Vector2(MAP_RIGHT - MAP_LEFT, MAP_BOTTOM - MAP_TOP))
+	if UNIT_COMMAND.issue_move_order(selected_units, center, map_bounds, FORMATION_SPACING) <= 0:
+		return
 	## #竞技场（2026-08-24 需求4）：下令点弹出阵营色椭圆，1 秒渐隐
+	_attack_lock_target = null  ## 移动令与集火令互斥，撤掉集火红圈
 	_order_mark_pos = center
 	_order_mark_time = ORDER_MARK_DURATION
 	_order_mark_team = selected_team
+	_order_mark_is_attack = false
+
+## #框选攻击锁定（2026-09-04）：左键点敌人 → 当前框选单位全体集火该目标。
+## 锁定期间不自动换目标、不受肉鸽牵引半径约束，直到目标阵亡或玩家改令（再点一个敌人 / 下移动令）。
+## enemy: 被点中的敌方单位
+func _issue_attack_order(enemy: Unit) -> void:
+	var count: int = UNIT_COMMAND.issue_attack_order(selected_units, enemy)
+	if count <= 0:
+		return
+	_attack_lock_target = enemy
+	_order_mark_pos = enemy.global_position
+	_order_mark_time = ORDER_MARK_DURATION
+	_order_mark_team = selected_team
+	_order_mark_is_attack = true
 
 ## ── 绘制 ───────────────────────────────────────────────────
 func _draw_grid() -> void:
@@ -619,49 +657,33 @@ func _draw_team_rings() -> void:
 			var c: Color = Unit.team_color(u.team)
 			var p: Vector2 = u.global_position + Vector2(0.0, 12.0)
 			_draw_ellipse_filled(ground_layer, p, SEL_ELLIPSE_HALF_W, SEL_ELLIPSE_HALF_H, Color(c.r, c.g, c.b, 0.55))
+	## #框选攻击锁定（2026-09-04）：集火目标常驻红圈，只要锁定还有效就一直画
+	if _attack_lock_target != null and is_instance_valid(_attack_lock_target) \
+			and not _attack_lock_target.is_dead:
+		ground_layer.draw_polyline(
+			_ellipse_points(_attack_lock_target.global_position + Vector2(0.0, 12.0),
+					SEL_ELLIPSE_HALF_W, SEL_ELLIPSE_HALF_H),
+			ATTACK_MARK_COLOR, 2.0)
 	## #竞技场（2026-08-24 需求4）：右键移动令点击反馈——阵营色椭圆描边，1 秒渐隐 + 微扩
+	## #框选攻击锁定（2026-09-04）：攻击令用红色，与移动令区分
 	if _order_mark_time > 0.0 and _order_mark_pos.is_finite():
 		var t: float = _order_mark_time / ORDER_MARK_DURATION   ## 1→0
-		var mc: Color = Unit.team_color(_order_mark_team)
+		var mc: Color = ATTACK_MARK_COLOR if _order_mark_is_attack else Unit.team_color(_order_mark_team)
 		var grow: float = 1.0 + (1.0 - t) * 0.35
 		ground_layer.draw_polyline(
 			_ellipse_points(_order_mark_pos, SEL_ELLIPSE_HALF_W * grow, SEL_ELLIPSE_HALF_H * grow),
 			Color(mc.r, mc.g, mc.b, t * 0.95), 2.5)
 
-## 框选命中判定：单位有 1/3 以上面积落在框内即算选中（2026-08-20 用户拍板，依据单位碰撞体尺寸）
-## 旧实现用 box.has_point(global_position) 只测中心点，贴边的兵会漏选。
-## 单位碰撞体是 CircleShape2D（见 unit_base._setup_collision_body），这里取其外接正方形做面积近似——
-## 圆与矩形的精确交集面积需要积分，正方形近似在实用精度上足够且每帧开销恒定。
+## 框选命中判定（实现在 UNIT_COMMAND，与肉鸽指挥层共用同一套面积占比规则）
 func _is_unit_boxed(u: Unit, box: Rect2) -> bool:
-	var half: float = _unit_half_extent(u)
-	var rect := Rect2(u.global_position - Vector2(half, half), Vector2(half * 2.0, half * 2.0))
-	var inter: Rect2 = box.intersection(rect)
-	if inter.size.x <= 0.0 or inter.size.y <= 0.0:
-		return false
-	var unit_area: float = rect.size.x * rect.size.y
-	if unit_area <= 0.0:
-		return box.has_point(u.global_position)
-	return (inter.size.x * inter.size.y) / unit_area >= SELECT_AREA_RATIO
+	return UNIT_COMMAND.is_unit_boxed(u, box, SELECT_AREA_RATIO)
 
-## 取单位碰撞体的半边长（CircleShape2D 半径；异常时回落到光圈半高，保证判定不失效）
-func _unit_half_extent(u: Unit) -> float:
-	var col := u.get_node_or_null("CollisionShape2D")
-	if col != null and col.shape is CircleShape2D:
-		var r: float = (col.shape as CircleShape2D).radius
-		if r > 0.0:
-			return r
-	return SEL_ELLIPSE_HALF_H
-
-## 手动绘制椭圆描边（避免 draw_ellipse 在不同 Godot 版本签名差异：本作 4.7 第二参为 float）
+## 手动绘制椭圆描边取点（实现在 UNIT_COMMAND）
 func _ellipse_points(center: Vector2, rx: float, ry: float, segments: int = 24) -> PackedVector2Array:
-	var pts: PackedVector2Array = []
-	for i in range(segments + 1):   ## +1 闭合首尾（draw_polyline 不自动闭环；polygon 多一点无害）
-		var a: float = float(i) / float(segments) * TAU
-		pts.append(center + Vector2(cos(a) * rx, sin(a) * ry))
-	return pts
+	return UNIT_COMMAND.ellipse_points(center, rx, ry, segments)
 
 func _draw_ellipse_filled(layer: CanvasItem, center: Vector2, rx: float, ry: float, color: Color) -> void:
-	layer.draw_polygon(_ellipse_points(center, rx, ry), [color])
+	UNIT_COMMAND.draw_ellipse_filled(layer, center, rx, ry, color)
 
 ## ── 摄像机辅助 ─────────────────────────────────────────────
 func _update_camera_keys(delta: float) -> void:

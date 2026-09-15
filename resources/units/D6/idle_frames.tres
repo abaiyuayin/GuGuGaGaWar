@@ -4,79 +4,79 @@
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_idle_0"]
 atlas = ExtResource("1_idle_sheet")
-region = Rect2(0, 0, 400, 400)
+region = Rect2(0, 0, 280, 280)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_idle_1"]
 atlas = ExtResource("1_idle_sheet")
-region = Rect2(400, 0, 400, 400)
+region = Rect2(280, 0, 280, 280)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_idle_2"]
 atlas = ExtResource("1_idle_sheet")
-region = Rect2(800, 0, 400, 400)
+region = Rect2(560, 0, 280, 280)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_idle_3"]
 atlas = ExtResource("1_idle_sheet")
-region = Rect2(1200, 0, 400, 400)
+region = Rect2(840, 0, 280, 280)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_idle_4"]
 atlas = ExtResource("1_idle_sheet")
-region = Rect2(1600, 0, 400, 400)
+region = Rect2(1120, 0, 280, 280)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_idle_5"]
 atlas = ExtResource("1_idle_sheet")
-region = Rect2(2000, 0, 400, 400)
+region = Rect2(1400, 0, 280, 280)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_idle_6"]
 atlas = ExtResource("1_idle_sheet")
-region = Rect2(2400, 0, 400, 400)
+region = Rect2(1680, 0, 280, 280)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_idle_7"]
 atlas = ExtResource("1_idle_sheet")
-region = Rect2(2800, 0, 400, 400)
+region = Rect2(1960, 0, 280, 280)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_idle_8"]
 atlas = ExtResource("1_idle_sheet")
-region = Rect2(3200, 0, 400, 400)
+region = Rect2(2240, 0, 280, 280)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_idle_9"]
 atlas = ExtResource("1_idle_sheet")
-region = Rect2(3600, 0, 400, 400)
+region = Rect2(2520, 0, 280, 280)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_idle_10"]
 atlas = ExtResource("1_idle_sheet")
-region = Rect2(0, 400, 400, 400)
+region = Rect2(0, 280, 280, 280)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_idle_11"]
 atlas = ExtResource("1_idle_sheet")
-region = Rect2(400, 400, 400, 400)
+region = Rect2(280, 280, 280, 280)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_idle_12"]
 atlas = ExtResource("1_idle_sheet")
-region = Rect2(800, 400, 400, 400)
+region = Rect2(560, 280, 280, 280)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_idle_13"]
 atlas = ExtResource("1_idle_sheet")
-region = Rect2(1200, 400, 400, 400)
+region = Rect2(840, 280, 280, 280)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_idle_14"]
 atlas = ExtResource("1_idle_sheet")
-region = Rect2(1600, 400, 400, 400)
+region = Rect2(1120, 280, 280, 280)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_idle_15"]
 atlas = ExtResource("1_idle_sheet")
-region = Rect2(2000, 400, 400, 400)
+region = Rect2(1400, 280, 280, 280)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_idle_16"]
 atlas = ExtResource("1_idle_sheet")
-region = Rect2(2400, 400, 400, 400)
+region = Rect2(1680, 280, 280, 280)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_idle_17"]
 atlas = ExtResource("1_idle_sheet")
-region = Rect2(2800, 400, 400, 400)
+region = Rect2(1960, 280, 280, 280)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_idle_18"]
 atlas = ExtResource("1_idle_sheet")
-region = Rect2(3200, 400, 400, 400)
+region = Rect2(2240, 280, 280, 280)
 
 [resource]
 animations = [{

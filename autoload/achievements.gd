@@ -50,13 +50,20 @@ const ACHIEVEMENTS: Array[Dictionary] = [
 	{id = "hamster_summon", name = "鼠鼠我呀", desc = "第一次召唤仓鼠士兵", hidden = true},
 	{id = "penguin_sacrifice", name = "偏我来时不逢春", desc = "凑企鹅死亡时己方水晶还存在", hidden = true},
 	{id = "penguin_irony", name = "我草了老铁，那本来是属于我的", desc = "我方水晶死亡时凑企鹅还存在于场上", hidden = true},
+	## #自由事件（2026-08-25）：特殊/异象友军首次出现成就（判定模式沿用 _is_achievement_mode）
+	{id = "banana_cat", name = "香蕉猫", desc = "第一次出现香蕉猫", hidden = true},
+	{id = "my_sword_shield", name = "我的刀盾", desc = "第一次出现我的刀盾", hidden = true},
+	{id = "power_fei", name = "你怎么绿绿", desc = "第一次召唤动力菲比", hidden = true},
+	## #新需求（2026-09-10）：S7 大肥鱼 / S8 丽贝卡 首次召唤成就（hidden，判定沿用 _is_achievement_mode）
+	{id = "big_fish", name = "爱吃大白饭", desc = "第一次召唤大肥鱼", hidden = true},
+	{id = "pelican", name = "大鹈鹕", desc = "第一次召唤丽贝卡", hidden = true},
 ]
 
 ## 自定义成就音效（#12 用户拍板）：部分成就解锁成功时播放专属语音
 ## 键为成就 ID，值为 res:// 音效路径
 const ACHIEVEMENT_SOUND_PATHS: Dictionary = {
-	"penguin_sacrifice": "res://assets/audio/sfx/achievements/penguin_sacrifice.wav",  ## 偏我来时不逢春
-	"penguin_irony": "res://assets/audio/sfx/achievements/penguin_irony.wav",  ## 我草了老铁，那本来是属于我的
+	"penguin_sacrifice": "res://assets/audio/sfx/achievements/penguin_sacrifice.ogg",  ## 偏我来时不逢春
+	"penguin_irony": "res://assets/audio/sfx/achievements/penguin_irony.ogg",  ## 我草了老铁，那本来是属于我的
 }
 
 ## 最近一次新解锁的成就（用于结算时弹窗提示）
@@ -76,6 +83,13 @@ func record_player_deploy(unit_id: String) -> void:
 	if unit_id == "":
 		return
 	_deployed_units[unit_id] = true
+	## #新需求（2026-09-10）：出兵栏手动部署 S7/S8 也算「第一次召唤」，
+	## 与开发工具召唤 / 随机事件召唤共用同一成就（unlock_by_id_in_mode 内部仍按 _is_achievement_mode 判模式）。
+	## 放在上方模式判断之前，避免被 D/G/N 计数分支的 return 提前截断。
+	if unit_id == "S7":
+		unlock_by_id_in_mode("big_fish")
+	elif unit_id == "S8":
+		unlock_by_id_in_mode("pelican")
 	## 出兵计数成就：仅战役模式统计（用户拍板），跨启动持久累加
 	if not _is_achievement_mode():
 		return
@@ -116,7 +130,7 @@ var _flush_scheduled: bool = false
 var _toast_queue: Array[Dictionary] = []
 var _toast_busy: bool = false
 ## 成就解锁音效路径（#20 批量连播用）
-const ACHIEVEMENT_SOUND_PATH: String = "res://assets/audio/achievement_unlock.wav"
+const ACHIEVEMENT_SOUND_PATH: String = "res://assets/audio/achievement_unlock.ogg"
 ## #13（2026-08-09）：音效改为「随每个弹窗同时播放」，弹窗停留 3 秒（toast 内部 HOLD_TIME=3.0）。
 ## 相邻两个提示框的间隔：0.35s 滑入 + 3.0s 停留 + 0.35s 滑出 + 少量缓冲
 const TOAST_SPACING: float = 3.6
@@ -225,7 +239,7 @@ func unlock_by_id(id: String) -> bool:
 	return _try_unlock(id)
 
 ## #自由事件成就（2026-08-15）：带模式门解锁 —— 仅当处于允许判定成就的模式才解锁。
-## 开发者模式下战役/全面/双人都判定；非开发者仅战役。用于召唤/异象类成就的实时判定点。
+## 开发者模式可放宽战役/全面战争判定，但双人模式始终不解锁成就。用于召唤/异象类成就的实时判定点。
 func unlock_by_id_in_mode(id: String) -> bool:
 	if not _is_achievement_mode():
 		return false
@@ -254,18 +268,20 @@ func _try_unlock_by_kills(kills: int) -> void:
 		_try_unlock("kills_800")
 
 ## 当前是否处于允许判定成就的模式
-## 开发者模式下：战役/全面战争/双人 都判定（便于调试自由事件成就）；
-## 非开发者模式：仅战役模式判定，双人/全面战争一律跳过
+## 双人模式始终跳过；开发者模式下放宽为战役/全面战争；非开发者仅战役模式判定。
 func _is_achievement_mode() -> bool:
-	if DevMode.enabled:
-		return true  ## 开发者模式：全部常规模式判定（肉鸽另走专属路径）
 	if BattleManager.is_two_player:
 		return false
+	if DevMode.enabled:
+		return true  ## 开发者模式：战役/全面战争判定（肉鸽另走专属路径）
 	return GameManager.is_campaign_mode
 
 ## 尝试解锁成就，首次解锁返回 true 并把该成就排入本帧反馈队列
 ## 注意：这里不直接播音效/弹提示，统一交给帧末 _flush_unlock_feedback 去重后处理
 func _try_unlock(id: String) -> bool:
+	## 双人模式禁止所有成就入口，覆盖结算、进度及开发工具触发。
+	if BattleManager.is_two_player:
+		return false
 	if not CampaignProgress.unlock_achievement(id):
 		return false
 	_play_achievement_sound(id)  ## #12：成就专属音效（偏我来时不逢春 / 我草了老铁 等，解锁成功即播）

@@ -4,6 +4,9 @@ extends Control
 ## 由 battle_root 在 roguelike is_active 且本局判负时弹出，替代原 game_over_screen 的肉鸽分支。
 ## 仅做「失败提示 + 再来一局 / 返回主菜单」两枚按钮。
 
+## 结算战绩面板构建器（与胜利界面共用），用 preload 而非全局类名，免依赖编辑器类名缓存
+const RUN_SUMMARY_PANEL := preload("res://scripts/roguelike/run_summary_panel.gd")
+
 ## 场景切换防重入：按钮按下进入跳转后屏蔽再次触发
 var _transitioning: bool = false
 
@@ -13,7 +16,10 @@ func _ready() -> void:
 	_build_ui()
 
 func _build_ui() -> void:
-	set_anchors_preset(Control.PRESET_FULL_RECT)
+	## 必须用 set_anchors_and_offsets_preset：本界面是 .new() 出来后直接挂到 CanvasLayer 的，
+	## 挂进树时 size 仍为 0，此时 set_anchors_preset 会把 offset 改成 -1280/-720 以「保持当前矩形」，
+	## 结果根节点永远是 0×0 —— 遮罩不显示、面板被挤到屏幕左上角。
+	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_STOP
 
 	var backdrop := ColorRect.new()
@@ -54,6 +60,9 @@ func _build_ui() -> void:
 	sub.add_theme_font_size_override("font_size", 16)
 	sub.add_theme_color_override("font_color", Color(0.30, 0.22, 0.12, 1.0))
 	vbox.add_child(sub)
+
+	## 本局战绩 + 历史最佳（archive_run 已在 director._on_run_lost 里调用，数据已刷新）
+	vbox.add_child(RUN_SUMMARY_PANEL.build())
 
 	var btn_restart := Button.new()
 	btn_restart.text = "再来一局"
@@ -100,8 +109,9 @@ func _on_restart_pressed() -> void:
 	get_tree().paused = false
 	GameManager.is_campaign_mode = false
 	BattleManager.is_two_player = false
+	var hero_id: String = RoguelikeManager.selected_hero
 	RoguelikeManager.end_run()
-	RoguelikeManager.start_run(RoguelikeManager.selected_hero)
+	RoguelikeManager.start_run(hero_id)
 	GameManager.enter_roguelike_map()
 
 func _on_menu_pressed() -> void:

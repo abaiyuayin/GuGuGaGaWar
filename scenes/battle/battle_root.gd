@@ -23,9 +23,16 @@ const MAP_BOTTOM: float = 368.0
 
 ## 肉鸽模式专用 HUD 场景与波次导演脚本（仅肉鸽模式下实例化）
 const ROGUELIKE_HUD_SCENE := preload("res://scenes/ui/roguelike_hud.tscn")
+## #框选（2026-09-04）：肉鸽框选指挥层（仅肉鸽模式下实例化）
+const ROGUELIKE_COMMAND_LAYER := preload("res://scenes/battle/roguelike_command_layer.gd")
 
 ## 运行时最小缩放值（根据窗口尺寸动态计算，确保地图始终填满视口）
 var camera_zoom_min: float = CAMERA_ZOOM_MIN_BASE
+
+## #框选（2026-09-04）：肉鸽框选指挥层实例；非肉鸽模式恒为 null。
+## 非空即表示「鼠标左键由指挥层接管」——本脚本原有的「左键按下锁定单位」改由指挥层
+## 在「单击空地且当前无选中单位」时回调 try_lock_unit() 触发，避免起框那一下就锁住单位。
+var _cmd_layer: Node2D = null
 
 ## 右键拖动状态：是否正在拖动
 var _is_dragging: bool = false
@@ -336,8 +343,17 @@ func _input(event: InputEvent) -> void:
 		print("[调试] 全屏切换: ", "全屏" if new_mode == SettingsManager.WINDOW_MODE_FULLSCREEN else "窗口")
 		return
 
+	## #框选（2026-09-04）：肉鸽框选指挥层优先处理鼠标（起框 / 框选 / 移动令 / 集火令）。
+	## 显式调用而非让它自己 _input，是为了让「框选」与下方「左键点单位看详情」的优先级确定，
+	## 不依赖 Godot 的 _input 遍历顺序。返回 true 表示事件已被指挥层消费。
+	if _cmd_layer != null and is_instance_valid(_cmd_layer) and _cmd_layer.handle_input(event):
+		return
+
 	## 左键点击：锁定/解锁单位跟随（游戏结束后禁用）
-	if not game_ended and event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
+	## #框选（2026-09-04）：肉鸽指挥层接管左键时不在此处理 —— 否则按下起框的同一下就把
+	## 单位锁定跟随了。改由指挥层在「单击空地且无选中单位」时回调 try_lock_unit()。
+	if not game_ended and _cmd_layer == null \
+			and event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
 		if event.pressed:  ## 按下左键
 			_try_lock_unit()  ## 尝试锁定点击位置附近的单位
 
@@ -394,6 +410,14 @@ func _is_mouse_over_hud_control() -> bool:
 			return true
 		node = node.get_parent()
 	return false
+
+## 尝试锁定鼠标点击位置附近的单位（公开入口，供肉鸽框选指挥层在「单击空地」时回调）
+## #框选（2026-09-04）：肉鸽下左键由指挥层接管，锁定时机从「按下」推迟到「松手且判定为单击」，
+## 否则起框那一下就把单位锁定跟随了。
+func try_lock_unit() -> void:
+	if not BattleManager.is_battle_active:
+		return
+	_try_lock_unit()
 
 ## 尝试锁定鼠标点击位置附近的单位
 ## 点击单位附近（CLICK_LOCK_THRESHOLD 像素内）则锁定跟随；点击空地则解锁
@@ -576,16 +600,24 @@ func _setup_roguelike() -> void:
 	## 波次导演随暂停冻结，避免奖励界面打开期间继续刷怪
 	director.process_mode = Node.PROCESS_MODE_PAUSABLE
 	director.setup(battlefield, hud_rl)
+	## #框选（2026-09-04）：框选指挥层 —— 左键框选己方单位、右键点按下移动令、
+	## 左键点敌人下集火令。随暂停冻结（结算/奖励期间不接受指挥）
+	_cmd_layer = ROGUELIKE_COMMAND_LAYER.new()
+	_cmd_layer.name = "RoguelikeCommandLayer"
+	_cmd_layer.process_mode = Node.PROCESS_MODE_PAUSABLE
+	add_child(_cmd_layer)
+	_cmd_layer.setup(self, battlefield, hud_rl)
 
 func _on_game_over(winner_team: int) -> void:
 	_battle_stats.winner_team = winner_team
 	## 解除锁定单位，避免结算后访问已释放单位
 	if _locked_unit != null:
 		_unlock_camera()
-	## 肉鸽模式失败：结算前重置运行态，让结算界面的「重开」能开启新的一局
-	var is_roguelike: bool = RoguelikeManager.is_active
-	if is_roguelike:
+	## 肉鸽模式失败：结算前记下英雄，再重置运行态，让失败界面的「再来一局」能沿用同英雄
+	if RoguelikeManager.is_active:
+		var hero_id: String = RoguelikeManager.selected_hero
 		RoguelikeManager.end_run()
+		RoguelikeManager.selected_hero = hero_id
 		## 隐藏肉鸽专用 HUD（layer 3），避免其卡牌/波次文本覆盖在结算界面（layer 2）之上
 		var rl_hud := get_node_or_null("RoguelikeHUD") as CanvasLayer
 		if rl_hud != null and is_instance_valid(rl_hud):
@@ -597,4 +629,4 @@ func _on_game_over(winner_team: int) -> void:
 	var scene = load("res://scenes/ui/game_over_screen.tscn")
 	var go = scene.instantiate()
 	hud.add_child(go)
-	go.set_winner(winner_team, _battle_stats, false)
+	go.set_winner(winner_team, _battle_stats)

@@ -104,7 +104,7 @@ var unit_buttons: Array[TextureButton] = []
 ## 敌人侧兵种按�?��组（TextureButton，非 Button�?
 var enemy_buttons: Array[TextureButton] = []
 ## 战场模式：当前选中的出兵兵种与阵营（不写入 BattleManager.selected_units，避免自动出兵循环）
-## battlefield_spawn_team: 0=红方/左列(G/D/Hero)，1=蓝方/右列(F/N/S/Y)，由战场控制器读取用于落点布兵
+## battlefield_spawn_team: 0=红方/左列(G/D/Hero/S)，1=蓝方/右列(F/N/Y)，由战场控制器读取用于落点布兵
 var battlefield_spawn_res: Resource = null
 var battlefield_spawn_team: int = 0
 ## 战场模式：网格显隐切换按钮（G 键同效），普通模式不创建
@@ -330,7 +330,6 @@ func _ready() -> void:
 	adjust_btn.pressed.connect(_on_adjust_pressed)
 	## #新需求：弢�发工�?调整按钮仅开发��模式可见����初始化显隐并监�?���?
 	DevMode.dev_mode_changed.connect(_apply_dev_gating)
-	DevMode.hide_in_battle_top_buttons_changed.connect(_on_hide_in_battle_top_buttons_changed)
 	_apply_dev_gating()
 	## 监听设置变化信号以重新应用本地化
 	SettingsManager.settings_changed.connect(_apply_localization)
@@ -354,28 +353,36 @@ func _ready() -> void:
 	## 快速出兵（开发者模式，全面战争/双人模式）：在左右信息面板旁创建
 	_create_quick_spawn_controls()
 
-## 肉鸽模式布局：隐藏与金币经济、基地水晶��固定兵种��择相关的控�?
-## 常�?模式下�?函数不做任何事，保证对既有战�?双人流程零影�?
+## 肉鸽模式布局：隐藏与金币经济、基地水晶、固定兵种选择相关的控件
+## 常规模式下本函数不做任何事，保证对既有战役/双人流程零影响
 func _apply_roguelike_layout() -> void:
 	if not RoguelikeManager.is_active:
 		return
-	## 无基�?�?隐藏顶部双方衢��?
+	## 无基地 → 隐藏顶部双方水晶血条
 	red_hp.visible = false
 	blue_hp.visible = false
-	## 无金币经�?�?隐藏两侧经济数据面板
+	## 无金币经济 → 隐藏两侧经济数据面板
 	var left_panel := get_node_or_null("LeftSidePanel") as Control
 	if left_panel != null:
 		left_panel.visible = false
 	var right_panel := get_node_or_null("RightSidePanel") as Control
 	if right_panel != null:
 		right_panel.visible = false
-	## 兵�?不再固定�?��?�?隐藏底部兵�?按钮面板，改由手牌面板出�?
+	## 兵种不再固定编成 → 隐藏底部兵种按钮面板，改由手牌面板出兵
 	var bottom_panel := get_node_or_null("BottomPanel") as Control
 	if bottom_panel != null:
 		bottom_panel.visible = false
+	## 无回合 / 倒计时 / 局内经济 → 隐藏顶部计时标签与「调整」按钮
+	if timer_label != null:
+		timer_label.visible = false
+	if adjust_btn != null:
+		adjust_btn.visible = false
+	## 无固定选中兵种 → 隐藏中央选中兵种预览
+	if center_preview != null:
+		center_preview.visible = false
 
 ## 战场模式布局：隐藏左右经济面板/计时标签/难度标签/中央预览，
-## 清空并重建底部两列兵种按钮（左列=G/D/Hero 红方、右列=F/N/S/Y 蓝方，无视解锁全放开，按钮 160×160）
+## 清空并重建底部两列兵种按钮（左列=G/D/Hero/S 红方、右列=F/N/Y 蓝方，无视解锁全放开，按钮 160×160）
 ## 仅 GameManager.is_battlefield_mode 下生效；其余模式本函数直接返回，零影响
 func apply_battlefield_layout() -> void:
 	if not GameManager.is_battlefield_mode:
@@ -397,6 +404,10 @@ func apply_battlefield_layout() -> void:
 		timer_label.visible = false
 	if diff_btn != null:
 		diff_btn.visible = false
+	## #竞技场（2026-09-02 用户要求）：删除竞技场的「调整」按钮（沙盒无局内经济，调整面板无意义）
+	if adjust_btn != null:
+		adjust_btn.visible = false
+	_update_top_buttons_centering()
 	## 隐藏中央选中兵种预览（沙盒不需要）
 	if center_preview != null:
 		center_preview.visible = false
@@ -602,15 +613,19 @@ func _build_battlefield_buttons() -> void:
 	_enemy_row_sizes.clear()
 
 	var button_bg_tex: Texture2D = load("res://assets/ui/unit_button_bg.png")
-	var units = UnitDatabase.unit_list.duplicate()
-	## 左列阵营前缀（红方）：G / D / Hero；右列阵营前缀（蓝方）：F / N / S / Y
+	## 竞技场是全兵种沙盒：常规、特殊英雄、特殊事件和异象兵种都应可直接部署。
+	## special_units/hidden_units 不在 unit_list，旧实现因此漏掉 Hero4/5、S2~S8、Y2~Y4。
+	var units: Array = UnitDatabase.unit_list + UnitDatabase.special_units + UnitDatabase.hidden_units
+	## S6「小猫臭臭舞」仅用于过场加载动画，不是可部署单位。
+	units = units.filter(func(u): return u != null and u.unit_id != "S6")
+	## 左列阵营前缀（红方）：G / D / Hero / S；右列阵营前缀（蓝方）：F / N / Y
 	var left_units: Array = []
 	var right_units: Array = []
 	for u in units:
 		var uid: String = u.unit_id
-		if uid.begins_with("G") or uid.begins_with("D") or uid.begins_with("Hero"):
+		if uid.begins_with("G") or uid.begins_with("D") or uid.begins_with("Hero") or uid.begins_with("S"):
 			left_units.append(u)
-		elif uid.begins_with("F") or uid.begins_with("N") or uid.begins_with("S") or uid.begins_with("Y"):
+		elif uid.begins_with("F") or uid.begins_with("N") or uid.begins_with("Y"):
 			right_units.append(u)
 	left_units.sort_custom(func(a, b): return _unit_sort_key(a.unit_id) < _unit_sort_key(b.unit_id))
 	right_units.sort_custom(func(a, b): return _unit_sort_key(a.unit_id) < _unit_sort_key(b.unit_id))
@@ -796,8 +811,8 @@ func _setup_difficulty_label() -> void:
 	var btn := Button.new()
 	btn.name = "DifficultyBtn"
 	diff_btn = btn
-	## 与其他顶部按�?��持一致的朢�小尺�?
-	btn.custom_minimum_size = Vector2(80, 28)
+	## 与顶部按钮一致的尺寸（按「按钮2」原图比例，不压扁）
+	btn.custom_minimum_size = Vector2(114, 31)
 	## 根据当前难度设置文本
 	match GameManager.current_difficulty:
 		0: btn.text = tr("DIFFICULTY_EASY")
@@ -810,8 +825,8 @@ func _setup_difficulty_label() -> void:
 	## #2：悬停提�?= �?��义优先，回落内置默�?（文案与战役地图 campaign_map 保持丢�致）
 	btn.tooltip_text = _get_hud_diff_tip()
 	btn.pressed.connect(_on_diff_btn_pressed)
-	## 与其他顶部按�?��丢�使用 UIButtonHelper 设置纹理样式
-	UIButtonHelper.setup_button(btn)
+	## 与其他顶部按钮一致使用「按钮2」样式
+	UIButtonHelper.setup_topbar_button(btn)
 	## 将难度按�?��入顶部按�??器最左侧
 	$TopCenterButtons.add_child(btn)
 	$TopCenterButtons.move_child(btn, 0)
@@ -919,9 +934,17 @@ func _show_toast(text: String) -> void:
 	t.start()
 
 func _setup_buttons() -> void:
-	## 为帮助���?�?�����出��开发工具按�?��用统丢��?���??�?
-	for btn in [help_btn, settings_btn, exit_btn, dev_btn]:
-		UIButtonHelper.setup_button(btn)
+	## 顶部按钮「按钮2」贴图原图宽高比（1466×399 ≈ 3.67），按此比例放大避免被压扁
+	const TOPBAR_BTN_SIZE := Vector2(114, 31)
+	## 为局内上方按钮（模式/帮助/设置/退出）统一使用「按钮2」样式
+	for btn in [help_btn, settings_btn, exit_btn]:
+		btn.custom_minimum_size = TOPBAR_BTN_SIZE
+		UIButtonHelper.setup_topbar_button(btn)
+	## 开发/调整按钮改回默认按钮样式
+	if dev_btn != null:
+		UIButtonHelper.setup_button(dev_btn)
+	if adjust_btn != null:
+		UIButtonHelper.setup_button(adjust_btn)
 
 
 ## 配置左侧按钮集（PlayerScroll）的裁剪和滚�?
@@ -1130,9 +1153,9 @@ func _create_unit_buttons() -> void:
 			player_ids.append(u.unit_id)
 			enemy_ids.append(u.unit_id)
 		## #自由事件（2026-08-15）：DevMode 下把有实际素材的隐藏事件兵种 S2（仓鼠士兵）/Y2（凑企鹅）
-		## 追加进按钮集。S3/Y3/Y4 为占位兵种（素材待补）不放；战役模式仍走固定编成不受影响。
+		## 追加进按钮集。S3 仍为占位兵种（素材待补）不放；战役模式仍走固定编成不受影响。
 		if DevMode.enabled:
-			for hid in ["S2", "Y2"]:
+			for hid in ["S2", "Y2", "S4", "S5", "Y3", "Y4", "S7", "S8"]:
 				if hid in player_ids:
 					continue
 				player_ids.append(hid)
@@ -2425,11 +2448,13 @@ func _on_selection_changed(player_id: int, _unit_res: Resource) -> void:
 	## 更新底部�?��封面图�?�?
 	_update_center_preview(player_id)
 
-## #新需求：弢�发��专属入口仅 DevMode �??（局内��开发工具����调整��两�?���?��
-## 非开发��模式隐藏按�?��F11 弢��?��恢�?显示；帮助按�?��留（hover 查看�?���?��家功能）
+## #新需求：开发者专属入口仅 DevMode 可见（局内「开发工具」「调整」两个按钮）
+## 非开发者模式隐藏按钮；帮助按钮保留（hover 查看帮助，属玩家功能）
 func _apply_dev_gating(_on: bool = false) -> void:
 	dev_btn.visible = DevMode.enabled
-	adjust_btn.visible = DevMode.enabled
+	## #竞技场（2026-09-02 用户要求）：竞技场模式不显示「调整」按钮（沙盒无局内经济，调整面板无意义）
+	## 肉鸽同理：局内无经济系统，调整面板无意义
+	adjust_btn.visible = DevMode.enabled and not GameManager.is_battlefield_mode and not RoguelikeManager.is_active
 	## #12：开发��模式开�?��默�?打开兵�?攻击距�?显示（仅进入时�?�?��次，之后�?��由开关）�?
 	## �?DevMode.dev_mode_changed 信号触发，进入开发��模式即生效；菜单项 20 仍可随时关闭�?
 	if DevMode.enabled and not Unit.show_attack_ranges:
@@ -2440,30 +2465,10 @@ func _apply_dev_gating(_on: bool = false) -> void:
 		if Unit.show_attack_ranges:
 			Unit.show_attack_ranges = false
 			_dev_redraw_all_units()
-	## F12 隐藏局内上方按钮整排（TopCenterButtons）仅在开发者模式内生效；
-	## 开发者模式下按 DevMode.hide_in_battle_top_buttons 标志控制显隐（标志可在主菜单预置），
-	## 退出（或初始非开发模式）时强制恢复显示，避免玩家界面丢失按钮（F11 已禁用，退出后 F12 不再可用）
-	if DevMode.enabled:
-		$TopCenterButtons.visible = not DevMode.hide_in_battle_top_buttons
-	else:
-		$TopCenterButtons.visible = true
-
-## 开发者模式专属快捷键：F12 切换局内上方按钮整排（游戏帮助/游戏设置/调整/退出/开发工具）显隐
-## 仅开发者模式下生效（F11 已暂时禁用，2026-08-15）；切换的是全局标志 DevMode.hide_in_battle_top_buttons，
-## 因此主菜单按 F12 也能预隐藏，进入战斗后自动套用（主菜单自身按钮不受影响）
-func _unhandled_input(event: InputEvent) -> void:
-	if not DevMode.enabled:
-		return
-	if not (event is InputEventKey) or not event.pressed or event.echo:
-		return
-	if event.keycode == KEY_F12:
-		DevMode.hide_in_battle_top_buttons = not DevMode.hide_in_battle_top_buttons
-		_show_toast("局内按钮栏：%s" % ("隐藏" if DevMode.hide_in_battle_top_buttons else "显示"))
-
-## 响应 DevMode.hide_in_battle_top_buttons 标志变化（F12 可在主菜单预置），实时套用到局内上方按钮栏
-func _on_hide_in_battle_top_buttons_changed(hidden: bool) -> void:
-	if DevMode.enabled:
-		$TopCenterButtons.visible = not hidden
+	## 局内上方按钮整排始终显示（F12 显隐功能已于 2026-09-02 按用户要求删除）
+	$TopCenterButtons.visible = true
+	## 按钮显隐变化后重算居中偏移（HBoxContainer 不为隐藏子节点留位）
+	_update_top_buttons_centering()
 
 func _on_help_pressed() -> void:
 	## #7�?026-08-11 用户拍板）：�?DevMode 点击弹出游戏�?��正文（不再弹「不�?��辑��提示）
@@ -2764,15 +2769,24 @@ func _on_exit_pressed() -> void:
 	confirm.process_mode = Node.PROCESS_MODE_ALWAYS
 	## 2026-08-22：风格彻底统一为兵种详情框同款（一并压掉 Window 自带黑框/标题栏/关闭图标）
 	UIButtonHelper.setup_detail_frame_dialog(confirm)
-	## 标题栏已隐藏，标题与正文都改在框内以 Label 呈现（顺序：标题 → 正文）
-	confirm.add_child(UIButtonHelper.make_detail_frame_title(tr("TIP_TITLE")))
+	## 标题栏已隐藏，标题与正文都改在框内以 Label 呈现（与局外退出确认框同构：
+	## 用 VBoxContainer 包裹标题在上、正文在下，避免 title 与内容被挤到同一行）
+	var confirm_vbox := VBoxContainer.new()
+	confirm_vbox.set_anchors_preset(Control.PRESET_FULL_RECT)
+	confirm_vbox.add_theme_constant_override("separation", 8)
+	confirm_vbox.add_theme_constant_override("margin_top", 20)
+	confirm_vbox.add_theme_constant_override("margin_bottom", 20)
+	confirm_vbox.add_theme_constant_override("margin_left", 20)
+	confirm_vbox.add_theme_constant_override("margin_right", 20)
+	confirm_vbox.add_child(UIButtonHelper.make_detail_frame_title(tr("TIP_TITLE")))
 	var exit_text := Label.new()
 	exit_text.text = tr("EXIT_CONFIRM")
 	exit_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	exit_text.custom_minimum_size = Vector2(240, 0)
 	exit_text.add_theme_font_size_override("font_size", 14)
 	exit_text.add_theme_color_override("font_color", Color(0.30, 0.22, 0.12, 1.0))
-	confirm.add_child(exit_text)
+	confirm_vbox.add_child(exit_text)
+	confirm.add_child(confirm_vbox)
 	## 公共清理：结束战斗状态 / 双人模式 / 肉鸽 run，恢复暂停（避免状态残留）
 	var cleanup_battle := func() -> void:
 		BattleManager.is_battle_active = false
@@ -2806,13 +2820,10 @@ func _on_exit_pressed() -> void:
 	var _btn_box: Node = confirm.get_ok_button().get_parent()
 	for _b in [confirm.get_ok_button(), btn_map, btn_menu, confirm.get_cancel_button()]:
 		_btn_box.move_child(_b, -1)
-	## 默认高亮「取消」：聚焦 + 白边框（用户 2026-08-15：取消为默认选中项）
+	## 所有退出操作按钮使用统一紧凑长方形样式；焦点态不绘制额外白边
+	for _b in [confirm.get_ok_button(), btn_map, btn_menu, confirm.get_cancel_button()]:
+		UIButtonHelper.setup_dialog_action_button(_b)
 	var _cancel_btn: Button = confirm.get_cancel_button()
-	var _white_border := StyleBoxFlat.new()
-	_white_border.bg_color = Color(0, 0, 0, 0)
-	_white_border.border_color = Color(1, 1, 1, 1)
-	_white_border.set_border_width_all(2)
-	_cancel_btn.add_theme_stylebox_override("focus", _white_border)
 	add_child(confirm)
 	confirm.popup_centered()
 	_cancel_btn.grab_focus()
@@ -2832,6 +2843,9 @@ func _on_dev_tool_pressed() -> void:
 	## #11：出兵限制开关����开�?��玩�?方每次出兵严格只�?1 �?��AI 不受影响�?
 	menu.add_check_item("出兵限制（玩家每次只出一个）", 25)
 	menu.set_item_checked(menu.get_item_index(25), DevMode.single_spawn)
+	if not GameManager.is_battlefield_mode and not RoguelikeManager.is_active:
+		menu.add_check_item("随机出兵（红蓝双方自动出兵）", 46)
+		menu.set_item_checked(menu.get_item_index(46), BattleManager.dev_random_spawn_enabled)
 	menu.add_item("给自己 +1000 金币", 0)
 	menu.add_item("清空场上所有兵种", 1)
 	menu.add_item("清空对面兵种", 2)
@@ -2853,6 +2867,13 @@ func _on_dev_tool_pressed() -> void:
 	menu.add_submenu_item("【仓鼠士兵事件】", "HamsterSubmenu", 26)
 	menu.add_item("【死亡使者异象】召唤死亡使者(蓝方)", 27)
 	menu.add_item("【凑企鹅异象】召唤凑企鹅(蓝方)", 28)
+	## 特殊/异象事件手动触发：Y3/Y4 加入蓝方，S4/S5 加入红方
+	menu.add_item("召唤香蕉猫（蓝方敌军）", 40)
+	menu.add_item("召唤我的刀盾（蓝方敌军）", 41)
+	menu.add_item("召唤咕嘎工钢（红方友军）", 42)
+	menu.add_item("召唤动力菲比（红方友军）", 43)
+	menu.add_item("召唤大肥鱼（红方友军）", 44)
+	menu.add_item("召唤丽贝卡（红方友军）", 45)
 	## 敌方兵�?阵营二级菜单（咕�?Doro/菲比/�?��），默�?全部勾��；
 	## 仅在全面战争（非双人、非战役）中生效，过�?AI �?��兵�?
 	var faction_sub := PopupMenu.new()
@@ -2931,6 +2952,7 @@ func _on_dev_tool_pressed() -> void:
 	## #开发工具：水晶无敌（仅标准模式，2026-08-21 用户拍板）——开启后红蓝双方水晶都不掉血
 	menu.add_check_item("水晶无敌", 24)
 	menu.set_item_checked(menu.get_item_index(24), _get_battlefield_crystal_invincible())
+	## #自由事件：特殊/异象事件手动触发并入上方【特殊异象事件】栏（见召唤香蕉猫/我的刀盾/咕嘎工钢/动力菲比 id 40-43）
 	## #12�?026-08-11）：攻击距�?显示改为真�?的开关������开发��模式默认开�?��下沉到
 	## _apply_dev_gating（进入开发��模式时�??�?��次），�?后玩家可�?��弢�关，不再每�?
 	## 打开菜单都�?强制拉回弢��?��旧��辑�?��次打弢�菜单强制打开，�?致��关不掉」）�?
@@ -2978,6 +3000,9 @@ func _on_dev_tool_pressed() -> void:
 			## #11：切换出兵限制（玩�?方每次只�?1 �?��AI 不受影响�?
 			DevMode.set_single_spawn(not DevMode.single_spawn)
 			menu.set_item_checked(menu.get_item_index(25), DevMode.single_spawn)
+		elif id == 46:
+			BattleManager.set_dev_random_spawn_enabled(not BattleManager.dev_random_spawn_enabled)
+			menu.set_item_checked(menu.get_item_index(46), BattleManager.dev_random_spawn_enabled)
 		elif id == 23:
 			## #自由事件：直接触发蓝色女巫事件（专召 S1 蓝女巫入红方）
 			BattleManager.dev_trigger_blue_witch_event()
@@ -2987,6 +3012,24 @@ func _on_dev_tool_pressed() -> void:
 		elif id == 28:
 			## #自由事件：直接触发凑企鹅异象（专召 Y2 凑企鹅入蓝方 + 5%/秒蓝女巫追踪）
 			BattleManager.dev_trigger_penguin_event()
+		elif id == 40:
+			## #自由事件：召唤香蕉猫（Y3）加入蓝方敌军
+			BattleManager.dev_trigger_banana_cat_event()
+		elif id == 41:
+			## #自由事件：召唤我的刀盾（Y4）加入蓝方敌军
+			BattleManager.dev_trigger_sword_shield_event()
+		elif id == 42:
+			## #自由事件：召唤咕嘎工钢（S5）加入红方
+			BattleManager.dev_trigger_tank_event()
+		elif id == 43:
+			## #自由事件：召唤动力菲比（S4）加入红方
+			BattleManager.dev_trigger_power_fei_event()
+		elif id == 44:
+			## 特殊事件：召唤大肥鱼（S7）加入红方友军
+			BattleManager.dev_trigger_big_fish_event()
+		elif id == 45:
+			## 特殊事件：召唤丽贝卡（S8）加入红方友军
+			BattleManager.dev_trigger_rebecca_event()
 		elif id == 21:
 			## #霢?1：切换水晶是否可攻击
 			var bf: Node = _get_battlefield_node()

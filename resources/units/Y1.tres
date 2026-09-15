@@ -29,8 +29,8 @@ damage_by_hit = [{
 0: 150,
 3: 50
 }, {}]
-attack_hit_frame_start = 5
-attack_wait_anim_end = true
+attack_hit_frame_start = 4
+attack_sound_frame = 4
 move_display_height = 135.0
 move_display_width = 135.0
 attack_display_height = 135.0
@@ -47,5 +47,5 @@ move_anim_speed = 1.2000000000000002
 attack_anim_speed = 1.2000000000000002
 color_red = Color(0.65, 0.1, 0.15, 1)
 color_blue = Color(0.55, 0.05, 0.55, 1)
-aoe_radius = 340.0
+aoe_radius = 60.0
 affixes = Array[ExtResource("1_qrqm7")]([ExtResource("2_n03xx")])

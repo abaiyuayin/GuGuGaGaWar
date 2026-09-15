@@ -1,11 +1,16 @@
 extends Node
 ## 肉鸽模式运行状态管理器 — Autoload 单例
 ##
-## 生命周期：玩家在战役地图点击「肉鸽模式」时 start_run()，失败或主动退出时 end_run()。## 职责边界：只维护「一个run」的牌库 / 手牌 / 层数数据与抽牌规则。## 不包含任何战斗逻辑（刷怪、胜负判定由 RoguelikeDirector 负责），也不直接操作节点。##
+## 生命周期：玩家在战役地图点击「肉鸽模式」→ 选英雄 → start_run()，失败或主动退出时 end_run()。
+## 职责边界：只维护「一个 run」的牌库 / 手牌 / 层数 / 金币 / 文物 / 军令 / 地图数据与抽牌规则。
+## 不包含任何战斗逻辑（刷怪、胜负判定由 RoguelikeDirector 负责），也不直接操作节点。
+##
 ## 卡牌规则（与常规卡牌游戏的差异点）：
-##   1. 手牌上限恒为 HAND_LIMIT(3)，与牌库大小无关
-##   2. 每层开局从牌库洗牌后抽满手牌
-##   3. 每波敌军刷新时把手牌补到上限 — 上一波没打出去的牌不会被弃掉，会一直留在手。##   4. 牌库只在通关一层后通过三选一奖励增长
+##   1. 手牌上限恒为 HAND_LIMIT(3) + 文物 hand_limit_bonus
+##   2. 每个战斗节点开局从牌库洗牌后抽满手牌
+##   3. 每波敌军刷新时把手牌补到上限 —— 上一波没打出去的牌不会被弃掉
+##   4. 牌库只在通关节点后通过三选一奖励 / 商店 / 事件增长
+##   5. 每张卡打出后进入独立冷却（Constants.ROGUELIKE_CARD_COOLDOWN_SEC）
 
 ## 手牌内容变化时发出。[param hand_ids] 为当前手牌的兵种 ID 列表
 signal hand_changed(hand_ids: Array[String])
@@ -15,43 +20,45 @@ signal deck_changed(deck_ids: Array[String])
 signal gold_changed(gold: int)
 ## 持有文物变化时发出。[param artifact_ids] 为当前全部文物ID
 signal artifacts_changed(artifact_ids: Array[String])
-## 持有军令变化时发出。[param order_ids] 为当前全部军令ID
-signal orders_changed(order_ids: Array[String])
-## 军令被打出时发出，供战斗层立即执行一次性指令（补牌 / 治疗 / 跳波 / 延迟刷怪等。## 持续型军令（伤害倍率、护甲加成等）无需监听，直接由 RunModifiers active_order_effects
+## 军令卡被打出时发出，供战斗层立即执行一次性指令（补牌 / 治疗 / 跳波 / 延迟刷怪等）
+## 持续型军令（伤害倍率、护甲加成等）无需监听，由 RunModifiers 直接读 active_order_effects
 signal order_played(order_id: String, effect_type: String, effect_value: float)
 ## 层数推进时发出。[param floor_index] 为新的层数（第1起）
 signal floor_changed(floor_index: int)
 ## 一个run 正式开始时发出（start_run 末尾），供依赖run 级状态的子系统（如英雄技能CD）清
 signal run_started()
 
-## 局内手牌上
+## 局内手牌上限
 const HAND_LIMIT: int = 3
-## 起始牌库张数
+## 军令卡在牌库 / 手牌里的 ID 前缀：卡 ID = 前缀 + 军令 ID，与兵种 ID 区分
+## 军令与兵种同处一个牌库、共用手牌位与抽牌堆（打出只离手，下场重新洗牌仍可抽到）
+const ORDER_CARD_PREFIX: String = "ORDER:"
+## 起始牌库随机张数（英雄卡另外固定插入）
 const STARTING_DECK_SIZE: int = 3
-## 起始牌池允许的最高阶层（避免开局白送高阶兵
+## 起始牌池允许的最高阶层（避免开局白送高阶兵）
 const STARTING_MAX_TIER: int = 2
-## 通关一层后提供的候选奖励卡数量
+## 通关一个节点后提供的候选奖励卡数量
 const REWARD_CHOICE_COUNT: int = 3
-## 地图总层数（最后一层为 Boss
+## 地图总层数（最后一层为 Boss）
 const MAP_FLOORS: int = 10
-## 每层节点数量：底部4个起始选项、中部 3~4个、顶部 1个Boss，形成分支汇聚地图
+## 每层节点数量：底部 4 个起始选项、中部 3~4 个、顶部 1 个 Boss，形成分支汇聚地图
 const NODES_PER_FLOOR: Array[int] = [4, 4, 4, 3, 3, 3, 3, 3, 2, 1]
 
-## 地图节点类型（与杀戮尖塔一致：战斗/精英/休息/事件/商店/宝箱/Boss。## 节点数据结构见独立的全局的RoguelikeMapNode（scripts/roguelike/roguelike_map_node.gd
+## 地图节点类型（战斗/精英/休息/事件/商店/宝箱/Boss）
+## 节点数据结构见 scripts/roguelike/roguelike_map_node.gd
 enum NodeType { COMBAT, ELITE, REST, EVENT, SHOP, TREASURE, BOSS }
 
-## 入口层（第0层）固定节点类型：战斗/ 休息 / 商店 / 宝箱（奇遇）
-## 四种基础体验开局全部给到玩家；每次start_run 洗牌（见 generate_map），所以每次开局
-## 哪个位置出现哪种节点都是随机—入口层的"宝箱"节点就是三选一随机奇遇事件。## 自然满足"每次进入初始关卡都从事件池中随机抽一个奇遇的需求。## 数量必须（NODES_PER_FLOOR[0] 一致
+## 入口层（floor_index 0，4 个节点）固定类型：战斗 / 休息 / 商店 / 宝箱（奇遇）
+## 每次 start_run 洗牌（见 generate_map），左右位置随机；数量须与 NODES_PER_FLOOR[0] 一致
 const ENTRY_FLOOR_TYPES: Array[int] = [NodeType.COMBAT, NodeType.REST, NodeType.SHOP, NodeType.TREASURE]
-## Boss 前一层固定节点类型：休息 / 商店 — 决战前保证能回血与补给。## 数量必须（NODES_PER_FLOOR[MAP_FLOORS - 2] 一致
+## Boss 前一层（floor_index MAP_FLOORS-2，2 个节点）固定类型：休息 / 商店
 const PRE_BOSS_FLOOR_TYPES: Array[int] = [NodeType.REST, NodeType.SHOP]
-## 权重表各列对应的节点类型（与 FLOOR_TYPE_WEIGHTS 的数组下标一一对应
+## 权重表各列对应的节点类型（与 FLOOR_TYPE_WEIGHTS 的数组下标一一对应）
 const WEIGHTED_TYPES: Array[int] = [NodeType.COMBAT, NodeType.ELITE, NodeType.REST, NodeType.EVENT, NodeType.SHOP, NodeType.TREASURE]
-## 中间层节点类型权重表（层（按各类型权重），数值驱动：调节关卡节奏只需改这张表
-##   早期（~3层）：普通战斗与事件为主，精英稀少，让玩家先把牌库攒起来
-##   中期（~6层）：精英占比翻倍，商店 / 宝箱补给同步增加
-##   后期（层）：精英最多，休息占比提高以应对Boss 前的损失。## 取「floor_idx <= max_floor」中最先匹配的一个。## #4：REST/EVENT/SHOP/TREASURE（索引2~5）权重统一降到原值约 1/3。## 让肉鸽节奏更偏战斗而非逛街。COMBAT/ELITE（索引0~1）保持不变
+## 中间层节点类型权重表，取「floor_idx <= max_floor」中最先匹配的一行
+##   早期（≤3 层）：普通战斗为主，精英稀少，让玩家先把牌库攒起来
+##   中期（≤6 层）：精英占比翻倍，商店 / 宝箱补给同步增加
+##   后期（其余）：精英最多，休息占比提高以应对 Boss 前的损失
 const FLOOR_TYPE_WEIGHTS: Array[Dictionary] = [
 	{"max_floor": 3, "weights": [55, 8, 4, 5, 2, 2]},
 	{"max_floor": 6, "weights": [42, 18, 5, 4, 3, 2]},
@@ -62,29 +69,83 @@ const REST_GUARANTEE_SPAN: int = 3
 
 ## 当前是否处于肉鸽模式（战场、HUD 依据此标志切换行为）
 var is_active: bool = false
-## 当前 run 选择的英雄ID208）。空 = 尚未选择，禁止开局；由英雄选择界面写入
+## 当前 run 选择的英雄 ID。空 = 尚未选择，由英雄选择界面写入
 var selected_hero: String = ""
-## 肉鸽可选英雄表（208）。爱弥斯已实装可选；其余为占位，暂未上线（点击提示「暂未上线」）。## 英雄影响抽牌概率 + 初始卡组 + 局内加成（由start_run / 英雄加成接入点）。## #5：英雄定义拆成「army（军团构成）」与「special（特殊加成）」两栏，
-## 供英雄选择界面三栏布局展示；run_modifiers.hero_bonus_pct 已实现30% 加成。## #8（2026-08-11）：Hero2（Doro勇士）的 locked 不再硬编码，由get_hero_defs() 。## 「开发者模式默认解锁/非开发者模式需战役解锁（成就20星）」动态解析
+## 肉鸽可选英雄表：
+##   army     军团构成（起始牌库与奖励倾向按 factions 前缀过滤）
+##   special  特长文案（战斗开局播报）
+##   effects  特长的实际数值，键与文物 / 军令的 effect_type 同名，
+##            由 get_hero_effect_total 汇总进 RunModifiers.total
 const HERO_DEFS: Array[Dictionary] = [
-	{"id": "Hero1", "name": "爱弥斯", "locked": false, "army": "四兵种随机军队", "special": "全军 +30% 攻击与攻速"},
-	{"id": "Hero2", "name": "Doro勇士", "locked": true, "army": "Doro 系随机军队", "special": ""},
-	{"id": "Hero3", "name": "菲比Hero", "locked": true, "army": "菲比系随机军队", "special": ""},
-	{"id": "Hero4", "name": "咕咕嘎嘎Hero", "locked": true, "army": "咕咕嘎嘎系随机军队", "special": ""},
-	{"id": "Hero5", "name": "糯糯Hero", "locked": true, "army": "糯糯系随机军队", "special": ""},
+	{
+		"id": "Hero1", "name": "爱弥斯", "locked": false,
+		"army": "四兵种随机军队", "special": "全军 +30% 攻击力与攻击速度",
+		"factions": ["G", "D", "F", "N"],
+		"effects": {"unit_damage_pct": 0.30, "unit_attack_speed_pct": 0.30},
+	},
+	{
+		"id": "Hero2", "name": "Doro勇士", "locked": true,
+		"army": "Doro 系随机军队", "special": "全军最大生命 +25%",
+		"factions": ["D"],
+		"effects": {"unit_hp_pct": 0.25},
+	},
+	{
+		"id": "Hero3", "name": "菲比Hero", "locked": true,
+		"army": "菲比系随机军队", "special": "全军魔法伤害 +35%、远程伤害 +20%",
+		"factions": ["F"],
+		"effects": {"magic_damage_pct": 0.35, "ranged_damage_pct": 0.20},
+	},
+	{
+		"id": "Hero4", "name": "咕咕嘎嘎Hero", "locked": true,
+		"army": "咕咕嘎嘎系随机军队", "special": "全军护甲 +8、移动速度 +15%",
+		"factions": ["G"],
+		"effects": {"unit_armor_flat": 8.0, "unit_move_speed_pct": 0.15},
+	},
+	{
+		"id": "Hero5", "name": "糯糯Hero", "locked": true,
+		"army": "糯糯系随机军队", "special": "击杀 +1 金币、节点通关 +2 金币",
+		"factions": ["N"],
+		"effects": {"death_gold": 1.0, "gold_per_node": 2.0},
+	},
 ]
 
-## 返回英雄选择界面使用的英雄表（HERO_DEFS 的运行时副本）。## #8（2026-08-11）：Hero2的locked 动态计—开发者模式默认解锁；
-## 非开发者模式须在战役模式中真正解锁（隐藏成就「为了欧润橘！（20星，
-## 由CampaignProgress.is_unit_unlocked）才能选择，未解锁时保持占位显示
+## 当前所选英雄提供的某项加成总值（与文物 / 军令共用 RunModifiers.total 汇总通道）
+func get_hero_effect_total(effect_type: String) -> float:
+	if selected_hero.is_empty():
+		return 0.0
+	for hero in HERO_DEFS:
+		if hero["id"] == selected_hero:
+			var effects: Dictionary = hero.get("effects", {})
+			return float(effects.get(effect_type, 0.0))
+	return 0.0
+
+## 当前所选英雄的军团前缀列表（起始牌库与奖励倾向都按此过滤）
+func get_hero_factions() -> Array[String]:
+	var result: Array[String] = []
+	if selected_hero.is_empty():
+		return result
+	for hero in HERO_DEFS:
+		if hero["id"] == selected_hero:
+			for f in hero.get("factions", []):
+				result.append(String(f))
+			return result
+	return result
+
+## 当前所选英雄的特长文案（战斗开局播报用）
+func get_hero_special_text() -> String:
+	for hero in HERO_DEFS:
+		if hero["id"] == selected_hero:
+			return String(hero.get("special", ""))
+	return ""
+
+
+## 返回英雄选择界面使用的英雄表（HERO_DEFS 的运行时副本）。
+## Hero2：开发者模式默认解锁 / 战役隐藏成就「为了欧润橘！」解锁。
+## Hero3~Hero5：纯 DevMode 门控（Hero4/5 属 special_units，不在常规关解锁通道内）。
 func get_hero_defs() -> Array[Dictionary]:
 	var defs: Array[Dictionary] = []
 	for hero in HERO_DEFS:
 		var def := hero.duplicate()
-		## #25（2026-08-21 用户拍板）：Hero3 菲比Hero / Hero4 咕咕嘎嘎Hero / Hero5 糯糯Hero
-		## 已实装（单位资源齐全），肉鸽中仅开发者模式解锁可选；非开发者模式保持「？？？」锁定占位。
-		## 注意：这三个英雄走纯 DevMode 门控，不走战役解锁通道（Hero4/5 属 special_units，不在常规关解锁内）。
-		## Hero2 保持既有逻辑：开发者模式默认解锁 / 战役隐藏成就「为了欧润橘！」解锁。
 		var locked: bool = hero["locked"]
 		if hero["id"] == "Hero2":
 			var unlocked: bool = DevMode.enabled or CampaignProgress.is_unit_unlocked("Hero2")
@@ -98,8 +159,10 @@ func get_hero_defs() -> Array[Dictionary]:
 			def["special"] = ""
 		defs.append(def)
 	return defs
+
 ## ── 局内AI 调参（#210，肉鸽控制台可改）─────────────────────────
-## 统一寻敌 / 追击半径（像素）。肉鸽模式下所有兵种共用此值，与各自攻击距离解耦。## 单位在setup 时据此设置DetectionArea 半径；改动只对之后生成的单位生效
+## 统一寻敌 / 追击半径（像素）：肉鸽模式下所有兵种共用此值，与各自攻击距离解耦
+## 单位在 setup 时据此设置 DetectionArea 半径；改动只对之后生成的单位生效
 var chase_range_px: float = Constants.ROGUELIKE_CHASE_RANGE
 ## 追击牵引半径（像素）。守卫单位离水晶超过此距离即中断追击返回驻守点
 var chase_leash_px: float = Constants.ROGUELIKE_CHASE_LEASH
@@ -107,7 +170,8 @@ var chase_leash_px: float = Constants.ROGUELIKE_CHASE_LEASH
 var current_floor: int = 1
 ## 永久牌库（跨层保留的兵种 ID 列表
 var deck: Array[String] = []
-## 每张卡的升级次数（兵种ID 升级次数，每次休息事件升级 +1 级，单卡召唤人数 +2 线性叠加）。## 注意：存储的是「次数」，卡牌等级 = 次数 + 1（#211圆框徽章），本run重置
+## 每张卡的升级次数（兵种 ID -> 次数）：每次休息升级 +1 级，单卡召唤人数 +2 线性叠加
+## 存储的是「次数」，卡牌等级 = 次数 + 1；随 run 重置
 var deck_upgrade: Dictionary = {}
 ## 卡牌等级上限（#211 圆框徽章）：1=初始、=满级。deck_upgrade 存储值= 等级-1，故次数上限为CARD_LEVEL_MAX - 1 = 2
 const CARD_LEVEL_MAX: int = 3
@@ -121,20 +185,311 @@ signal crystal_hp_changed(hp: int, max_hp: int)
 var gold: int = 0
 ## 已获得的文物 ID 列表（run 内永久被动，本run重置
 var owned_artifacts: Array[String] = []
-## 已获得的军令 ID 列表（run 内一次性指令，打出后移除），随 run 重置
-var owned_orders: Array[String] = []
-## 本场战斗内已打出军令的累计效果：effect_type -> 累计。## 生命周期只覆盖「一场战斗」：打出即累加，进入下一场战斗（start_floor）时清空。## owned_artifacts 的永久被动区分开 —军令是本场用完就没的临时增益
+## 本场战斗内已打出军令的累计效果：effect_type -> 累计值
+## 生命周期只覆盖「一场战斗」：打出即累加，进入下一个战斗节点（start_floor）时清空。
+## 与 owned_artifacts 的永久被动区分开 —— 军令是本场用完就没的临时增益
 var active_order_effects: Dictionary = {}
-## 本层待抽牌堆（每层开局从deck 洗牌生成
+## 本层待抽牌堆（每个战斗节点开局从 deck 洗牌生成）
 var draw_pile: Array[String] = []
-## 当前手牌（兵种ID 列表
+## 当前手牌（卡 ID 列表：兵种 ID 或 ORDER_CARD_PREFIX + 军令 ID）
 var hand: Array[String] = []
-## #13（2026-08-09）：run 实际部署过的兵种 ID 集合（play_card 时记录，start_run 重置）。## 供肉鸽专属成就「传奇，还是无名小卒？」判定——全程只部署G1
+## 本 run 实际部署过的兵种 ID 集合（play_card 时记录，start_run / end_run 重置）
+## 供肉鸽专属成就「无名小卒还是名扬天下」判定 —— 全程只部署 G1
 var run_deployed_ids: Dictionary = {}
 ## 当前地图（分支DAG），元素为RoguelikeMapNode
 var map_nodes: Array[RoguelikeMapNode] = []
 ## 当前所在节点下标（-1 表示尚未进入任何节点，需从第一层挑一个）
 var current_node_index: int = -1
+## 本场战斗内各兵种卡的剩余冷却（unit_id -> 剩余秒数），进入新一层清空
+var card_cooldowns: Dictionary = {}
+## 本 run 已消耗的水晶免死次数（文物「Doro 的破布娃娃」revive_once）
+var crystal_revive_used: int = 0
+## 某张卡的冷却状态变化时发出（unit_id, 剩余秒数）
+signal card_cooldown_changed(unit_id: String, remaining: float)
+
+## ── 本局战绩统计（结算界面展示 + 历史最佳记录）──────────────────
+## 键：nodes_cleared / kills / gold_earned / cards_played / orders_played
+##     crystal_damage / elapsed_sec / max_floor
+var run_stats: Dictionary = {}
+
+## 最近一局结束时的战绩快照（archive_run 写入，start_run 清空）。
+## 结算界面读这份而不是 run_stats —— battle_root 在弹失败界面前就调了 end_run()，
+## run_stats 那时已被清空，只有快照能保证胜/败两个界面都拿到真实数据。
+var last_run_stats: Dictionary = {}
+
+## 结算界面用的统计取值：优先读本局快照，没有快照时回落实时统计
+func get_last_stat(key: String) -> int:
+	if last_run_stats.has(key):
+		return int(last_run_stats[key])
+	return get_stat(key)
+
+## 统计项累加（key 不存在时视为 0）
+func add_stat(key: String, amount: int = 1) -> void:
+	run_stats[key] = int(run_stats.get(key, 0)) + amount
+
+## 统计项取值
+func get_stat(key: String) -> int:
+	return int(run_stats.get(key, 0))
+
+## 统计项取「更大者」（如已达最深层数）
+func track_stat_max(key: String, value: int) -> void:
+	if value > int(run_stats.get(key, 0)):
+		run_stats[key] = value
+
+## 本局用时（秒）：以 run 开始时的引擎毫秒为基准实时算
+func get_elapsed_sec() -> int:
+	if _run_start_msec <= 0:
+		return get_stat("elapsed_sec")
+	return int((Time.get_ticks_msec() - _run_start_msec) / 1000)
+
+var _run_start_msec: int = 0
+
+## ── 进阶难度（通关一次解锁下一级，持久化 user://）─────────────
+## 每级：敌方 +ASCENSION_ENEMY_HP_PER_LEVEL 血 / +..._DMG... 伤，
+##       起始金币 −ASCENSION_GOLD_PENALTY，水晶上限 ×(1 − ..._CRYSTAL_PENALTY)
+const ASCENSION_MAX_LEVEL: int = 5
+const ASCENSION_ENEMY_HP_PER_LEVEL: float = 0.10
+const ASCENSION_ENEMY_DMG_PER_LEVEL: float = 0.08
+const ASCENSION_GOLD_PENALTY: int = 10
+const ASCENSION_CRYSTAL_PENALTY: float = 0.05
+const PROGRESS_PATH := "user://roguelike_progress.json"
+
+## 本局选定的进阶难度等级（0 = 无加难）
+var ascension_level: int = 0
+## 已解锁的最高进阶等级（通关后 +1，持久化）
+var ascension_unlocked: int = 0
+## 历史最佳记录：{ "best_floor", "best_kills", "best_gold", "wins", "runs", "best_ascension" }
+var best_records: Dictionary = {}
+var _progress_loaded: bool = false
+
+## 载入进阶解锁与历史记录（懒加载）
+func load_progress() -> void:
+	if _progress_loaded:
+		return
+	_progress_loaded = true
+	if not FileAccess.file_exists(PROGRESS_PATH):
+		return
+	var f := FileAccess.open(PROGRESS_PATH, FileAccess.READ)
+	if f == null:
+		return
+	var txt := f.get_as_text()
+	f.close()
+	var parsed: Variant = JSON.parse_string(txt)
+	if not (parsed is Dictionary):
+		return
+	var data: Dictionary = parsed as Dictionary
+	ascension_unlocked = clampi(int(data.get("ascension_unlocked", 0)), 0, ASCENSION_MAX_LEVEL)
+	var rec: Variant = data.get("best_records", {})
+	if rec is Dictionary:
+		best_records = rec as Dictionary
+
+## 写盘进阶解锁与历史记录
+func save_progress() -> void:
+	var f := FileAccess.open(PROGRESS_PATH, FileAccess.WRITE)
+	if f == null:
+		push_warning("RoguelikeManager: 无法写入肉鸽进度文件")
+		return
+	f.store_string(JSON.stringify({
+		"ascension_unlocked": ascension_unlocked,
+		"best_records": best_records,
+	}, "\t"))
+	f.close()
+
+## 本局结束时归档战绩：刷新历史最佳，通关时解锁下一进阶等级
+## [param won] 是否击败 Boss 通关
+func archive_run(won: bool) -> void:
+	load_progress()
+	run_stats["elapsed_sec"] = get_elapsed_sec()
+	## 快照必须在此刻做：随后 end_run() 会清空 run_stats，结算界面只认这份快照
+	last_run_stats = run_stats.duplicate()
+	best_records["runs"] = int(best_records.get("runs", 0)) + 1
+	if won:
+		best_records["wins"] = int(best_records.get("wins", 0)) + 1
+		if ascension_level >= ascension_unlocked and ascension_unlocked < ASCENSION_MAX_LEVEL:
+			ascension_unlocked += 1
+		best_records["best_ascension"] = maxi(int(best_records.get("best_ascension", 0)), ascension_level)
+	best_records["best_floor"] = maxi(int(best_records.get("best_floor", 0)), get_stat("max_floor"))
+	best_records["best_kills"] = maxi(int(best_records.get("best_kills", 0)), get_stat("kills"))
+	best_records["best_gold"] = maxi(int(best_records.get("best_gold", 0)), get_stat("gold_earned"))
+	save_progress()
+
+## 当前进阶难度带来的敌方血量倍率（1.0 = 无加难）
+func ascension_enemy_hp_mult() -> float:
+	return 1.0 + float(ascension_level) * ASCENSION_ENEMY_HP_PER_LEVEL
+
+## 当前进阶难度带来的敌方伤害倍率
+func ascension_enemy_damage_mult() -> float:
+	return 1.0 + float(ascension_level) * ASCENSION_ENEMY_DMG_PER_LEVEL
+
+## 某个进阶等级的效果文案（英雄选择界面的难度说明用）
+func ascension_desc(level: int) -> String:
+	if level <= 0:
+		return "标准难度，无额外惩罚"
+	return "敌方血量 +%d%% / 伤害 +%d%%，起始金币 −%d，水晶上限 −%d%%" % [
+		int(round(float(level) * ASCENSION_ENEMY_HP_PER_LEVEL * 100.0)),
+		int(round(float(level) * ASCENSION_ENEMY_DMG_PER_LEVEL * 100.0)),
+		level * ASCENSION_GOLD_PENALTY,
+		int(round(float(level) * ASCENSION_CRYSTAL_PENALTY * 100.0)),
+	]
+
+## ── run 存档（hub 层面）────────────────────────────────────────
+## 只存 hub 可恢复的状态：牌库 / 升级 / 文物 / 金币 / 水晶 / 地图 / 当前节点 / 英雄 / 统计。
+## 不存局内手牌、抽牌堆与场上单位 —— 战斗中退出会回退到该节点开始前。
+const RUN_SAVE_PATH := "user://roguelike_run_save.json"
+
+## 是否存在可继续的存档
+func has_save() -> bool:
+	return FileAccess.file_exists(RUN_SAVE_PATH)
+
+## 只读窥视存档摘要（供「继续上次征程」按钮显示层数 / 英雄 / 进阶，不改动任何运行态）。
+## 无存档或存档损坏时返回空字典。键：hero / floor / gold / ascension / deck_size
+func peek_save_summary() -> Dictionary:
+	if not has_save():
+		return {}
+	var f := FileAccess.open(RUN_SAVE_PATH, FileAccess.READ)
+	if f == null:
+		return {}
+	var txt := f.get_as_text()
+	f.close()
+	var parsed: Variant = JSON.parse_string(txt)
+	if not (parsed is Dictionary):
+		return {}
+	var data: Dictionary = parsed as Dictionary
+	var deck_raw: Variant = data.get("deck", [])
+	return {
+		"hero": String(data.get("selected_hero", "")),
+		"floor": maxi(int(data.get("current_floor", 1)), 1),
+		"gold": maxi(int(data.get("gold", 0)), 0),
+		"ascension": maxi(int(data.get("ascension_level", 0)), 0),
+		"deck_size": (deck_raw as Array).size() if deck_raw is Array else 0,
+	}
+
+## 把当前 run 写盘（在 hub 状态调用：进入 hub、非战斗结算完成后）
+func save_run() -> void:
+	if not is_active or map_nodes.is_empty():
+		return
+	var nodes: Array = []
+	for node in map_nodes:
+		nodes.append({
+			"floor_index": node.floor_index,
+			"slot_index": node.slot_index,
+			"x_ratio": node.x_ratio,
+			"node_type": node.node_type,
+			"next": node.next.duplicate(),
+			"visited": node.visited,
+			"enemy_tier": node.enemy_tier,
+			"wave_count": node.wave_count,
+			"is_boss": node.is_boss,
+		})
+	var f := FileAccess.open(RUN_SAVE_PATH, FileAccess.WRITE)
+	if f == null:
+		push_warning("RoguelikeManager: 无法写入肉鸽存档")
+		return
+	f.store_string(JSON.stringify({
+		"version": 1,
+		"selected_hero": selected_hero,
+		"current_floor": current_floor,
+		"current_node_index": current_node_index,
+		"gold": gold,
+		"crystal_hp": crystal_hp,
+		"crystal_max_hp": crystal_max_hp,
+		"crystal_revive_used": crystal_revive_used,
+		"ascension_level": ascension_level,
+		"deck": deck.duplicate(),
+		"deck_upgrade": deck_upgrade.duplicate(),
+		"owned_artifacts": owned_artifacts.duplicate(),
+		"run_deployed_ids": run_deployed_ids.duplicate(),
+		"run_stats": run_stats.duplicate(),
+		"map_nodes": nodes,
+	}, "\t"))
+	f.close()
+
+## 删除存档（run 结束 / 主动放弃）
+## DirAccess.remove_absolute 直接吃 res:// / user:// 虚拟路径，无需先 globalize_path
+func clear_save() -> void:
+	if FileAccess.file_exists(RUN_SAVE_PATH):
+		DirAccess.remove_absolute(RUN_SAVE_PATH)
+
+## 读档恢复一局 run；成功返回 true（随后由调用方切到 hub 场景）
+func load_run() -> bool:
+	if not has_save():
+		return false
+	var f := FileAccess.open(RUN_SAVE_PATH, FileAccess.READ)
+	if f == null:
+		return false
+	var txt := f.get_as_text()
+	f.close()
+	var parsed: Variant = JSON.parse_string(txt)
+	if not (parsed is Dictionary):
+		clear_save()
+		return false
+	var data: Dictionary = parsed as Dictionary
+	var raw_nodes: Variant = data.get("map_nodes", [])
+	if not (raw_nodes is Array) or (raw_nodes as Array).is_empty():
+		clear_save()
+		return false
+	is_active = true
+	selected_hero = String(data.get("selected_hero", "Hero1"))
+	current_floor = maxi(int(data.get("current_floor", 1)), 1)
+	current_node_index = int(data.get("current_node_index", -1))
+	gold = maxi(int(data.get("gold", 0)), 0)
+	crystal_max_hp = maxi(int(data.get("crystal_max_hp", Constants.ROGUELIKE_CRYSTAL_HP)), 1)
+	crystal_hp = clampi(int(data.get("crystal_hp", crystal_max_hp)), 1, crystal_max_hp)
+	crystal_revive_used = maxi(int(data.get("crystal_revive_used", 0)), 0)
+	ascension_level = clampi(int(data.get("ascension_level", 0)), 0, ASCENSION_MAX_LEVEL)
+	chase_range_px = Constants.ROGUELIKE_CHASE_RANGE
+	chase_leash_px = Constants.ROGUELIKE_CHASE_LEASH
+	deck.clear()
+	for cid in data.get("deck", []):
+		deck.append(String(cid))
+	deck_upgrade.clear()
+	var raw_up: Variant = data.get("deck_upgrade", {})
+	if raw_up is Dictionary:
+		for k in (raw_up as Dictionary).keys():
+			deck_upgrade[String(k)] = int((raw_up as Dictionary)[k])
+	owned_artifacts.clear()
+	for aid in data.get("owned_artifacts", []):
+		owned_artifacts.append(String(aid))
+	run_deployed_ids.clear()
+	var raw_dep: Variant = data.get("run_deployed_ids", {})
+	if raw_dep is Dictionary:
+		for k in (raw_dep as Dictionary).keys():
+			run_deployed_ids[String(k)] = true
+	run_stats.clear()
+	var raw_stats: Variant = data.get("run_stats", {})
+	if raw_stats is Dictionary:
+		for k in (raw_stats as Dictionary).keys():
+			run_stats[String(k)] = int((raw_stats as Dictionary)[k])
+	map_nodes.clear()
+	for raw in (raw_nodes as Array):
+		if not (raw is Dictionary):
+			continue
+		var d: Dictionary = raw as Dictionary
+		var node := RoguelikeMapNode.new()
+		node.floor_index = int(d.get("floor_index", 0))
+		node.slot_index = int(d.get("slot_index", 0))
+		node.x_ratio = float(d.get("x_ratio", 0.5))
+		node.node_type = int(d.get("node_type", NodeType.COMBAT))
+		node.next.clear()
+		for n in d.get("next", []):
+			node.next.append(int(n))
+		node.visited = bool(d.get("visited", false))
+		node.enemy_tier = int(d.get("enemy_tier", 1))
+		node.wave_count = int(d.get("wave_count", 3))
+		node.is_boss = bool(d.get("is_boss", false))
+		map_nodes.append(node)
+	card_cooldowns.clear()
+	active_order_effects.clear()
+	draw_pile.clear()
+	hand.clear()
+	_run_start_msec = Time.get_ticks_msec() - get_stat("elapsed_sec") * 1000
+	artifacts_changed.emit(owned_artifacts.duplicate())
+	deck_changed.emit(deck.duplicate())
+	crystal_hp_changed.emit(crystal_hp, crystal_max_hp)
+	gold_changed.emit(gold)
+	run_started.emit()
+	return true
+
 
 ## #26：肉鸽控制台兵种数值覆盖层（持久化 user://，跨 run 保留，不影响全局 .tres
 var _unit_override: Dictionary = {}
@@ -196,50 +551,66 @@ func apply_unit_override(res: UnitResource) -> void:
 	if o.has("cost"): res.cost = int(o["cost"])
 
 ## 开启一次新的run：重置层数，随机生成起始牌库
-func start_run(hero_id: String = "") -> void:
+## [param ascension] 本局进阶难度等级（-1 = 沿用当前值）
+func start_run(hero_id: String = "", ascension: int = -1) -> void:
+	load_progress()
 	is_active = true
-	## #13：肉鸽专属成就「传奇，还是无名小卒？」——重置本 run 部署兵种记录
 	run_deployed_ids.clear()
-	## 记录本局英雄208）：优先用入参；否则沿用上一局已选；都为空则兜底爱弥斯避免软
+	run_stats.clear()
+	last_run_stats.clear()
+	_run_start_msec = Time.get_ticks_msec()
+	if ascension >= 0:
+		ascension_level = clampi(ascension, 0, ascension_unlocked)
+	else:
+		ascension_level = clampi(ascension_level, 0, ascension_unlocked)
 	if not hero_id.is_empty():
 		selected_hero = hero_id
 	elif selected_hero.is_empty():
 		selected_hero = "Hero1"
 	current_floor = 1
-	## AI 调参回到默认值：控制台的临时改动不跨 run 保留
+	track_stat_max("max_floor", 1)
 	chase_range_px = Constants.ROGUELIKE_CHASE_RANGE
 	chase_leash_px = Constants.ROGUELIKE_CHASE_LEASH
 	deck.clear()
 	deck_upgrade.clear()
-	gold = 50  ## #12：开局金币由0改为50，给玩家首层买补给的余地
-	crystal_max_hp = Constants.ROGUELIKE_CRYSTAL_HP
+	card_cooldowns.clear()
+	## 进阶难度按等级扣起始金币与水晶上限
+	gold = maxi(50 - ascension_level * ASCENSION_GOLD_PENALTY, 0)
+	crystal_max_hp = maxi(int(round(float(Constants.ROGUELIKE_CRYSTAL_HP)
+			* (1.0 - float(ascension_level) * ASCENSION_CRYSTAL_PENALTY))), 1)
 	crystal_hp = crystal_max_hp
+	crystal_revive_used = 0
 	owned_artifacts.clear()
-	owned_orders.clear()
 	artifacts_changed.emit(owned_artifacts.duplicate())
-	orders_changed.emit(owned_orders.duplicate())
-	var pool: Array[String] = _collect_unit_ids(STARTING_MAX_TIER)
+	## 起始随机牌优先取本局英雄的军团（前缀）；该军团池不足时回落到全兵种池
+	var pool: Array[String] = _collect_unit_ids(STARTING_MAX_TIER, get_hero_factions())
+	if pool.is_empty():
+		pool = _collect_unit_ids(STARTING_MAX_TIER)
 	if pool.is_empty():
 		push_error("RoguelikeManager: 起始牌池为空，检查 UnitDatabase 是否已加载兵种")
 		return
 	pool.shuffle()
 	for i in range(min(STARTING_DECK_SIZE, pool.size())):
 		deck.append(pool[i])
-	## 保证特殊英雄「爱弥斯」固定在起始牌库内（抽到顺序仍随机，由draw_pile 洗牌决定
-	if not deck.has("Hero1"):
-		deck.insert(0, "Hero1")
+	## 本局所选英雄卡固定进起始牌库（抽到顺序仍随机，由 draw_pile 洗牌决定）
+	if not deck.has(selected_hero):
+		deck.insert(0, selected_hero)
 	deck_changed.emit(deck.duplicate())
 	generate_map()
 	start_floor()
 	run_started.emit()
+	save_run()
 
-## 开始当前层：牌库洗牌进抽牌堆，清空手牌并抽
+## 开始当前战斗节点：牌库洗牌进抽牌堆，清空手牌并抽满
 func start_floor() -> void:
 	draw_pile = deck.duplicate()
 	draw_pile.shuffle()
 	hand.clear()
-	## 上一场战斗打出的军令效果不跨场生效	active_order_effects.clear()
+	## 上一场战斗打出的军令效果不跨场生效
+	active_order_effects.clear()
+	card_cooldowns.clear()
 	refill_hand()
+	track_stat_max("max_floor", current_floor)
 	floor_changed.emit(current_floor)
 
 ## 把手牌补充到上限，返回本次实际补充的张数
@@ -258,25 +629,109 @@ func refill_hand() -> int:
 func get_hand_limit() -> int:
 	return maxi(HAND_LIMIT + int(get_artifact_effect_total("hand_limit_bonus")), 1)
 
-## 打出指定手牌，返回对应兵种资源；索引非法或资源缺失时返回 null
+## 某卡 ID 是否为军令卡（军令与兵种共用牌库，靠前缀区分）
+func is_order_card(card_id: String) -> bool:
+	return card_id.begins_with(ORDER_CARD_PREFIX)
+
+## 把军令 ID 包装成牌库里的军令卡 ID
+func make_order_card(order_id: String) -> String:
+	return ORDER_CARD_PREFIX + order_id
+
+## 从军令卡 ID 取回军令 ID；非军令卡返回空串
+func order_id_of(card_id: String) -> String:
+	if not is_order_card(card_id):
+		return ""
+	return card_id.substr(ORDER_CARD_PREFIX.length())
+
+## 打出指定手牌位上的兵种卡，返回兵种资源。
+## 索引非法 / 是军令卡 / 资源缺失 / 该卡仍在冷却时返回 null。
+## 军令卡请走 play_order_card。
 func play_card(index: int) -> UnitResource:
 	if index < 0 or index >= hand.size():
 		return null
-	var unit_id: String = hand[index]
-	var res := UnitDatabase.get_unit(unit_id) as UnitResource
-	if res == null:
-		push_error("RoguelikeManager: 手牌兵种 %s 在数据库中不存在" % unit_id)
+	var card_id: String = hand[index]
+	if is_order_card(card_id):
 		return null
-	## #13：记录本 run 实际部署过的兵种（「传奇，还是无名小卒？」判定只部署G1 通关	run_deployed_ids[unit_id] = true
+	if get_card_cooldown(card_id) > 0.0:
+		return null
+	var res := UnitDatabase.get_unit(card_id) as UnitResource
+	if res == null:
+		push_error("RoguelikeManager: 手牌兵种 %s 在数据库中不存在" % card_id)
+		return null
+	run_deployed_ids[card_id] = true
 	hand.remove_at(index)
+	start_card_cooldown(card_id)
 	hand_changed.emit(hand.duplicate())
 	return res
 
-## 手牌与抽牌堆是否还有任何可用卡牌（失败判定的必要条件之一
-func has_cards_left() -> bool:
-	return not hand.is_empty() or not draw_pile.is_empty()
+## 打出指定手牌位上的军令卡：登记本场效果并广播 order_played。
+## 打出只离手（不从 deck 移除），下一个战斗节点重新洗牌仍可抽到。
+## 索引非法 / 不是军令卡 / 军令数据缺失 / 冷却中时返回 false 且不做任何变更。
+func play_order_card(index: int) -> bool:
+	if index < 0 or index >= hand.size():
+		return false
+	var card_id: String = hand[index]
+	if not is_order_card(card_id):
+		return false
+	if get_card_cooldown(card_id) > 0.0:
+		return false
+	var order_id: String = order_id_of(card_id)
+	var od := ItemDatabase.get_order(order_id)
+	if od == null:
+		push_error("RoguelikeManager: 军令 %s 在数据库中不存在" % order_id)
+		return false
+	hand.remove_at(index)
+	start_card_cooldown(card_id)
+	var key: String = od.effect_type
+	active_order_effects[key] = float(active_order_effects.get(key, 0.0)) + od.effect_value
+	hand_changed.emit(hand.duplicate())
+	order_played.emit(order_id, key, od.effect_value)
+	return true
 
-## 向永久牌库添加一张卡（通关奖励
+## 某张卡当前剩余冷却（秒），未冷却返回 0
+func get_card_cooldown(card_id: String) -> float:
+	return maxf(float(card_cooldowns.get(card_id, 0.0)), 0.0)
+
+## 给某张卡挂上冷却（打出时调用）；冷却为 0 时不记录
+func start_card_cooldown(card_id: String) -> void:
+	var cd: float = RunModifiers.card_cooldown_sec()
+	if cd <= 0.0:
+		return
+	card_cooldowns[card_id] = cd
+	card_cooldown_changed.emit(card_id, cd)
+
+## 推进所有卡牌冷却（由战斗层每帧调用），归零即移除并广播
+func tick_card_cooldowns(delta: float) -> void:
+	if card_cooldowns.is_empty():
+		return
+	for card_id in card_cooldowns.keys():
+		var left: float = float(card_cooldowns[card_id]) - delta
+		if left <= 0.0:
+			card_cooldowns.erase(card_id)
+			card_cooldown_changed.emit(card_id, 0.0)
+		else:
+			card_cooldowns[card_id] = left
+			card_cooldown_changed.emit(card_id, left)
+
+## 立即清空所有手牌冷却（军令「疾行军令」）
+func clear_card_cooldowns() -> void:
+	for card_id in card_cooldowns.keys():
+		card_cooldown_changed.emit(card_id, 0.0)
+	card_cooldowns.clear()
+
+## 手牌或抽牌堆里是否还有兵种卡（失败判定只看兵种卡：
+## 手里剩一堆军令但无兵可出同样算输）
+func has_cards_left() -> bool:
+	for card_id in hand:
+		if not is_order_card(card_id):
+			return true
+	for card_id in draw_pile:
+		if not is_order_card(card_id):
+			return true
+	return false
+
+## 向永久牌库添加一张卡。传兵种 ID 即兵种卡；
+## 传 ORDER_CARD_PREFIX + 军令 ID（通关奖励三选一抽到军令时）则等价于 add_order。
 func add_card(unit_id: String) -> void:
 	if unit_id.is_empty():
 		return
@@ -292,7 +747,9 @@ func remove_card(unit_id: String) -> void:
 		deck.remove_at(idx)
 		deck_changed.emit(deck.duplicate())
 
-## 升级一张卡：每次升一级，单卡召唤人数 +2（线性叠加，非翻倍），最高CARD_LEVEL_MAX 级（#211）。## 升级按兵种ID 生效，对牌库中所有同名卡同时生效。## 返回升级后的卡牌等级从1起）；已达上限时返回当前等级，不再增长
+## 升级一张卡：每次升一级，单卡召唤人数 +2（线性叠加），最高 CARD_LEVEL_MAX 级。
+## 升级按兵种 ID 生效，对牌库中所有同名卡同时生效。
+## 返回升级后的卡牌等级（从 1 起）；已达上限时返回当前等级，不再增长
 func upgrade_card(unit_id: String) -> int:
 	if unit_id.is_empty():
 		return 0
@@ -302,17 +759,47 @@ func upgrade_card(unit_id: String) -> int:
 	deck_changed.emit(deck.duplicate())
 	return times + 1
 
-## 返回卡牌当前等级（供 HUD 圆框徽章显示）：未升级为 1，满级为 CARD_LEVEL_MAX。## 等级 = 升级次数 + 1，与 upgrade_card 的存储值保持一致
+## 返回卡牌当前等级（供 HUD 圆框徽章显示）：未升级为 1，满级为 CARD_LEVEL_MAX
+## 等级 = 升级次数 + 1，与 upgrade_card 的存储值保持一致
 func get_card_level(unit_id: String) -> int:
 	var times: int = int(deck_upgrade.get(unit_id, 0))
 	return clampi(times + 1, 1, CARD_LEVEL_MAX)
 
-## 恢复水晶耐久 [param pct] 比例~1，如 0.3 = 30% 上限），夹断[0, crystal_max_hp] 并广播。## 用于休息处（#213）等 run 内恢复场景；水晶耐久run 级持久资源，跨战斗保留
+## 恢复水晶耐久 [param pct] 比例（0~1，如 0.3 = 上限的 30%），夹断到 [0, crystal_max_hp] 并广播。
+## 用于休息节点等 run 内恢复场景；水晶耐久是 run 级持久资源，跨战斗保留
 func heal_crystal(pct: float) -> void:
 	crystal_hp = clampi(int(round(float(crystal_hp) + float(crystal_max_hp) * pct)), 0, crystal_max_hp)
 	crystal_hp_changed.emit(crystal_hp, crystal_max_hp)
 
-## 计算某兵种当前单卡实际召唤数。## 基础值：units_per_card 若>0 则采用（数据驱动覆盖）；否则按阶层自动：tier>=2 高级为2个，其余 3 。## 训练强化（休息点）：每次强化使该卡牌召唤人数 +2（线性叠加，不翻倍），最高CARD_LEVEL_MAX 级（#211）## 最终受单方人口上限夹断
+## 抬高水晶耐久上限并同步补满同等当前值（文物 / 事件用），广播给 HUD 与 hub
+func boost_crystal_max_hp(amount: int) -> void:
+	if amount <= 0:
+		return
+	crystal_max_hp += amount
+	crystal_hp = mini(crystal_hp + amount, crystal_max_hp)
+	crystal_hp_changed.emit(crystal_hp, crystal_max_hp)
+
+## 水晶免死（文物「Doro 的破布娃娃」）：还有剩余次数时消耗一次并返回 true
+func consume_crystal_revive() -> bool:
+	if crystal_revive_used >= RunModifiers.crystal_revive_charges():
+		return false
+	crystal_revive_used += 1
+	return true
+
+## 当前节点类型对应的敌方数值倍率（精英 / Boss 额外加成，普通节点为 1.0）
+func node_stat_mult() -> float:
+	match current_node_type():
+		NodeType.BOSS:
+			return Constants.ROGUELIKE_BOSS_STAT_MULT
+		NodeType.ELITE:
+			return Constants.ROGUELIKE_ELITE_STAT_MULT
+		_:
+			return 1.0
+
+## 计算某兵种当前单卡实际召唤数。
+## 基础值：units_per_card > 0 时直接采用（数据驱动）；否则按阶层自动 —— tier>=2 出 2 个，其余 3 个。
+## 训练强化（休息点）：每次强化该卡召唤人数 +2（线性叠加），最高 CARD_LEVEL_MAX 级。
+## 最终夹断到 [1, Constants.ROGUELIKE_POPULATION_CAP]
 func get_deploy_count(unit_id: String) -> int:
 	var res := UnitDatabase.get_unit(unit_id) as UnitResource
 	if res == null:
@@ -322,10 +809,13 @@ func get_deploy_count(unit_id: String) -> int:
 	var upgrade_bonus: int = level * 2  ## 每次训练强化召唤人数 +2
 	## 文物「战鼓」与军令「大点兵」提供的额外召唤数，在强化之后加算（加法收益不随强化膨胀
 	var bonus: int = int(get_artifact_effect_total("deploy_count_bonus") + get_order_effect_total("deploy_count_bonus"))
-	return clampi(base + upgrade_bonus + bonus, 1, Constants.ROGUELIKE_MAX_UNITS_PER_SIDE)
+	return clampi(base + upgrade_bonus + bonus, 1, Constants.ROGUELIKE_POPULATION_CAP)
 
 ## 增加金币（用于商店消费），下限夹断为 0，变化时广播 gold_changed
+## 正向变动同时计入本局「累计获得金币」统计
 func add_gold(amount: int) -> void:
+	if amount > 0:
+		add_stat("gold_earned", amount)
 	gold = maxi(gold + amount, 0)
 	gold_changed.emit(gold)
 
@@ -352,34 +842,21 @@ func add_artifact(artifact_id: String) -> void:
 	owned_artifacts.append(artifact_id)
 	artifacts_changed.emit(owned_artifacts.duplicate())
 
-## 获得一张军令（进入军令袋，待战斗中打出
+## 获得一张军令卡：以 ORDER_CARD_PREFIX + 军令 ID 的形式加入永久牌库，
+## 之后与兵种卡一起洗进抽牌堆、占手牌位，由 play_order_card 打出。
 func add_order(order_id: String) -> void:
 	if order_id.is_empty():
 		return
-	owned_orders.append(order_id)
-	orders_changed.emit(owned_orders.duplicate())
+	deck.append(make_order_card(order_id))
+	deck_changed.emit(deck.duplicate())
 
-## 消耗一张军令；未持有返回false
-func consume_order(order_id: String) -> bool:
-	var idx: int = owned_orders.find(order_id)
-	if idx < 0:
-		return false
-	owned_orders.remove_at(idx)
-	orders_changed.emit(owned_orders.duplicate())
-	return true
-
-## 打出一张军令：从军令袋移除，并把效果登记进本场临时效果。## 一次性指令（补牌 / 治疗 / 跳波…）由监听order_played 的战斗层执行。## 持续型加成（伤害 / 护甲 / 移速…）直接留在 active_order_effects 里供 RunModifiers 查询## 未持有该军令时返回false 且不做任何变更
-func play_order(order_id: String) -> bool:
-	var od := ItemDatabase.get_order(order_id)
-	if od == null:
-		push_error("RoguelikeManager: 军令 %s 在数据库中不存在" % order_id)
-		return false
-	if not consume_order(order_id):
-		return false
-	var key: String = od.effect_type
-	active_order_effects[key] = float(active_order_effects.get(key, 0.0)) + od.effect_value
-	order_played.emit(order_id, key, od.effect_value)
-	return true
+## 当前牌库中已持有的军令 ID 列表（去重前的原始顺序，供商店排除已有 / hub 展示）
+func get_owned_order_ids() -> Array[String]:
+	var result: Array[String] = []
+	for card_id in deck:
+		if is_order_card(card_id):
+			result.append(order_id_of(card_id))
+	return result
 
 ## 汇总本场已打出军令中指定[param effect_type] 的累计值（未打出过返回 0
 func get_order_effect_total(effect_type: String) -> float:
@@ -419,49 +896,106 @@ func roll_reward_choices_tier(max_tier: int) -> Array[String]:
 	return result
 
 ## 随机产出本层通关的候选奖励卡（可能与牌库已有卡重复，重复即视为该兵种多一张）
+## 英雄军团（前缀）优先：候选里至少给一张本军团卡，其余照全池随机
+## 军令合并进牌库后，候选里有 ORDER_REWARD_CHANCE 的概率把最后一格换成一张未持有的军令卡
 func roll_reward_choices() -> Array[String]:
-	var pool: Array[String] = _collect_unit_ids(_max_tier_for_floor())
+	var max_tier: int = _max_tier_for_floor()
 	var result: Array[String] = []
+	var faction_pool: Array[String] = _collect_unit_ids(max_tier, get_hero_factions())
+	if not faction_pool.is_empty():
+		faction_pool.shuffle()
+		result.append(faction_pool[0])
+	var pool: Array[String] = _collect_unit_ids(max_tier)
 	if pool.is_empty():
-		return result
+		return _inject_order_choice(result)
 	pool.shuffle()
-	for i in range(min(REWARD_CHOICE_COUNT, pool.size())):
-		result.append(pool[i])
-	return result
+	for uid in pool:
+		if result.size() >= REWARD_CHOICE_COUNT:
+			break
+		if uid in result:
+			continue
+		result.append(uid)
+	return _inject_order_choice(result)
 
-## 推进到下一层并重新发牌
-func advance_floor() -> void:
-	current_floor += 1
-	start_floor()
+## 通关奖励里出现军令卡的概率
+const ORDER_REWARD_CHANCE: float = 0.25
 
-## 结束本次 run，清空所有运行
+## 按概率把候选列表的最后一格替换成一张未持有的军令卡（军令池为空时原样返回）。
+## 候选不足一格时改为追加，保证概率命中就一定看得到军令卡。
+func _inject_order_choice(choices: Array[String]) -> Array[String]:
+	if randf() >= ORDER_REWARD_CHANCE:
+		return choices
+	var rolled := ItemDatabase.roll_orders(1, get_owned_order_ids())
+	if rolled.is_empty():
+		return choices
+	var card_id: String = make_order_card(rolled[0].order_id)
+	if choices.is_empty():
+		choices.append(card_id)
+	else:
+		choices[choices.size() - 1] = card_id
+	return choices
+
+## 结束本次 run，清空所有运行态（selected_hero 保留，供结算界面「再来一局」沿用同英雄）
 func end_run() -> void:
 	is_active = false
 	current_floor = 1
+	gold = 0
 	deck.clear()
+	deck_upgrade.clear()
 	draw_pile.clear()
 	hand.clear()
+	card_cooldowns.clear()
 	map_nodes.clear()
 	owned_artifacts.clear()
-	owned_orders.clear()
 	active_order_effects.clear()
+	run_deployed_ids.clear()
+	crystal_hp = 0
+	crystal_max_hp = 0
+	crystal_revive_used = 0
 	current_node_index = -1
+	run_stats.clear()
+	clear_save()
 
-## 获取当前手牌对应的兵种资源列表（UI 展示用，跳过缺失资源
+## 当前手牌的展示数据列表（UI 建卡用），每项：
+##   { "card_id", "hand_index", "is_order", "unit_res"(兵种卡), "order_data"(军令卡) }
+## hand_index 是该卡在 hand 里的真实下标 —— 数据缺失的卡会被跳过，
+## 列表下标与手牌下标可能错位，UI 打牌必须用 hand_index 而不是列表下标。
+func get_hand_entries() -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	for i in range(hand.size()):
+		var card_id: String = hand[i]
+		if is_order_card(card_id):
+			var od := ItemDatabase.get_order(order_id_of(card_id))
+			if od != null:
+				result.append({"card_id": card_id, "hand_index": i, "is_order": true, "order_data": od})
+		else:
+			var res := UnitDatabase.get_unit(card_id) as UnitResource
+			if res != null:
+				result.append({"card_id": card_id, "hand_index": i, "is_order": false, "unit_res": res})
+	return result
+
+## 获取当前手牌里的兵种资源列表（兼容旧调用；军令卡会被跳过）
 func get_hand_resources() -> Array[UnitResource]:
 	var result: Array[UnitResource] = []
-	for unit_id in hand:
-		var res := UnitDatabase.get_unit(unit_id) as UnitResource
+	for card_id in hand:
+		if is_order_card(card_id):
+			continue
+		var res := UnitDatabase.get_unit(card_id) as UnitResource
 		if res != null:
 			result.append(res)
 	return result
 
-## 生成杀戮尖塔式分支地图：多层节点，路径可分叉、可汇聚，最终收束到单一 Boss
+## 生成分支地图：多层节点，路径可分叉、可汇聚，最终收束到单一 Boss
 ##
-## 关卡结构（v2 重设计）。##   0 层（入口层 节点）固定为 战斗 / 休息 / 商店 / 精英 —四种基础体验开局全部给到。##       左右顺序每局洗牌。入口精英被压低到tier 2 / 3 波，是「敢打就白嫖一件文物」的选项。##   第1~7 （按FLOOR_TYPE_WEIGHTS 的层段权重随机，生成后跑 _enforce_floor_rules 保底修补##   第8层（Boss 前，2 节点）固定为 休息 / 商店 — 决战前必给回血与补给。##   第9 层Boss（唯一节点，全部路径收束于此）##
-## 每层节点与上下层按横向proximity 连边，形成自然的分支/汇聚结构。## 同层节点最小横向间距（x_ratio 单位）。生成时强制保证同层相邻节点间距 >= 此值，
-## 杜绝两个节点渲染到同一像素位置（肉鸽大地图节点重叠问题）.16 在小屏（usable_w<100）也
-## 对应 ~96px，远大于节点直径 54px
+## 关卡结构（floor_index 从 0 起，共 MAP_FLOORS=10 层）：
+##   第 0 层（入口层，4 节点）固定为 战斗 / 休息 / 商店 / 宝箱，左右顺序每局洗牌
+##   第 1~7 层 按 FLOOR_TYPE_WEIGHTS 的层段权重随机，生成后跑 _enforce_floor_rules 保底修补
+##   第 8 层（Boss 前，2 节点）固定为 休息 / 商店 —— 决战前必给回血与补给
+##   第 9 层 Boss（唯一节点，全部路径收束于此）
+## 每层节点与上下层按横向 proximity 连边，形成自然的分支 / 汇聚结构。
+##
+## 同层节点最小横向间距（x_ratio 单位）：生成时强制保证同层相邻节点间距 >= 此值，
+## 杜绝两个节点渲染到同一像素位置。0.16 在小屏也对应 ~96px，远大于节点直径 54px
 const MAP_MIN_X_GAP: float = 0.16
 
 func generate_map() -> void:
@@ -482,9 +1016,9 @@ func generate_map() -> void:
 			## 在层内均匀分布，并加入小幅随机抖动，使路径看起来更自然
 			var base_ratio: float = float(s + 1) / float(count + 1)
 			var jitter: float = randf_range(-0.12, 0.12)
-			## 奇偶层横向错位，避免上下层节点正对形成竖
+			## 奇偶层横向错位，避免上下层节点正对形成竖直线
 			var stagger: float = 0.09 if (f % 2 == 1) else 0.0
-			node.x_ratio = clampf(base_ratio + stagger + jitter, 0.08, 0.92)
+			node.x_ratio = clampf(base_ratio + stagger + jitter, MAP_X_MIN, MAP_X_MAX)
 			if f == 0:
 				node.node_type = entry_types[s % entry_types.size()]
 			elif f == MAP_FLOORS - 1:
@@ -494,7 +1028,8 @@ func generate_map() -> void:
 			else:
 				node.node_type = _roll_node_type(f)
 			map_nodes.append(node)
-	## 1.5 同层节点横向去重叠：保证相邻节点 x_ratio 间距 >= MAP_MIN_X_GAP，杜绝渲染重叠	_separate_floor_nodes()
+	## 1.5 同层节点横向去重叠：保证相邻节点 x_ratio 间距 >= MAP_MIN_X_GAP，杜绝渲染重叠
+	_separate_floor_nodes()
 	## 2. 保底规则修补（每层至少一场战斗/ 同层类型不单一 / 三层内必有休息）
 	_enforce_floor_rules()
 	## 3. 类型定稿后才推算难度参数，避免修补后 tier / 波数与类型对不上
@@ -506,28 +1041,50 @@ func generate_map() -> void:
 	for f in range(MAP_FLOORS - 1):
 		_connect_floor(f)
 
-## 同层节点横向去重叠：对每一层按 x_ratio 排序后，从左往右推保证相邻间距 >= MAP_MIN_X_GAP。## 若右侧溢出再从右往左回收，最后整体夹紧到合法区间。连边（_connect_floor）在之后执行## 因此去重叠后该x_ratio 同时决定了连接关系与显示位置，二者一致，根治节点重叠
+## 同层节点横向布局的合法区间（x_ratio）
+const MAP_X_MIN: float = 0.08
+const MAP_X_MAX: float = 0.92
+
+## 同层节点横向去重叠：每层按 x_ratio 排序后先从左往右推（下界 MAP_X_MIN），
+## 再从右往左收（上界 MAP_X_MAX），保证相邻间距 >= MAP_MIN_X_GAP 且整体落在合法区间内。
+## 两遍之后仍塞不下（节点数过多）时退化为区间内等距均分。
+## 连边（_connect_floor）在此之后执行，因此 x_ratio 同时决定连接关系与显示位置，二者一致。
 func _separate_floor_nodes() -> void:
 	for f in range(MAP_FLOORS):
 		var idx: Array[int] = _floor_node_indices(f)
-		if idx.size() < 2:
+		if idx.is_empty():
+			continue
+		if idx.size() == 1:
+			map_nodes[idx[0]].x_ratio = clampf(map_nodes[idx[0]].x_ratio, MAP_X_MIN, MAP_X_MAX)
 			continue
 		idx.sort_custom(func(a: int, b: int) -> bool: return map_nodes[a].x_ratio < map_nodes[b].x_ratio)
-		## 从左往右推，保证相邻间距达
-		for i in range(1, idx.size()):
-			var min_x: float = map_nodes[idx[i - 1]].x_ratio + MAP_MIN_X_GAP
-			if map_nodes[idx[i]].x_ratio < min_x:
-				map_nodes[idx[i]].x_ratio = min_x
-		## 右侧溢出时从右往左回收，整体仍处于合法区
-		for i in range(idx.size() - 2, -1, -1):
-			var max_x: float = map_nodes[idx[i + 1]].x_ratio - MAP_MIN_X_GAP
-			if map_nodes[idx[i]].x_ratio > max_x:
-				map_nodes[idx[i]].x_ratio = max_x
-		for i in idx:
-			map_nodes[i].x_ratio = clampf(map_nodes[i].x_ratio, 0.08, 0.92)
+		var last: int = idx.size() - 1
+		## 从左往右推：首个不低于 MAP_X_MIN，其余不小于「前一个 + 最小间距」
+		for i in range(idx.size()):
+			var lower: float = MAP_X_MIN if i == 0 else map_nodes[idx[i - 1]].x_ratio + MAP_MIN_X_GAP
+			map_nodes[idx[i]].x_ratio = maxf(map_nodes[idx[i]].x_ratio, lower)
+		## 从右往左收：末个不超过 MAP_X_MAX，其余不大于「后一个 − 最小间距」
+		## 注意不能在此之后再做整体 clampf —— 那会把越界的末节点拉回 MAX 却不同步左邻，重新造成重叠
+		for i in range(last, -1, -1):
+			var upper: float = MAP_X_MAX if i == last else map_nodes[idx[i + 1]].x_ratio - MAP_MIN_X_GAP
+			map_nodes[idx[i]].x_ratio = minf(map_nodes[idx[i]].x_ratio, upper)
+		## 兜底：区间宽度不足以容纳全部节点时等距均分（当前 NODES_PER_FLOOR 最多 4，正常不会触发）
+		if _floor_has_overlap(idx):
+			var step: float = (MAP_X_MAX - MAP_X_MIN) / float(last)
+			for i in range(idx.size()):
+				map_nodes[idx[i]].x_ratio = MAP_X_MIN + step * float(i)
+
+## 该层（已按 x_ratio 排序的下标数组）是否仍存在小于最小间距的相邻对
+func _floor_has_overlap(sorted_idx: Array[int]) -> bool:
+	for i in range(1, sorted_idx.size()):
+		var gap: float = map_nodes[sorted_idx[i]].x_ratio - map_nodes[sorted_idx[i - 1]].x_ratio
+		if gap < MAP_MIN_X_GAP - 0.0001:
+			return true
+	return false
 
 ## 生成后修补中间层类型，保证关卡节奏不失控。三条硬性规则：
-##   规则 1 每个中间层至少一个战斗类节点（战斗/ 精英），杜绝「整层白嫖？##   规则2的节点的层不能全是同一类型，至少两种（避免「四个事件」这类极端地图）
+##   规则 1：每个中间层至少一个战斗类节点（战斗 / 精英），杜绝整层白嫖
+##   规则 2：>=3 节点的层不能全是同一类型，至少两种（避免「四个事件」这类极端地图）
 ##   规则 3 连续 REST_GUARANTEE_SPAN 层内必须出现休息点，否则强制改写一个非战斗节点
 ## 只修补中间层：入口层到Boss前层是固定编排，Boss 层不可改
 func _enforce_floor_rules() -> void:
@@ -570,7 +1127,8 @@ func _ensure_type_variety(indices: Array[int]) -> void:
 	var last: int = indices[indices.size() - 1]
 	map_nodes[last].node_type = NodeType.EVENT if first == NodeType.COMBAT else NodeType.COMBAT
 
-## 规则 3：强制在该层放一个休息点。优先改写非战斗节点。## 全是战斗时也允许改一个（该层节点类型，改后仍至少剩一场战斗）
+## 规则 3：强制在该层放一个休息点，优先改写非战斗节点；
+## 全是战斗时也允许改一个（改后该层仍至少剩一场战斗）
 func _force_rest_on_floor(indices: Array[int]) -> void:
 	if indices.size() < 2:
 		return  ## 单节点层是必经之路，改掉会切断唯一通路
@@ -583,7 +1141,9 @@ func _force_rest_on_floor(indices: Array[int]) -> void:
 		candidates = indices.duplicate()
 	map_nodes[candidates[randi() % candidates.size()]].node_type = NodeType.REST
 
-## 连接第[floor_idx] 层与下一层的边，保证：##   - 下一层每个节点至少有一个父节点（不会unreachable）##   - 当前层每个节点至少有一个子节点（不会死路）
+## 连接第 [floor_idx] 层与下一层的边，保证：
+##   - 下一层每个节点至少有一个父节点（不会 unreachable）
+##   - 当前层每个节点至少有一个子节点（不会死路）
 ##   - 连边目标在横向窗口内随机选取（不是固定「最规整等比」），刻意让每条边斜率不同，
 ##     杜绝平行斜线；配合奇偶层错位，进一步避免竖线
 func _connect_floor(floor_idx: int) -> void:
@@ -683,12 +1243,16 @@ func get_reachable_node_indices() -> Array[int]:
 		return []
 	return map_nodes[current_node_index].next.duplicate()
 
-## 选定一个节点（进入该节点内容前调用），标记为已访问
+## 选定一个节点（进入该节点内容前调用），标记为已访问。
+## 刻意不在此处存档：存档点只放在「节点内容结算完成」处（战斗 _finish_node /
+## 非战斗 _after_noncombat）。否则战斗中途退出后，磁盘上的节点已是 visited，
+## 读档会直接跳过这场战斗 —— 与「战斗中退出回退到本节点开始前」的约定相反。
 func select_node(index: int) -> void:
 	if index < 0 or index >= map_nodes.size():
 		return
 	current_node_index = index
 	map_nodes[index].visited = true
+	add_stat("nodes_cleared")
 
 ## 获取指定节点数据；下标非法返回null
 func get_map_node(index: int) -> RoguelikeMapNode:
@@ -702,7 +1266,8 @@ func current_node_type() -> int:
 		return -1
 	return map_nodes[current_node_index].node_type
 
-## 按层段权重表加权随机一个中间层节点类型（层越深，精英越多、纯战斗越少。## 权重全部来自 FLOOR_TYPE_WEIGHTS，调节节奏不需要动这段逻辑
+## 按层段权重表加权随机一个中间层节点类型（层越深，精英越多、纯战斗越少）
+## 权重全部来自 FLOOR_TYPE_WEIGHTS，调节节奏不需要动这段逻辑
 func _roll_node_type(floor_idx: int) -> int:
 	var weights: Array = []
 	for row in FLOOR_TYPE_WEIGHTS:
@@ -725,7 +1290,8 @@ func _roll_node_type(floor_idx: int) -> int:
 			return WEIGHTED_TYPES[i]
 	return NodeType.COMBAT
 
-## 按节点所在层与类型推算敌军阶层上限（越深越高，精英Boss 额外加成。## 入口层精英特例：压到 tier 2，使「开局白嫖文物」的风险落在玩家能承受的范围
+## 按节点所在层与类型推算敌军阶层上限（越深越高，精英 / Boss 额外加成）
+## 入口层精英特例：压到 tier 2，使「开局白嫖文物」的风险落在玩家能承受的范围
 func _node_enemy_tier(floor_idx: int, type: int) -> int:
 	if type == NodeType.BOSS:
 		return 4
@@ -744,16 +1310,18 @@ func _node_wave_count(floor_idx: int, type: int) -> int:
 		return 3 if floor_idx == 0 else 4
 	return clampi(2 + floor_idx, 2, 5)
 
-## 收集阶层不超过max_tier 的全部兵种ID
-## #3/#14：英雄卡（Hero1 爱弥斯/ Hero2 Doro勇士）由卡组用start_run 显式 insert 保证：## 不进入兵种池 —一并满足「敌方不刷英雄」与「通关奖励不出现英雄」。## #8（2026-08-11）：排除条件由「= Hero1」扩展到全部 Hero 前缀，Hero2 解锁后同样不进随机卡池，
-## 避免「选了爱弥斯却随机抽到 Doro勇士卡」破坏英雄决定卡组的设定
-func _collect_unit_ids(max_tier: int) -> Array[String]:
+## 收集阶层不超过 max_tier 的全部兵种 ID；英雄卡（Hero 前缀）一律排除，
+## 英雄只由 start_run 按 selected_hero 显式插入，兼顾「敌方不刷英雄」与「奖励不出英雄」。
+## [param factions] 非空时只保留这些前缀的兵种（英雄军团倾向）
+func _collect_unit_ids(max_tier: int, factions: Array[String] = []) -> Array[String]:
 	var result: Array[String] = []
 	for unit in UnitDatabase.unit_list:
 		var res := unit as UnitResource
 		if res == null:
 			continue
-		if res.unit_id.begins_with("Hero"):
+		if UnitDatabase.is_hero_unit(res.unit_id):
+			continue
+		if not factions.is_empty() and not (res.unit_id.left(1) in factions):
 			continue
 		if res.tier <= max_tier:
 			result.append(res.unit_id)

@@ -7,6 +7,8 @@ class_name RoguelikeReward
 ## 由 RoguelikeDirector 在单层通关、暂停战斗时实例化，并调用 choices_ready()。
 
 ## 玩家选定某张卡（[param unit_id] 为空字符串表示跳过）
+## 军令合并进牌库后，此处也可能是 ORDER_CARD_PREFIX + 军令 ID 的军令卡 ID，
+## 直接交给 RoguelikeManager.add_card 即可正确入库。
 signal card_chosen(unit_id: String)
 ## 玩家选定某件文物（[param artifact_id] 为空字符串表示跳过），供宝箱节点三选一文物
 signal artifact_chosen(artifact_id: String)
@@ -84,7 +86,9 @@ func _build_ui() -> void:
 	skip.pressed.connect(_on_skip_pressed)
 	vbox.add_child(skip)
 
-## 填充三张候选卡牌（[param title] 为弹窗标题，[param choices] 为兵种 ID 列表）
+## 填充三张候选卡牌（[param title] 为弹窗标题，[param choices] 为卡 ID 列表）
+## 卡 ID 可能是兵种 ID，也可能是 RoguelikeManager.ORDER_CARD_PREFIX + 军令 ID
+## —— 军令已并入牌库，通关奖励里同样可能出现军令卡。
 func choices_ready(title: String, choices: Array[String]) -> void:
 	_title = title
 	if _title_label != null:
@@ -97,8 +101,13 @@ func choices_ready(title: String, choices: Array[String]) -> void:
 	if choices.is_empty():
 		_show_empty_hint("牌库已无可获得的卡牌（点下方跳过继续）")
 		return
-	for unit_id in choices:
-		var res := UnitDatabase.get_unit(unit_id) as UnitResource
+	for card_id in choices:
+		if RoguelikeManager.is_order_card(card_id):
+			var od := ItemDatabase.get_order(RoguelikeManager.order_id_of(card_id))
+			if od != null:
+				_choices_container.add_child(_create_order_choice_card(od, card_id))
+			continue
+		var res := UnitDatabase.get_unit(card_id) as UnitResource
 		if res != null:
 			_choices_container.add_child(_create_card(res))
 
@@ -180,6 +189,64 @@ func _create_artifact_card(art: ArtifactData) -> Button:
 	vbox.add_child(desc_lbl)
 
 	card.pressed.connect(func() -> void: _on_artifact_chosen(art.artifact_id))
+	return card
+
+## 创建一张可点击的候选军令卡（与兵种卡同尺寸，选中后以军令卡 ID 进牌库）
+func _create_order_choice_card(od: MilitaryOrderData, card_id: String) -> Button:
+	var card := Button.new()
+	card.custom_minimum_size = CARD_SIZE
+	card.mouse_filter = Control.MOUSE_FILTER_STOP
+	card.tooltip_text = "%s〔军令卡·%s〕\n\n%s\n\n%s" % [
+		od.display_name, od.get_rarity_name(), od.description, od.get_duration_text()
+	]
+	var accent: Color = od.get_rarity_color()
+	var style := StyleBoxFlat.new()
+	## 深紫底 + 稀有度描边：与兵种卡的暖褐底一眼区分
+	style.bg_color = Color(0.10, 0.09, 0.12, 0.96)
+	style.set_border_width_all(3)
+	style.border_color = accent
+	style.set_corner_radius_all(8)
+	style.set_content_margin_all(8)
+	card.add_theme_stylebox_override("normal", style)
+	card.add_theme_stylebox_override("hover", style)
+	card.add_theme_stylebox_override("pressed", style)
+
+	var vbox := VBoxContainer.new()
+	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	vbox.add_theme_constant_override("separation", 4)
+	vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	card.add_child(vbox)
+
+	## 「令」字角标，占位与兵种卡的图标区等高
+	var tag := Label.new()
+	tag.text = "令"
+	tag.custom_minimum_size = Vector2(0, 60)
+	tag.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	tag.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	tag.add_theme_font_size_override("font_size", 44)
+	tag.add_theme_color_override("font_color", accent)
+	tag.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	vbox.add_child(tag)
+
+	var name_lbl := Label.new()
+	name_lbl.text = od.display_name
+	name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	name_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	name_lbl.add_theme_font_size_override("font_size", 15)
+	name_lbl.add_theme_color_override("font_color", accent)
+	name_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	vbox.add_child(name_lbl)
+
+	var desc_lbl := Label.new()
+	desc_lbl.text = od.description
+	desc_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	desc_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	desc_lbl.add_theme_font_size_override("font_size", 11)
+	desc_lbl.add_theme_color_override("font_color", Color(0.82, 0.80, 0.72, 1.0))
+	desc_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	vbox.add_child(desc_lbl)
+
+	card.pressed.connect(func() -> void: _on_card_chosen(card_id))
 	return card
 
 ## 创建一张可点击的候选卡

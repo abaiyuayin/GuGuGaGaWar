@@ -36,9 +36,6 @@ VICTORY_BGM_LABEL,胜利BGM,Victory BGM,Victory BGM,승리 BGM,勝利BGM,ชั�
 DEFEAT_BGM_LABEL,失败BGM,Defeat BGM,Defeat BGM,패배 BGM,敗北BGM,ความพ่ายแพ้ BGM,BGM défaite,BGM sconfitta
 BATTLE_SETTINGS,战斗设置,Battle,Battle,전투,戦闘,การต่อสู้,Bataille,Battaglia
 BGM_SETTINGS,背景音乐设置,BGM Settings,BGM Settings,BGM 설정,BGM設定,การตั้งค่า BGM,Paramètres BGM,Impostazioni BGM
-WINDOW_SETTINGS,窗口设置,Window,Window,창 설정,ウィンドウ設定,การตั้งค่าหน้าต่าง,Fenêtre,Finestra
-LANGUAGE_SETTINGS,语言设置,Language,Language,언어 설정,言語設定,การตั้งค่าภาษา,Langue,Lingua
-AUDIO_SETTINGS,音频设置,Audio,Audio,오디오 설정,オーディオ設定,การตั้งค่าเสียง,Audio,Audio
 CONFIRM,确认,OK,OK,확인,確認,ตกลง,Confirmer,Conferma
 SAVE,保存,Save,Save,저장,保存,บันทึก,Enregistrer,Salva
 CLOSE,关闭,Close,Close,닫기,閉じる,ปิด,Fermer,Chiudi
@@ -66,7 +63,7 @@ COST_LABEL,造价,Cost,Cost,비용,コスト,ค่าใช้จ่าย,Coû
 SUPPLY_LABEL,人口,Supply,Supply,인구,人口,ประชากร,Population,Popolazione
 HP_LABEL,生命值,HP,HP,체력,HP,พลังชีวิต,PV,PV
 DAMAGE_LABEL,攻击力,Damage,Damage,공격력,攻撃力,พลังโจมตี,Attaque,Attacco
-ATTACK_SPEED_LABEL,攻击速度,Attack Speed,Attack Speed,공격 속도,攻撃速度,ความเร็วโจมตี,Vitesse d'attaque,Velocità d'attacco
+ATTACK_RECOVERY_LABEL,攻击后摇,Attack Recovery,Attack Recovery,공격 후딜,攻撃後隙,ดีเลย์หลังโจมตี,Récupération,Recupero
 ATTACK_RANGE_LABEL,攻击距离,Attack Range,Attack Range,공격 거리,攻撃範囲,ระยะโจมตี,Portée d'attaque,Gittata d'attacco
 MOVE_SPEED_LABEL,移动速度,Move Speed,Move Speed,이동 속도,移動速度,ความเร็วเคลื่อนที่,Vitesse de déplacement,Velocità di movimento
 INCOME_LABEL,收入,Income,Income,수입,収入,รายได้,Revenu,Reddito
@@ -140,46 +137,46 @@ CODEX_TAB_EVENT,事件图鉴,Event Codex,Event Codex,이벤트 도감,イベン�
 DEV_MODE_ENABLED,开发者模式已开启,Developer mode enabled,Developer mode enabled,개발자 모드 활성화됨,開発者モード有効,โหมดนักพัฒนาเปิดใช้งาน,Mode développeur activé,Modalità sviluppatore attiva
 DEV_MODE_DISABLED,开发者模式已关闭,Developer mode disabled,Developer mode disabled,개발자 모드 비활성화,開発者モード無効,โหมดนักพัฒนาปิดใช้งาน,Mode développeur désactivé,Modalità sviluppatore disattiva
 CODEX_HERO_SPECIAL,英雄（特殊）,Hero (Special),Hero (Special),영웅 (특수),英雄（特殊）,ฮีโร่ (พิเศษ),Héros (spécial),Eroe (speciale)
-CODEX_LOCKED_UNIT,🔒 %s（尚未解锁）,🔒 %s (Locked),🔒 %s (Locked),🔒 %s（잠김）,🔒 %s（ロック中）,🔒 %s（ล็อค）,🔒 %s (verrouillé),🔒 %s (bloccato)
+CODEX_LOCKED_UNIT,锁 %s（尚未解锁）,Lock %s (Locked),Lock %s (Locked),잠금 %s（잠김）,ロック %s（ロック中）,ล็อค %s（ล็อค）,Verrou %s (verrouillé),Blocco %s (bloccato)
 UNIT_INFO_CLOSE,关闭信息面板,Close panel,Close panel,정보 패널 닫기,情報パネルを閉じる,ปิดแผงข้อมูล,Fermer le panneau,Chiudi pannello
 UNIT_INFO_STATS,"%s
 伤害:%d
-攻速:%.1f
+后摇:%.1f
 移速:%.1f
 射程:%.1f
 造价:%d","%s
 Damage:%d
-AtkSpd:%.1f
+Recovery:%.1f
 MoveSpd:%.1f
 Range:%.1f
 Cost:%d","%s
 Damage:%d
-AtkSpd:%.1f
+Recovery:%.1f
 MoveSpd:%.1f
 Range:%.1f
 Cost:%d","%s
 피해:%d
-공속:%.1f
+후딜:%.1f
 이속:%.1f
 사거리:%.1f
 비용:%d","%s
 ダメージ:%d
-攻速:%.1f
+後隙:%.1f
 移速:%.1f
 射程:%.1f
 コスト:%d","%s
 ดาเมจ:%d
-ความเร็วโจมตี:%.1f
+ดีเลย์หลังโจมตี:%.1f
 ความเร็วเคลื่อนที่:%.1f
 ระยะโจมตี:%.1f
 ค่าใช้จ่าย:%d","%s
 Dégâts:%d
-Vit. att.:%.1f
+Récup.:%.1f
 Vit. dépl.:%.1f
 Portée:%.1f
 Coût:%d","%s
 Danno:%d
-Vel. att.:%.1f
+Recup.:%.1f
 Vel. mov.:%.1f
 Gittata:%.1f
 Costo:%d"
@@ -244,15 +241,15 @@ CODEX_ATTR_GOLD_PER_NODE,每节点金币,Gold per node,Gold per node,노드당 �
 CODEX_ATTR_PIERCE_DAMAGE_PCT,穿透伤害提升,Pierce damage up,Pierce damage up,관통 피해 증가,貫通ダメージ上昇,เพิ่มดาเมจเจาะทะลุ,Dégâts perçants +,Danni perforanti +
 CODEX_ATTR_SHOP_DISCOUNT_PCT,商店折扣,Shop discount,Shop discount,상점 할인,ショップ割引,ส่วนลดร้าน,Remise magasin,Sconto negozio
 CODEX_ATTR_ARMOR_PCT,护甲减伤提升,Armor reduction up,Armor reduction up,방깎 감소 증가,鎧軽減上昇,เพิ่มลดดาเมจเกราะ,Réduc. armure +,Riduz. armatura +
-CODEX_ATTR_DEPLOY_COUNT_BONUS,部署数量加成,Deploy count bonus,Deploy count bonus,배치 수 보너스,展開数ボーナス,โบนัสจัด部署,Bonus déploiement,Bonus schieramento
+CODEX_ATTR_DEPLOY_COUNT_BONUS,部署数量加成,Deploy count bonus,Deploy count bonus,배치 수 보너스,展開数ボーナス,โบนัสจำนวนที่ส่งลงสนาม,Bonus déploiement,Bonus schieramento
 CODEX_ATTR_ENEMY_ATTACK_SPEED_PCT,敌军攻击速度下降,Enemy atk speed down,Enemy atk speed down,적 공속 감소,敵攻速低下,ลดความเร็วโจมตีศัตรู,Vit. att. ennemi -,Vel. att. nemico -
 CODEX_ATTR_DEATH_GOLD,击杀掉落金币,Gold on kill,Gold on kill,킬당 골드,撃殺ゴールド,ทองเมื่อฆ่า,Or par kill,Oro per uccisione
-CODEX_ATTR_HAND_LIMIT_BONUS,手牌上限加成,Hand limit bonus,Hand limit bonus,มือขีดจำกัดโบนัส,手札上限ボーナス,โบนัสขีดมือ,Bonus main,Bonus mano
+CODEX_ATTR_HAND_LIMIT_BONUS,手牌上限加成,Hand limit bonus,Hand limit bonus,손패 한도 보너스,手札上限ボーナス,โบนัสขีดจำกัดมือ,Bonus main,Bonus mano
 CODEX_ATTR_REGEN_PER_WAVE_PCT,每波回复,Regen per wave,Regen per wave,파당 회복,波毎回復,ฟื้นฟูต่อคลื่น,Régén. par vague,Rigene per ondata
 CODEX_ATTR_UNIT_DAMAGE_PCT,全体伤害提升,All damage up,All damage up,전체 피해 증가,全体ダメージ上昇,เพิ่มดาเมจทั้งหมด,Tous dégâts +,Tutti danni +
 CODEX_ATTR_RALLY_MOVE_SPEED,集结进军速度,Rally move speed,Rally move speed,집결 이속,集結移動速度,ความเร็วรวม,Vitesse ralliement,Vel. ralliement
 CODEX_ATTR_ARMOR_FLAT_BONUS,护甲加成,Armor bonus,Armor bonus,방어구 보너스,鎧ボーナス,โบนัสเกราะ,Bonus armure,Bonus armatura
-CODEX_ATTR_DEPLOY_COOLDOWN_PCT,部署冷却缩短,Deploy cooldown down,Deploy cooldown down,배치 쿨다운 감소,展開クールダウン短縮,ลดคูลดาวน์จัด部署,CD déploiement -,CD schieramento -
+CODEX_ATTR_DEPLOY_COOLDOWN_PCT,部署冷却缩短,Deploy cooldown down,Deploy cooldown down,배치 쿨다운 감소,展開クールダウン短縮,ลดคูลดาวน์การส่งลงสนาม,CD déploiement -,CD schieramento -
 CODEX_ATTR_REFILL_HAND,补满手牌,Refill hand,Refill hand,손보충,手札補充,เติมมือ,Main pleine,Mano piena
 CODEX_ATTR_GAIN_RANDOM_CARD,获得随机卡牌,Gain random card,Gain random card,랜덤 카드 획득,ランダムカード取得,ได้การ์ดสุ่ม,Carte aléatoire,Carta casuale
 CODEX_ATTR_HEAL_ALL_PCT,全军治疗,Heal all,Heal all,전군 치료,全軍治療,ฮีลกองทัพ,Soin total,Cura totale
@@ -331,3 +328,22 @@ ACH_NAME_penguin_sacrifice,偏我来时不逢春,Spring Comes Not for Me,Spring 
 ACH_DESC_penguin_sacrifice,凑企鹅死亡时己方水晶还存在,A penguin dies while your crystal still stands,A penguin dies while your crystal still stands,A penguin dies while your crystal still stands,A penguin dies while your crystal still stands,A penguin dies while your crystal still stands,A penguin dies while your crystal still stands,A penguin dies while your crystal still stands
 ACH_NAME_penguin_irony,我草了老铁，那本来是属于我的,"That Was Mine, Bro!","That Was Mine, Bro!","That Was Mine, Bro!","That Was Mine, Bro!","That Was Mine, Bro!","That Was Mine, Bro!","That Was Mine, Bro!"
 ACH_DESC_penguin_irony,我方水晶死亡时凑企鹅还存在于场上,Your crystal dies while a penguin is still on the field,Your crystal dies while a penguin is still on the field,Your crystal dies while a penguin is still on the field,Your crystal dies while a penguin is still on the field,Your crystal dies while a penguin is still on the field,Your crystal dies while a penguin is still on the field,Your crystal dies while a penguin is still on the field
+
+ACH_NAME_banana_cat,香蕉猫,Banana Cat,Banana Cat,香蕉猫,バナナ猫,แมวกล้วย,Chat banane,Gatto banana
+ACH_DESC_banana_cat,第一次出现香蕉猫,See Banana Cat for the first time,See Banana Cat for the first time,首次出现香蕉猫,バナナ猫が初めて登场,พบแมวกล้วยครั้งแรก,Voir Chat banane pour la première fois,Vedi Gatto banana per la prima volta
+ACH_NAME_my_sword_shield,我的刀盾,My Sword and Shield,My Sword and Shield,我的刀盾,私の剣と盾,ดาบและโล่ของฉัน,Mon épée et mon bouclier,La mia spada e il mio scudo
+ACH_DESC_my_sword_shield,第一次出现我的刀盾,See My Sword and Shield for the first time,See My Sword and Shield for the first time,首次出现我的刀盾,私の剣と盾が初めて登场,พบดาบและโล่ของฉันครั้งแรก,Voir Mon épée et mon bouclier pour la première fois,Vedi la mia spada e il mio scudo per la prima volta
+ACH_NAME_power_fei,你怎么绿绿,Why Are You So Green?,Why Are You So Green?,你怎么绿绿,どうしてそんなに緑なの？,ทำไมเขียวจัง,Pourquoi es-tu si vert ?,Perché sei così verde?
+ACH_DESC_power_fei,第一次召唤动力菲比,Summon Power Fei for the first time,Summon Power Fei for the first time,首次召唤动力菲比,动力菲比を初めて召喚,อัญเชิญพลังเฟยครั้งแรก,Invoquer Power Fei pour la première fois,Evoca Power Fei per la prima volta
+ACH_NAME_big_fish,爱吃大白饭,Love White Rice,Love White Rice,爱吃大白饭,白いごはんが大好き,ชอบข้าวขาวมาก,J'adore le riz blanc,Amo il riso bianco
+ACH_DESC_big_fish,第一次召唤大肥鱼,Summon Big Fish for the first time,Summon Big Fish for the first time,第一次召唤大肥鱼,大肥鱼を初めて召喚,อัญเชิญปลาใหญ่ครั้งแรก,Invoquer le gros poisson pour la première fois,Evoca il pesce grosso per la prima volta
+ACH_NAME_pelican,大鹈鹕,Great Pelican,Great Pelican,大鹈鹕,大きなペリカン,นกกระทุงใหญ่,Grand Pélican,Grande Pellicano
+ACH_DESC_pelican,第一次召唤丽贝卡,Summon Rebecca for the first time,Summon Rebecca for the first time,第一次召唤丽贝卡,レベッカを初めて召喚,อัญเชิญเรเบคก้าครั้งแรก,Invoquer Rebecca pour la première fois,Evoca Rebecca per la prima volta
+ROGUELIKE_MODE,肉鸽模式,Roguelike,Roguelike,로그라이크,ローグライク,โร้กไลก์,Roguelike,Roguelike
+UNIT_UNLOCK,兵种解锁,Unit Unlock,Unit Unlock,유닛 해금,ユニット解放,ปลดล็อกหน่วย,Déblocage,Sblocco unità
+ACHIEVEMENTS,成就,Achievements,Achievements,업적,実績,ความสำเร็จ,Succès,Obiettivi
+ACH_NAME_gugu_legion,咕嘎军团,GuGa Legion,GuGa Legion,구가 군단,グガ軍団,กองทัพกูกา,Légion GuGa,Legione GuGa
+ACH_DESC_gugu_legion,累计部署 500 次咕嘎兵种,Deploy GuGa units 500 times in total,Deploy GuGa units 500 times in total,구가 유닛 누적 500회 배치,グガ系ユニットを累計500回展開,ส่งหน่วยกูกาลงสนามรวม 500 ครั้ง,Déployer 500 fois des unités GuGa,Schiera unità GuGa 500 volte
+ACH_NAME_nuo_legion,糯糯大军,NuoNuo Host,NuoNuo Host,누오누오 대군,ヌオヌオ大軍,กองทัพนัวนัว,Armée NuoNuo,Armata NuoNuo
+ACH_DESC_nuo_legion,累计部署 500 次糯糯兵种,Deploy NuoNuo units 500 times in total,Deploy NuoNuo units 500 times in total,누오누오 유닛 누적 500회 배치,ヌオヌオ系ユニットを累計500回展開,ส่งหน่วยนัวนัวลงสนามรวม 500 ครั้ง,Déployer 500 fois des unités NuoNuo,Schiera unità NuoNuo 500 volte
+CODEX_ATTR_REVIVE_ONCE,水晶免死一次,Crystal revives once,Crystal revives once,수정 1회 부활,クリスタル一度復活,คริสตัลฟื้นคืนหนึ่งครั้ง,Cristal ressuscite une fois,Cristallo rinasce una volta

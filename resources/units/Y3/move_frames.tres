@@ -1,6 +1,6 @@
 [gd_resource type="SpriteFrames" load_steps=9 format=3]
 
-[ext_resource type="Texture2D" path="res://resources/units/N1/move_sheet.png" id="1_move_sheet"]
+[ext_resource type="Texture2D" path="res://resources/units/Y3/move_sheet.png" id="1_move_sheet"]
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_move_0"]
 atlas = ExtResource("1_move_sheet")
@@ -29,6 +29,10 @@ region = Rect2(2000, 0, 400, 400)
 [sub_resource type="AtlasTexture" id="AtlasTexture_move_6"]
 atlas = ExtResource("1_move_sheet")
 region = Rect2(2400, 0, 400, 400)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_move_7"]
+atlas = ExtResource("1_move_sheet")
+region = Rect2(2800, 0, 400, 400)
 
 [resource]
 animations = [{
@@ -60,9 +64,13 @@ animations = [{
 {
 "duration": 1.0,
 "texture": SubResource("AtlasTexture_move_6")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_move_7")
 }
 ],
 "loop": true,
 "name": &"move",
-"speed": 10
+"speed": 10.0
 }]

@@ -1,6 +1,6 @@
 [gd_resource type="SpriteFrames" load_steps=11 format=3]
 
-[ext_resource type="Texture2D" path="res://resources/units/Hero4/sprint_sheet.png" id="1_sprint_sheet"]
+[ext_resource type="Texture2D" path="res://resources/units/Hero4/move_sheet.png" id="1_sprint_sheet"]
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_sprint_0"]
 atlas = ExtResource("1_sprint_sheet")

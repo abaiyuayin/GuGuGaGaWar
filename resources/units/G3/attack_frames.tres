@@ -4,95 +4,95 @@
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_attack_0"]
 atlas = ExtResource("1_attack_sheet")
-region = Rect2(0, 0, 720, 536)
+region = Rect2(0, 0, 504, 375)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_attack_1"]
 atlas = ExtResource("1_attack_sheet")
-region = Rect2(720, 0, 720, 536)
+region = Rect2(504, 0, 504, 375)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_attack_2"]
 atlas = ExtResource("1_attack_sheet")
-region = Rect2(1440, 0, 720, 536)
+region = Rect2(1008, 0, 504, 375)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_attack_3"]
 atlas = ExtResource("1_attack_sheet")
-region = Rect2(2160, 0, 720, 536)
+region = Rect2(1512, 0, 504, 375)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_attack_4"]
 atlas = ExtResource("1_attack_sheet")
-region = Rect2(2880, 0, 720, 536)
+region = Rect2(2016, 0, 504, 375)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_attack_5"]
 atlas = ExtResource("1_attack_sheet")
-region = Rect2(0, 536, 720, 536)
+region = Rect2(0, 375, 504, 375)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_attack_6"]
 atlas = ExtResource("1_attack_sheet")
-region = Rect2(720, 536, 720, 536)
+region = Rect2(504, 375, 504, 375)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_attack_7"]
 atlas = ExtResource("1_attack_sheet")
-region = Rect2(1440, 536, 720, 536)
+region = Rect2(1008, 375, 504, 375)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_attack_8"]
 atlas = ExtResource("1_attack_sheet")
-region = Rect2(2160, 536, 720, 536)
+region = Rect2(1512, 375, 504, 375)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_attack_9"]
 atlas = ExtResource("1_attack_sheet")
-region = Rect2(2880, 536, 720, 536)
+region = Rect2(2016, 375, 504, 375)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_attack_10"]
 atlas = ExtResource("1_attack_sheet")
-region = Rect2(0, 1072, 720, 536)
+region = Rect2(0, 750, 504, 375)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_attack_11"]
 atlas = ExtResource("1_attack_sheet")
-region = Rect2(720, 1072, 720, 536)
+region = Rect2(504, 750, 504, 375)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_attack_12"]
 atlas = ExtResource("1_attack_sheet")
-region = Rect2(1440, 1072, 720, 536)
+region = Rect2(1008, 750, 504, 375)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_attack_13"]
 atlas = ExtResource("1_attack_sheet")
-region = Rect2(2160, 1072, 720, 536)
+region = Rect2(1512, 750, 504, 375)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_attack_14"]
 atlas = ExtResource("1_attack_sheet")
-region = Rect2(2880, 1072, 720, 536)
+region = Rect2(2016, 750, 504, 375)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_attack_15"]
 atlas = ExtResource("1_attack_sheet")
-region = Rect2(0, 1608, 720, 536)
+region = Rect2(0, 1126, 504, 375)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_attack_16"]
 atlas = ExtResource("1_attack_sheet")
-region = Rect2(720, 1608, 720, 536)
+region = Rect2(504, 1126, 504, 375)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_attack_17"]
 atlas = ExtResource("1_attack_sheet")
-region = Rect2(1440, 1608, 720, 536)
+region = Rect2(1008, 1126, 504, 375)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_attack_18"]
 atlas = ExtResource("1_attack_sheet")
-region = Rect2(2160, 1608, 720, 536)
+region = Rect2(1512, 1126, 504, 375)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_attack_19"]
 atlas = ExtResource("1_attack_sheet")
-region = Rect2(2880, 1608, 720, 536)
+region = Rect2(2016, 1126, 504, 375)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_attack_20"]
 atlas = ExtResource("1_attack_sheet")
-region = Rect2(0, 2144, 720, 536)
+region = Rect2(0, 1501, 504, 375)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_attack_21"]
 atlas = ExtResource("1_attack_sheet")
-region = Rect2(720, 2144, 720, 536)
+region = Rect2(504, 1501, 504, 375)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_attack_22"]
 atlas = ExtResource("1_attack_sheet")
-region = Rect2(1440, 2144, 720, 536)
+region = Rect2(1008, 1501, 504, 375)
 
 [resource]
 animations = [{

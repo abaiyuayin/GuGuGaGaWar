@@ -20,7 +20,7 @@ attack_range = 5.5
 is_ranged_override = 1
 attack_speed = 2.5
 damage_by_hit = [{
-0: 30
+0: 25
 }]
 attack_hit_frame_start = 8
 attack_sound_frame = 8

@@ -3,15 +3,13 @@ extends Node
 ##
 ## 生命周期：随游戏启动常驻。开启后，图鉴进入可编辑描述状态，
 ##   文物/军令/事件图鉴、开发工具按钮等开发者专属 UI 可见。
-## 持久化：状态写入 user://dev_mode.cfg，下次启动自动恢复，
-##   关闭后所有开发者专属 UI 一律隐藏；F12 局内按钮栏显隐标志同样持久化（2026-08-15）。
+## 持久化：状态写入 user://dev_mode.cfg，下次启动自动恢复，关闭后所有开发者专属 UI 一律隐藏。
+##   （F12 局内按钮栏显隐功能已于 2026-09-02 按用户要求删除。）
 ## 开关方式：图鉴 G1 页 abay 秘技 / 图鉴 G1 待机按钮连按 7 次 / 主菜单「控制台」按钮。
 ## （F11 快捷键已于 2026-08-23 隐藏，不再用于开关开发者模式。）
 
 ## 开发者模式开关状态变化时发出
 signal dev_mode_changed(enabled: bool)
-## 局内上方按钮整排（TopCenterButtons）显隐状态变化时发出（hidden=true 表示已隐藏）
-signal hide_in_battle_top_buttons_changed(hidden: bool)
 
 const SAVE_PATH: String = "user://dev_mode.cfg"  ## 状态持久化文件
 
@@ -22,19 +20,6 @@ var infinite_gold: bool = false
 ## 开发者出兵限制（#11）：开启后玩家方每次出兵严格只出 1 个（AI 不受影响）。
 ## 仅本次运行内保留（不持久化）；与 infinite_gold 一致。
 var single_spawn: bool = false
-## 开发者模式 F12 快捷键目标：是否隐藏局内上方按钮整排（TopCenterButtons）。
-## 全局生效——在主菜单按 F12 也能预隐藏，进入战斗后自动套用；主菜单自身按钮不受影响。
-## 持久化：与 enabled 一并写入 user://dev_mode.cfg（2026-08-15 修正：关闭重开窗口不重置按钮状态）。
-var _hide_in_battle_top_buttons: bool = false
-var hide_in_battle_top_buttons: bool:
-	get:
-		return _hide_in_battle_top_buttons
-	set(v):
-		if _hide_in_battle_top_buttons == v:
-			return
-		_hide_in_battle_top_buttons = v
-		_save_state()
-		hide_in_battle_top_buttons_changed.emit(v)
 
 func _ready() -> void:
 	_load_state()
@@ -82,11 +67,9 @@ func _load_state() -> void:
 	var cfg := ConfigFile.new()
 	if cfg.load(SAVE_PATH) == OK:
 		enabled = bool(cfg.get_value("dev", "enabled", false))
-		_hide_in_battle_top_buttons = bool(cfg.get_value("dev", "hide_in_battle_top_buttons", false))
 
 func _save_state() -> void:
 	var cfg := ConfigFile.new()
 	cfg.set_value("dev", "enabled", enabled)
-	cfg.set_value("dev", "hide_in_battle_top_buttons", _hide_in_battle_top_buttons)
 	if cfg.save(SAVE_PATH) != OK:
 		push_error("DevMode: 无法写入 %s。" % SAVE_PATH)

@@ -1,0 +1,19 @@
+[remap]
+
+importer="oggvorbisstr"
+type="AudioStreamOggVorbis"
+uid="uid://3o0o4pv0kjf2"
+path="res://.godot/imported/糯糯_processed (1).ogg-5c32380a84ca7ad5ea306f4422ee323b.oggvorbisstr"
+
+[deps]
+
+source_file="res://assets/audio/shared/糯糯_processed (1).ogg"
+dest_files=["res://.godot/imported/糯糯_processed (1).ogg-5c32380a84ca7ad5ea306f4422ee323b.oggvorbisstr"]
+
+[params]
+
+loop=false
+loop_offset=0
+bpm=0
+beat_count=0
+bar_beats=4

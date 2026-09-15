@@ -4,59 +4,59 @@
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_move_0"]
 atlas = ExtResource("1_move_sheet")
-region = Rect2(0, 0, 960, 720)
+region = Rect2(0, 0, 672, 504)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_move_1"]
 atlas = ExtResource("1_move_sheet")
-region = Rect2(960, 0, 960, 720)
+region = Rect2(672, 0, 672, 504)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_move_2"]
 atlas = ExtResource("1_move_sheet")
-region = Rect2(1920, 0, 960, 720)
+region = Rect2(1344, 0, 672, 504)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_move_3"]
 atlas = ExtResource("1_move_sheet")
-region = Rect2(2880, 0, 960, 720)
+region = Rect2(2016, 0, 672, 504)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_move_4"]
 atlas = ExtResource("1_move_sheet")
-region = Rect2(3840, 0, 960, 720)
+region = Rect2(2688, 0, 672, 504)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_move_5"]
 atlas = ExtResource("1_move_sheet")
-region = Rect2(4800, 0, 960, 720)
+region = Rect2(3360, 0, 672, 504)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_move_6"]
 atlas = ExtResource("1_move_sheet")
-region = Rect2(5760, 0, 960, 720)
+region = Rect2(4032, 0, 672, 504)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_move_7"]
 atlas = ExtResource("1_move_sheet")
-region = Rect2(6720, 0, 960, 720)
+region = Rect2(4704, 0, 672, 504)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_move_8"]
 atlas = ExtResource("1_move_sheet")
-region = Rect2(7680, 0, 960, 720)
+region = Rect2(5376, 0, 672, 504)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_move_9"]
 atlas = ExtResource("1_move_sheet")
-region = Rect2(0, 720, 960, 720)
+region = Rect2(0, 504, 672, 504)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_move_10"]
 atlas = ExtResource("1_move_sheet")
-region = Rect2(960, 720, 960, 720)
+region = Rect2(672, 504, 672, 504)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_move_11"]
 atlas = ExtResource("1_move_sheet")
-region = Rect2(1920, 720, 960, 720)
+region = Rect2(1344, 504, 672, 504)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_move_12"]
 atlas = ExtResource("1_move_sheet")
-region = Rect2(2880, 720, 960, 720)
+region = Rect2(2016, 504, 672, 504)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_move_13"]
 atlas = ExtResource("1_move_sheet")
-region = Rect2(3840, 720, 960, 720)
+region = Rect2(2688, 504, 672, 504)
 
 [resource]
 animations = [{

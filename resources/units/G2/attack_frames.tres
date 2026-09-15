@@ -4,91 +4,91 @@
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_attack_0"]
 atlas = ExtResource("1_attack_sheet")
-region = Rect2(0, 0, 703, 470)
+region = Rect2(0, 0, 492, 329)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_attack_1"]
 atlas = ExtResource("1_attack_sheet")
-region = Rect2(703, 0, 703, 470)
+region = Rect2(492, 0, 492, 329)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_attack_2"]
 atlas = ExtResource("1_attack_sheet")
-region = Rect2(1406, 0, 703, 470)
+region = Rect2(984, 0, 492, 329)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_attack_3"]
 atlas = ExtResource("1_attack_sheet")
-region = Rect2(2109, 0, 703, 470)
+region = Rect2(1476, 0, 492, 329)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_attack_4"]
 atlas = ExtResource("1_attack_sheet")
-region = Rect2(2812, 0, 703, 470)
+region = Rect2(1968, 0, 492, 329)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_attack_5"]
 atlas = ExtResource("1_attack_sheet")
-region = Rect2(3515, 0, 703, 470)
+region = Rect2(2460, 0, 492, 329)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_attack_6"]
 atlas = ExtResource("1_attack_sheet")
-region = Rect2(4218, 0, 703, 470)
+region = Rect2(2953, 0, 492, 329)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_attack_7"]
 atlas = ExtResource("1_attack_sheet")
-region = Rect2(4921, 0, 703, 470)
+region = Rect2(3445, 0, 492, 329)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_attack_8"]
 atlas = ExtResource("1_attack_sheet")
-region = Rect2(5624, 0, 703, 470)
+region = Rect2(3937, 0, 492, 329)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_attack_9"]
 atlas = ExtResource("1_attack_sheet")
-region = Rect2(0, 470, 703, 470)
+region = Rect2(0, 329, 492, 329)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_attack_10"]
 atlas = ExtResource("1_attack_sheet")
-region = Rect2(703, 470, 703, 470)
+region = Rect2(492, 329, 492, 329)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_attack_11"]
 atlas = ExtResource("1_attack_sheet")
-region = Rect2(1406, 470, 703, 470)
+region = Rect2(984, 329, 492, 329)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_attack_12"]
 atlas = ExtResource("1_attack_sheet")
-region = Rect2(2109, 470, 703, 470)
+region = Rect2(1476, 329, 492, 329)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_attack_13"]
 atlas = ExtResource("1_attack_sheet")
-region = Rect2(2812, 470, 703, 470)
+region = Rect2(1968, 329, 492, 329)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_attack_14"]
 atlas = ExtResource("1_attack_sheet")
-region = Rect2(3515, 470, 703, 470)
+region = Rect2(2460, 329, 492, 329)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_attack_15"]
 atlas = ExtResource("1_attack_sheet")
-region = Rect2(4218, 470, 703, 470)
+region = Rect2(2953, 329, 492, 329)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_attack_16"]
 atlas = ExtResource("1_attack_sheet")
-region = Rect2(4921, 470, 703, 470)
+region = Rect2(3445, 329, 492, 329)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_attack_17"]
 atlas = ExtResource("1_attack_sheet")
-region = Rect2(5624, 470, 703, 470)
+region = Rect2(3937, 329, 492, 329)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_attack_18"]
 atlas = ExtResource("1_attack_sheet")
-region = Rect2(0, 940, 703, 470)
+region = Rect2(0, 658, 492, 329)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_attack_19"]
 atlas = ExtResource("1_attack_sheet")
-region = Rect2(703, 940, 703, 470)
+region = Rect2(492, 658, 492, 329)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_attack_20"]
 atlas = ExtResource("1_attack_sheet")
-region = Rect2(1406, 940, 703, 470)
+region = Rect2(984, 658, 492, 329)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_attack_21"]
 atlas = ExtResource("1_attack_sheet")
-region = Rect2(2109, 940, 703, 470)
+region = Rect2(1476, 658, 492, 329)
 
 [resource]
 animations = [{

@@ -3,21 +3,23 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://bi6b0vkm6lave"
-path="res://.godot/imported/battle_bg.png-c6fea0b6b1a9207d70fccb232ef26216.ctex"
+path.bptc="res://.godot/imported/battle_bg.png-c6fea0b6b1a9207d70fccb232ef26216.bptc.ctex"
+path.astc="res://.godot/imported/battle_bg.png-c6fea0b6b1a9207d70fccb232ef26216.astc.ctex"
 metadata={
-"vram_texture": false
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
+"vram_texture": true
 }
 
 [deps]
 
 source_file="res://assets/backgrounds/battle_bg.png"
-dest_files=["res://.godot/imported/battle_bg.png-c6fea0b6b1a9207d70fccb232ef26216.ctex"]
+dest_files=["res://.godot/imported/battle_bg.png-c6fea0b6b1a9207d70fccb232ef26216.bptc.ctex", "res://.godot/imported/battle_bg.png-c6fea0b6b1a9207d70fccb232ef26216.astc.ctex"]
 
 [params]
 
-compress/mode=0
-compress/high_quality=false
-compress/lossy_quality=0.7
+compress/mode=2
+compress/high_quality=true
+compress/lossy_quality=0.9
 compress/uastc_level=0
 compress/rdo_quality_loss=0.0
 compress/hdr_compression=1

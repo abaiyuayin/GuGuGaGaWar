@@ -258,8 +258,7 @@ func _award_first_clear(level: int) -> void:
 	_levels_first_cleared[level] = true
 	_merit += MERIT_PER_LEVEL.get(level, 100)
 	_stars += 1
-	## #21：�?通加星后立即棢�查进度类成就（星耢�将星等实时弹出，不等结算�?	Achievements.check_progress()
-	## 通知 UI �?��首��并解锁新兵种（首��弹窗）
+	Achievements.check_progress()
 	var new_unit: String = get_level_new_unit(level)
 	level_first_cleared.emit(level, new_unit)
 

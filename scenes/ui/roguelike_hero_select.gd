@@ -2,18 +2,28 @@ class_name RoguelikeHeroSelect
 extends Control
 ## 肉鸽英雄选择界面（#208）。5 个槽位：爱弥斯可选；其余按解锁状态动态显示
 ## （#8：Hero2 开发者模式默认解锁 / 战役解锁后可选，未解锁显示「暂未上线」）。
-## 必须选完英雄才能开始：确认后 emit hero_confirmed(hero_id)，由调用方负责 start_run + 切场景。
+## 必须选完英雄才能开始：确认后 emit hero_confirmed(hero_id, ascension)，由调用方负责 start_run + 切场景。
+## 另外承载两件事：
+##   1. 「继续上次征程」——存在 run 存档时置顶显示，emit continue_run_requested 走读档流程
+##   2. 进阶难度选择器——只能选到已解锁等级（通关一次解锁下一级）
 ## 纯代码构建 UI（无 .tscn），与 RoguelikeVictoryScreen / RoguelikeDefeatScreen 同风格。
 
-signal hero_confirmed(hero_id: String)
+signal hero_confirmed(hero_id: String, ascension: int)
+## 玩家点「继续上次征程」：由调用方执行 RoguelikeManager.load_run() 并切到 hub
+signal continue_run_requested()
 
 var _selected_id: String = ""
 var _start_btn: Button
 var _toast: Label
 ## 英雄 ID → 该行的选择按钮，用于切换「选择 / 已选择」文案（配合锁定英雄禁用开始按钮）
 var _hero_buttons: Dictionary = {}
+## 进阶难度下拉（只列出已解锁等级）与其效果说明
+var _ascension_option: OptionButton = null
+var _ascension_desc: Label = null
 
 func _ready() -> void:
+	## 进阶解锁等级与历史记录来自 user://，读界面前先懒加载一次
+	RoguelikeManager.load_progress()
 	## 用 set_anchors_and_offsets_preset 而非 set_anchors_preset：
 	## 后者只改锚点、不动 offset，一旦有残留偏移量整个面板就会偏离屏幕中心。
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -32,7 +42,7 @@ func _build_ui() -> void:
 	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(center)
 	var panel := PanelContainer.new()
-	panel.custom_minimum_size = Vector2(760, 560)
+	panel.custom_minimum_size = Vector2(820, 660)
 	var panel_style := StyleBoxFlat.new()
 	panel_style.bg_color = Color(0.16, 0.12, 0.09, 1)
 	panel_style.corner_radius_top_left = 14
@@ -66,6 +76,9 @@ func _build_ui() -> void:
 	subtitle.add_theme_color_override("font_color", Color(0.8, 0.8, 0.75, 1.0))
 	vbox.add_child(subtitle)
 
+	## 「继续上次征程」置顶：只在存在 run 存档时出现
+	_build_continue_row(vbox)
+
 	## 英雄槽位
 	var grid := GridContainer.new()
 	grid.columns = 1
@@ -76,6 +89,9 @@ func _build_ui() -> void:
 	grid.add_child(_create_hero_header())
 	for hero in RoguelikeManager.get_hero_defs():
 		grid.add_child(_create_hero_row(hero))
+
+	## 进阶难度选择器（仅列出已解锁等级）
+	_build_ascension_row(vbox)
 
 	## 底部按钮行
 	var btn_row := HBoxContainer.new()
@@ -105,6 +121,105 @@ func _build_ui() -> void:
 	_toast.add_theme_color_override("font_color", Color(1.0, 0.6, 0.5, 1.0))
 	_toast.visible = false
 	vbox.add_child(_toast)
+
+## 「继续上次征程」行：存在 hub 层面的 run 存档时才构建。
+## 存档只记录 hub 状态，因此文案明确写出「回到该节点开始前」，避免玩家以为战斗进度也能续上。
+func _build_continue_row(parent: Control) -> void:
+	if not RoguelikeManager.has_save():
+		return
+	var summary: Dictionary = RoguelikeManager.peek_save_summary()
+	if summary.is_empty():
+		return
+	var hero_name: String = _hero_display_name(String(summary.get("hero", "")))
+	var asc: int = int(summary.get("ascension", 0))
+	var btn := Button.new()
+	btn.text = "继续上次征程（%s · 第 %d 层 · 金币 %d · 牌库 %d 张%s）" % [
+		hero_name,
+		int(summary.get("floor", 1)),
+		int(summary.get("gold", 0)),
+		int(summary.get("deck_size", 0)),
+		"" if asc <= 0 else " · 进阶 %d" % asc,
+	]
+	btn.custom_minimum_size = Vector2(0, 48)
+	btn.add_theme_font_size_override("font_size", 18)
+	btn.add_theme_color_override("font_color", Color(0.62, 1.0, 0.72, 1.0))
+	btn.pressed.connect(_on_continue_pressed)
+	parent.add_child(btn)
+
+	var hint := Label.new()
+	hint.text = "读档回到地图总控台（战斗中退出会退回该节点开始前）；下方新开一局会覆盖此存档"
+	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	hint.add_theme_font_size_override("font_size", 12)
+	hint.add_theme_color_override("font_color", Color(0.72, 0.72, 0.68, 1.0))
+	parent.add_child(hint)
+
+## 英雄 ID 的展示名（存档里只有 ID，取 HERO_DEFS 里的中文名，查不到就回落 ID）
+func _hero_display_name(hero_id: String) -> String:
+	if hero_id.is_empty():
+		return "未知英雄"
+	for hero in RoguelikeManager.HERO_DEFS:
+		if String(hero["id"]) == hero_id:
+			return String(hero["name"])
+	return hero_id
+
+## 进阶难度行：下拉只列出 0 ~ ascension_unlocked，选中后实时刷新效果说明
+func _build_ascension_row(parent: Control) -> void:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 12)
+	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	parent.add_child(row)
+
+	var label := Label.new()
+	label.text = "进阶难度"
+	label.custom_minimum_size = Vector2(120, 0)
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	label.add_theme_font_size_override("font_size", 16)
+	label.add_theme_color_override("font_color", Color(1.0, 0.82, 0.45, 1.0))
+	row.add_child(label)
+
+	_ascension_option = OptionButton.new()
+	_ascension_option.custom_minimum_size = Vector2(200, 36)
+	_ascension_option.add_theme_font_size_override("font_size", 15)
+	var unlocked: int = clampi(RoguelikeManager.ascension_unlocked, 0, RoguelikeManager.ASCENSION_MAX_LEVEL)
+	for lvl in range(unlocked + 1):
+		_ascension_option.add_item("标准（无进阶）" if lvl == 0 else "进阶 %d" % lvl, lvl)
+	## 沿用上一局选择（受当前解锁上限夹断），方便连续挑战同难度
+	_ascension_option.select(clampi(RoguelikeManager.ascension_level, 0, unlocked))
+	_ascension_option.item_selected.connect(_on_ascension_selected)
+	row.add_child(_ascension_option)
+
+	_ascension_desc = Label.new()
+	_ascension_desc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_ascension_desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_ascension_desc.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_ascension_desc.add_theme_font_size_override("font_size", 12)
+	_ascension_desc.add_theme_color_override("font_color", Color(0.85, 0.80, 0.70, 1.0))
+	row.add_child(_ascension_desc)
+	_refresh_ascension_desc()
+
+## 当前下拉选中的进阶等级（下拉未构建时回落 0）
+func _current_ascension() -> int:
+	if _ascension_option == null or not is_instance_valid(_ascension_option):
+		return 0
+	return maxi(_ascension_option.get_selected_id(), 0)
+
+func _on_ascension_selected(_index: int) -> void:
+	_refresh_ascension_desc()
+
+## 刷新进阶效果说明；尚未解锁任何进阶时提示解锁条件
+func _refresh_ascension_desc() -> void:
+	if _ascension_desc == null or not is_instance_valid(_ascension_desc):
+		return
+	if RoguelikeManager.ascension_unlocked <= 0:
+		_ascension_desc.text = "通关一次（击败最终 Boss）后解锁进阶 1"
+		return
+	_ascension_desc.text = RoguelikeManager.ascension_desc(_current_ascension())
+
+## 点「继续上次征程」：交给调用方读档并切场景，本界面随即关闭
+func _on_continue_pressed() -> void:
+	continue_run_requested.emit()
+	queue_free()
 
 ## 创建单个英雄行（名称 / 军团 / 特长 / 选择），三栏布局（#5）
 func _create_hero_row(hero: Dictionary) -> Control:
@@ -196,7 +311,7 @@ func _on_start_pressed() -> void:
 	if _selected_id.is_empty():
 		_show_toast("请先选择一个英雄")
 		return
-	hero_confirmed.emit(_selected_id)
+	hero_confirmed.emit(_selected_id, _current_ascension())
 
 func _show_toast(text: String) -> void:
 	_toast.text = text

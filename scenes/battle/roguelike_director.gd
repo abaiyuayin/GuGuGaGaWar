@@ -8,13 +8,10 @@ class_name RoguelikeDirector
 ##   - 单位生成 / 死亡统计 / 战斗主循环：BattleManager
 ##   - 手牌 UI / 拖放部署：roguelike_hud
 ## 本节点不直接操作任何单位节点，只通过 BattleManager.spawn_unit 与 RoguelikeManager 协作。
+##
+## 进入本场战斗一定来自地图节点（roguelike_meta 选点 → GameManager.start_game），
+## 因此波数 / 敌军阶层一律读当前节点数据，不存在「线性多层」流程。
 
-## 相邻两波敌军的刷新间隔（秒）
-const WAVE_INTERVAL: float = 10.0
-## 单层基础波数（实际波数 = 本值 + 当前层数，受 WAVES_CAP 限制）
-const WAVES_BASE: int = 2
-## 单层波数上限（防止后期层数过深时波数爆炸）
-const WAVES_CAP: int = 5
 ## 每波基础敌人数（实际数量 = 本值 + 波次序号，第 1 波=3、第 2 波=4…）
 const ENEMY_BASE_COUNT: int = 2
 ## 战场持续型效果（急救回血 / 火攻灼烧）的结算间隔（秒）
@@ -23,20 +20,16 @@ const FIELD_TICK_INTERVAL: float = 1.0
 const CLEAR_GOLD_BASE: int = 30
 ## 每深入一层额外增加的通关金币
 const FLOOR_GOLD_STEP: int = 5
-## 线性（非地图）模式的最终层：清掉该层即视为击败最终 Boss，整局通关 → 弹胜利界面 + 播 BGM（#204）
-## 地图模式的终点由地图 Boss 节点决定，不依赖此常量
-const LINEAR_FINAL_FLOOR: int = 10
+## Boss 节点每波敌人数量的额外倍率（决战规模翻倍）
+const BOSS_COUNT_MULT: float = 2.0
 
-## 战场节点引用（用于潜在的关卡衔接，当前主要作为存在性校验）
+## 战场节点引用（水晶加血 / 免死等回调需要）
 var _battlefield: Node2D = null
 ## 肉鸽专用 HUD（用于刷新顶部波次文本）
 var _hud: CanvasLayer = null
-## 是否由地图节点进入本场战斗（true=从 roguelike_meta 选节点进来；false=旧线性多层流程）
-## 由当前已选节点下标判定：地图模式下 current_node_index >= 0
-var is_map_mode: bool = false
-## 地图模式下本场敌军的阶层上限（每场战斗从节点读取）
+## 本场敌军的阶层上限（每场战斗从节点读取）
 var _enemy_tier: int = 1
-## 波次刷新倒计时累加器
+## 波次刷新倒计时累加器（仅军令「佯攻令」延迟下一波时使用）
 var _wave_timer: float = 0.0
 ## 当前已刷出的波次序号（从 1 起）
 var _current_wave: int = 0
@@ -52,25 +45,25 @@ var _reward_open: bool = false
 var _field_tick: float = 0.0
 ## 「白旗休战令」清场期间抑制击杀金币，避免敌军撤退也算战功
 var _suppress_kill_gold: bool = false
+## 本场节点类型（COMBAT / ELITE / BOSS）
+var _node_type: int = RoguelikeManager.NodeType.COMBAT
 
 ## 注入依赖并启动本层波次
 func setup(battlefield: Node2D, hud: CanvasLayer) -> void:
 	_battlefield = battlefield
 	_hud = hud
-	## 地图模式下玩家已通过 select_node 选定了具体节点（current_node_index >= 0）
-	is_map_mode = RoguelikeManager.current_node_index >= 0
+	_node_type = RoguelikeManager.current_node_type()
 	BattleManager.unit_removed.connect(_on_unit_removed)
 	## 敌军撤退（军令「围三阙一令」）只清波次、不结算赏金，故走独立信号
 	BattleManager.unit_retreated.connect(_on_unit_retreated)
-	## 军令的即时结算（补牌 / 治疗 / 跳波…）在本节点执行；
-	## 持续型加成不用监听，打出后已写进 active_order_effects，由 RunModifiers 实时查询
 	RoguelikeManager.order_played.connect(_on_order_played)
+	if _battlefield != null and is_instance_valid(_battlefield) \
+			and _battlefield.has_signal("base_revive_requested"):
+		_battlefield.base_revive_requested.connect(_on_crystal_revive_requested)
 	_start_floor_waves()
-	## #6：战斗开始时播报当前英雄特长（顶部提示停留 5 秒）
 	_flash_hero_special()
 
 func _exit_tree() -> void:
-	## 场景卸载时断开单例信号，避免残留连接指向已释放节点
 	if BattleManager.unit_removed.is_connected(_on_unit_removed):
 		BattleManager.unit_removed.disconnect(_on_unit_removed)
 	if BattleManager.unit_retreated.is_connected(_on_unit_retreated):
@@ -79,25 +72,23 @@ func _exit_tree() -> void:
 		RoguelikeManager.order_played.disconnect(_on_order_played)
 
 func _process(delta: float) -> void:
-	## 战斗未激活 / 已暂停 / 奖励界面打开 / 已结算 时均跳过波次推进
 	if not BattleManager.is_battle_active or BattleManager.is_paused or _reward_open or _ended:
 		return
-	## 战场持续型效果按秒结算，与波次推进解耦（波次刷完后仍需继续回血 / 灼烧）
+	## 手牌冷却推进（部署节奏控制），与波次推进解耦
+	RoguelikeManager.tick_card_cooldowns(delta)
+	## 战场持续型效果按秒结算（波次刷完后仍需继续回血 / 灼烧）
 	_tick_field_effects(delta)
-	## 所有波次已刷完，胜负交由 _check_end_conditions 在敌军清空时判定
 	if _all_waves_spawned:
 		return
 	## 清波制推进：当前波敌军未全灭前不进入下一波（第一波由 _start_floor_waves 立即刷出）
 	if not _current_wave_enemies_cleared():
 		return
-	## #13：全灭即刷新——正常情况下 _wave_timer 为 0，直接进下一波，不再空等 10 秒。
-	## _wave_timer 保留给军令「佯攻令」(enemy_wave_delay) 临时压后下一波使用。
 	if _wave_timer > 0.0:
 		_wave_timer -= delta
 		return
 	_spawn_wave()
 
-## 当前波敌军是否已全部阵亡（清波制推进条件：第一波敌人全部死亡后才进入第二波）
+## 当前波敌军是否已全部阵亡（清波制推进条件）
 func _current_wave_enemies_cleared() -> bool:
 	for u in BattleManager.enemy_units:
 		var unit := u as Unit
@@ -105,74 +96,79 @@ func _current_wave_enemies_cleared() -> bool:
 			return false
 	return true
 
-## 重置并启动某一层的波次（每层开局与第一波立即刷新）
+## 重置并启动本节点的波次（每层开局与第一波立即刷新）
 func _start_floor_waves() -> void:
 	_current_wave = 0
 	_all_waves_spawned = false
-	if is_map_mode:
-		## 地图模式：难度取当前节点的 wave_count / enemy_tier，且每场战斗重新洗牌抽满手牌
-		var node := RoguelikeManager.get_map_node(RoguelikeManager.current_node_index)
-		if node != null:
-			_total_waves = node.wave_count
-			_enemy_tier = node.enemy_tier
-		else:
-			_total_waves = mini(WAVES_BASE + RoguelikeManager.current_floor, WAVES_CAP)
-		RoguelikeManager.start_floor()
+	var node := RoguelikeManager.get_map_node(RoguelikeManager.current_node_index)
+	if node != null:
+		_total_waves = node.wave_count
+		_enemy_tier = node.enemy_tier
 	else:
-		_total_waves = mini(WAVES_BASE + RoguelikeManager.current_floor, WAVES_CAP)
-		RoguelikeManager.refill_hand()
-	_wave_timer = 0.0  ## 立即刷新第一波
+		## 兜底：节点数据缺失时按层数推波，保证战斗仍可正常结束
+		_total_waves = clampi(2 + RoguelikeManager.current_floor, 2, 5)
+		_enemy_tier = clampi(1 + int(RoguelikeManager.current_floor / 2.0), 1, 4)
+	RoguelikeManager.start_floor()
+	_wave_timer = 0.0
 	_update_wave_text()
 	_spawn_wave()
 
 ## 刷出一波敌军，并在每波刷新时给玩家补满手牌
 func _spawn_wave() -> void:
 	_current_wave += 1
-	## #8：每刷新一波敌军，英雄技能 CD 自动恢复 1 点（波次制冷却）
 	HeroSkillManager.on_wave_advance()
 	var count: int = ENEMY_BASE_COUNT + _current_wave
+	if _node_type == RoguelikeManager.NodeType.BOSS:
+		count = int(round(float(count) * BOSS_COUNT_MULT))
 	for i in range(count):
 		var res := _pick_enemy_resource() as UnitResource
 		if res == null:
 			continue
-		## #24：肉鸽敌人从屏幕外生成——出生点放到地图左右边缘之外（|x| > FIELD_X_MAX），
-		## 敌人从视野边缘走入战场，不再凭空出现在基地前方（默认出生点 ±544 在视野内）。
-		## y 仍限定在出兵区域内（SPAWN_Y_CENTER ± SPAWN_Y_RANGE）。
+		## 敌人从屏幕外生成（|x| > FIELD_X_MAX），走入战场后向中央水晶合围
 		var side: float = -1.0 if randf() < 0.5 else 1.0
 		var spawn_x: float = side * (Constants.FIELD_X_MAX + 40.0)
 		var spawn_y: float = Constants.SPAWN_Y_CENTER + randf_range(-Constants.SPAWN_Y_RANGE, Constants.SPAWN_Y_RANGE)
 		BattleManager.spawn_unit(res, 1, Vector2(spawn_x, spawn_y))
+		_decorate_spawned_enemy()
 	if _current_wave >= _total_waves:
 		_all_waves_spawned = true
-	## 每波开局给场上我方单位结算文物类的护盾 / 回复
 	_apply_wave_start_buffs()
-	## 每波刷新把玩家手牌补到上限 —— 上一波没打出的牌保留，不弃置
 	RoguelikeManager.refill_hand()
 	_update_wave_text()
 	_check_end_conditions()
-	## #13：波次间隔归零 —— 下一波的触发条件只剩「当前波全灭」
 	_wave_timer = 0.0
 
+## Boss 节点：把刚生成的敌军体型放大（用户拍板 ×2）
+func _decorate_spawned_enemy() -> void:
+	if _node_type != RoguelikeManager.NodeType.BOSS:
+		return
+	if BattleManager.enemy_units.is_empty():
+		return
+	var unit := BattleManager.enemy_units.back() as Unit
+	if unit == null or not is_instance_valid(unit):
+		return
+	unit.visual_scale_mult = Constants.ROGUELIKE_BOSS_SCALE_MULT
+
 ## 从兵种库中随机取一个符合当前阶层上限的敌军资源
-## 阶层上限随波次渐进：第 1 波只出 T1 低级兵，每两波提升一档，直到节点/层数上限。
-## 地图模式取本场节点的 enemy_tier 为上限；旧线性模式取 clamp(层数,1,4)。
+## 阶层上限随波次渐进：第 1 波只出低阶兵，每两波提升一档，直到节点阶层上限。
 func _pick_enemy_resource() -> UnitResource:
-	var tier_cap: int = _enemy_tier if is_map_mode else clampi(RoguelikeManager.current_floor, 1, 4)
-	## 随战斗深入逐渐出现高级兵：前期清一色低级，后期出现高阶兵种
-	var max_tier: int = clampi(1 + int((_current_wave - 1) / 2.0), 1, tier_cap)
+	var max_tier: int = clampi(1 + int((_current_wave - 1) / 2.0), 1, _enemy_tier)
 	var pool: Array[UnitResource] = []
 	for u in UnitDatabase.unit_list:
 		var res := u as UnitResource
 		if res == null or res.tier > max_tier:
 			continue
-		if res.unit_id == "Hero1" or res.unit_id == "Hero2":
-			continue  ## #3/#14/#Bug9：英雄卡不进入敌方刷怪池（爱弥斯/Doro勇士为玩家专属，禁止敌方刷出）
+		## 英雄卡（Hero 前缀）为玩家专属，一律不进敌方刷怪池
+		if UnitDatabase.is_hero_unit(res.unit_id):
+			continue
 		pool.append(res)
 	if pool.is_empty():
-		## 兜底：退回全部兵种，避免空波
+		## 兜底：放宽到节点阶层上限内的全部非英雄兵种，避免空波
 		for u in UnitDatabase.unit_list:
 			var res := u as UnitResource
-			if res != null:
+			if res == null or UnitDatabase.is_hero_unit(res.unit_id):
+				continue
+			if res.tier <= _enemy_tier:
 				pool.append(res)
 	if pool.is_empty():
 		return null
@@ -185,10 +181,10 @@ func _update_wave_text() -> void:
 	var text: String = tr("ROGUE_FLOOR_WAVE") % [RoguelikeManager.current_floor, _current_wave, _total_waves]
 	_hud.set_wave_text(text)
 
-## 任何单位被移除时（敌死 / 己死）都重新评估胜负；敌军阵亡时结算赏金
+## 任何单位被移除时（敌死 / 己死）都重新评估胜负；敌军阵亡时结算赏金与击杀统计
 func _on_unit_removed(player_id: int) -> void:
-	## player_id == 1 表示被移除的是敌方单位 —— 文物「无名冢砖」/ 军令「掠夺令」在此兑现
 	if player_id == 1 and not _suppress_kill_gold:
+		RoguelikeManager.add_stat("kills")
 		var bounty: int = RunModifiers.kill_gold()
 		if bounty > 0:
 			RoguelikeManager.add_gold(bounty)
@@ -206,7 +202,6 @@ func _on_unit_retreated(_player_id: int) -> void:
 
 ## 每波开局的文物结算：首波护盾（圣殿骑士吊坠）+ 每波回复（龙涎香炉）
 func _apply_wave_start_buffs() -> void:
-	## first_wave_shield 顾名思义只在本层第一波兑现，后续波次不再叠加
 	var shield: int = RunModifiers.wave_shield() if _current_wave <= 1 else 0
 	var regen_pct: float = RunModifiers.wave_regen_pct()
 	if shield <= 0 and regen_pct <= 0.0:
@@ -248,8 +243,7 @@ func _pct_of_max_hp(unit: Unit, pct: float) -> int:
 	return maxi(int(round(float(unit.get_max_hp()) * pct)), 1)
 
 ## 军令被打出时的即时结算
-## 只处理「一次性」军令；持续型加成（移速 / 护甲 / 敌方减伤…）已由 play_order 写入
-## RoguelikeManager.active_order_effects，战斗层通过 RunModifiers 自动读到，无需在此处理。
+## 只处理「一次性」军令；持续型加成由 RunModifiers 实时读取 active_order_effects。
 func _on_order_played(_order_id: String, effect_type: String, value: float) -> void:
 	match effect_type:
 		"refill_hand":
@@ -274,6 +268,10 @@ func _on_order_played(_order_id: String, effect_type: String, value: float) -> v
 			_reveal_next_wave()
 		"skip_wave":
 			_skip_current_wave()
+		"deploy_cooldown_pct":
+			## 疾行军令：立即清空当前所有手牌冷却，后续冷却按百分比缩短（RunModifiers 实时读取）
+			RoguelikeManager.clear_card_cooldowns()
+			_flash_hud("疾行军令：出兵冷却缩短 %d%%，当前冷却已清空" % int(round(absf(value) * 100.0)))
 		_:
 			## 持续型加成：无需即时动作，交给 RunModifiers 实时查询
 			pass
@@ -304,7 +302,10 @@ func _reveal_next_wave() -> void:
 		_flash_hud(tr("ROGUE_INTEL"))
 		return
 	var next_wave: int = _current_wave + 1
-	_flash_hud(tr("ROGUE_INTEL_WAVE") % [next_wave, ENEMY_BASE_COUNT + next_wave, _enemy_tier])
+	var count: int = ENEMY_BASE_COUNT + next_wave
+	if _node_type == RoguelikeManager.NodeType.BOSS:
+		count = int(round(float(count) * BOSS_COUNT_MULT))
+	_flash_hud(tr("ROGUE_INTEL_WAVE") % [next_wave, count, _enemy_tier])
 
 ## 白旗休战令：当前这一波已登场的敌军全部撤退（不给击杀赏金）
 func _skip_current_wave() -> void:
@@ -322,20 +323,22 @@ func _flash_hud(text: String) -> void:
 	if _hud != null and is_instance_valid(_hud) and _hud.has_method("show_hint"):
 		_hud.show_hint(text)
 
-## #6：战斗开始时播报当前英雄特长（如「全军 +30% 攻击与攻速」），停留 5 秒
+## 战斗开始时播报当前英雄特长，停留 5 秒
 func _flash_hero_special() -> void:
-	var hero_id: String = RoguelikeManager.selected_hero
-	for hero in RoguelikeManager.HERO_DEFS:
-		if hero["id"] == hero_id:
-			var special: String = hero.get("special", "")
-			if not special.is_empty():
-				_flash_hud_duration(tr("ROGUE_HERO_TRAIT") % special, 5.0)
-			return
+	var special: String = RoguelikeManager.get_hero_special_text()
+	if special.is_empty():
+		return
+	_flash_hud_duration(tr("ROGUE_HERO_TRAIT") % special, 5.0)
 
-## 与 _flash_hud 类似，但提示停留 [duration] 秒后恢复（用于英雄特长等长提示，#6）
+## 与 _flash_hud 类似，但提示停留 [duration] 秒后恢复
 func _flash_hud_duration(text: String, duration: float) -> void:
 	if _hud != null and is_instance_valid(_hud) and _hud.has_method("show_hint_duration"):
 		_hud.show_hint_duration(text, duration)
+
+## 水晶被击破时的免死请求（文物「Doro 的破布娃娃」revive_once）
+## 返回 true 表示本次免死已生效，战场应把水晶血量拉回而不结算失败。
+func _on_crystal_revive_requested() -> void:
+	_flash_hud("破布娃娃替你挨了一次！水晶耐久已回复")
 
 ## 统一胜负判定入口（多重守卫避免重复触发）
 func _check_end_conditions() -> void:
@@ -345,29 +348,27 @@ func _check_end_conditions() -> void:
 	if _all_waves_spawned and BattleManager.enemy_units.is_empty():
 		_on_floor_cleared()
 		return
-	## 失败：手牌与抽牌堆皆空 且 场上己方单位全灭
+	## 失败：手牌与抽牌堆里都没有兵种卡（军令卡不算）且场上己方单位全灭
 	if not RoguelikeManager.has_cards_left() and BattleManager.player_units.is_empty():
 		_on_run_lost()
 		return
 
-## 单层通关：暂停并弹出三选一奖励
+## 单层通关：暂停并弹出奖励（精英 / Boss 额外给文物）
 func _on_floor_cleared() -> void:
 	_ended = true
 	_reward_open = true
-	## 显式冻结场上所有单位（强制 idle），不单纯依赖 get_tree().paused，
-	## 避免本层通关后单位仍在攻击/移动（游戏结束后仍在战斗）
 	BattleManager.freeze_units()
 	get_tree().paused = true
-	## 通关发金币（几十金币，随层数递增，并叠加文物「糯糯米袋」gold_per_node），用于路途商店消费
 	RoguelikeManager.add_gold(RunModifiers.node_gold(CLEAR_GOLD_BASE + RoguelikeManager.current_floor * FLOOR_GOLD_STEP))
 	_show_reward_screen()
 
-## 整局失败：交给既有失败结算画面
+## 整局失败：归档战绩后交给失败结算画面
 func _on_run_lost() -> void:
 	_ended = true
+	RoguelikeManager.archive_run(false)
 	BattleManager.end_game(1)
 
-## 弹出通关奖励界面（三选一）
+## 弹出通关奖励界面（三选一兵种卡）
 func _show_reward_screen() -> void:
 	var scene := load("res://scenes/ui/roguelike_reward.tscn") as PackedScene
 	var reward := scene.instantiate() as RoguelikeReward
@@ -375,43 +376,61 @@ func _show_reward_screen() -> void:
 	reward.choices_ready(tr("ROGUE_CHOOSE_REWARD"), RoguelikeManager.roll_reward_choices())
 	reward.card_chosen.connect(_on_reward_chosen)
 
-## 弹出肉鸽整局通关胜利界面（击败 Boss 后）。战场仍处暂停态，由胜利界面接管并管理按钮响应。
+## 精英 / Boss 的额外文物三选一（在兵种卡奖励之后弹出）
+func _show_artifact_reward() -> void:
+	var scene := load("res://scenes/ui/roguelike_reward.tscn") as PackedScene
+	var reward := scene.instantiate() as RoguelikeReward
+	reward.artifact_chosen.connect(_on_artifact_reward_chosen)
+	add_child(reward)
+	var title: String = "决战战利品：三选一获得文物" if _node_type == RoguelikeManager.NodeType.BOSS \
+			else "精英战利品：三选一获得文物"
+	reward.choices_artifacts_ready(title, ItemDatabase.roll_artifacts(3, RoguelikeManager.owned_artifacts))
+
+## 弹出肉鸽整局通关胜利界面（击败 Boss 后）
+## 自建高层 CanvasLayer 承载，避免挂到会被 battle_root 隐藏的肉鸽 HUD，
+## 也避免挂到 Node2D 场景根导致界面被摄像机变换缩放/偏移。
 func _show_victory_screen() -> void:
-	## #13：肉鸽专属成就「传奇，还是无名小卒？」——通关时判定本 run 是否全程只用 G1
 	Achievements.unlock_roguelike_g1_legend()
-	var screen := RoguelikeVictoryScreen.new()
-	if _hud != null and is_instance_valid(_hud):
-		_hud.add_child(screen)
-	else:
-		get_tree().current_scene.add_child(screen)
+	RoguelikeManager.archive_run(true)
+	## 本局已通关：删掉 hub 存档，否则「继续上次征程」会读到一个所有节点都已走完、
+	## 无路可走的死局
+	RoguelikeManager.clear_save()
+	var layer := CanvasLayer.new()
+	layer.name = "RoguelikeVictoryLayer"
+	layer.layer = 11
+	layer.process_mode = Node.PROCESS_MODE_ALWAYS
+	var host: Node = get_tree().current_scene
+	if host == null:
+		host = self
+	host.add_child(layer)
+	layer.add_child(RoguelikeVictoryScreen.new())
 
 ## 玩家选定奖励卡（unit_id 为空表示跳过）
 func _on_reward_chosen(unit_id: String) -> void:
 	if not unit_id.is_empty():
 		RoguelikeManager.add_card(unit_id)
-	if is_map_mode:
-		## 地图模式：若刚通关的是 Boss 节点，整局完成 → 弹专属胜利界面（不回地图 hub）
-		var node := RoguelikeManager.get_map_node(RoguelikeManager.current_node_index)
-		if node != null and node.node_type == RoguelikeManager.NodeType.BOSS:
-			_reward_open = false
-			_ended = false
-			_show_victory_screen()
-			return
-		## 普通节点：获得卡牌后返回地图 hub，由玩家选择下一节点（不自动进层）
+	## 精英 / Boss 额外给一件文物，选完文物才继续
+	if _node_type == RoguelikeManager.NodeType.ELITE or _node_type == RoguelikeManager.NodeType.BOSS:
+		_show_artifact_reward()
+		return
+	_finish_node()
+
+## 玩家选定额外文物（artifact_id 为空表示跳过）
+func _on_artifact_reward_chosen(artifact_id: String) -> void:
+	if not artifact_id.is_empty():
+		RoguelikeManager.add_artifact(artifact_id)
+	_finish_node()
+
+## 本节点全部奖励结算完毕：Boss → 通关胜利界面；普通节点 → 存档并回地图 hub
+func _finish_node() -> void:
+	if _node_type == RoguelikeManager.NodeType.BOSS:
 		_reward_open = false
 		_ended = false
-		get_tree().paused = false
-		GameManager.enter_roguelike_map()
-	else:
-		## 旧线性模式：已抵达最终层 → 清场即视为击败最终 Boss，整局通关胜利（#204，与地图模式 Boss 通关对齐）
-		if RoguelikeManager.current_floor >= LINEAR_FINAL_FLOOR:
-			_reward_open = false
-			_ended = false
-			_show_victory_screen()
-			return
-		## 普通层：推进到下一层并重新发牌
-		RoguelikeManager.advance_floor()
-		_reward_open = false
-		_ended = false
-		get_tree().paused = false
-		_start_floor_waves()
+		_show_victory_screen()
+		return
+	_reward_open = false
+	_ended = false
+	## 战斗节点通关后立即存档：从此处退出再进入即可从 hub 继续
+	RoguelikeManager.save_run()
+	get_tree().paused = false
+	GameManager.enter_roguelike_map()

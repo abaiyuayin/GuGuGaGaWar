@@ -32,6 +32,22 @@ func update(_delta: float) -> void:  ## 重写每帧更新方法
 	if res == null:  ## 无资源
 		return
 
+	## 0. 玩家指挥优先（#框选 2026-09-04）：肉鸽玩家单位的默认状态是 guard，
+	##    移动令 / 攻击锁定必须在这里也有入口，否则框选下的指令会被驻守逻辑当场覆盖。
+	##    移动令交给 state_move._advance_to_order 执行（到位后原地站定，与竞技场一致）。
+	if unit.order_pos.is_finite():  ## 有移动令
+		unit.change_state("move")  ## 转 move 状态执行移动令
+		return
+	## 攻击锁定：锁死玩家点的目标，进射程就打、没进就直奔过去（不回驻守锚点、不受牵引半径约束）
+	var forced: Unit = unit.sync_forced_target()  ## 校验并取强制目标
+	if forced != null:  ## 玩家已指定攻击目标
+		unit.target = forced  ## 锁定目标
+		if unit.is_target_in_attack_range(forced.global_position, 10.0):  ## 已进有效射程
+			unit.change_state("attack")  ## 切换到攻击状态
+			return
+		_move_towards(forced.global_position)  ## 未进射程：全向接近
+		return
+
 	## 1. 优先索敌：发现敌人后按兵种决定是否切入攻击状态
 	## #6（2026-08-09）：远程守卫必须等敌人进入攻击射程才切 attack。
 	## 旧逻辑用统一寻敌半径（chase_range，比射程大得多）索敌，敌人在「追击半径内、射程外」时
@@ -130,7 +146,7 @@ func _move_towards(anchor: Vector2) -> void:  ## 定义朝锚点移动的方法
 	unit.set_facing_hysteresis(unit.velocity.x, maxf(0.25, speed_px * 0.4))  ## 意图方向 + 滞回
 	unit.move_and_slide()  ## 走碰撞系统移动
 	unit.play_anim("move")  ## 播放移动动画
-	unit.queue_redraw()  ## 请求重绘
+	unit.request_debug_redraw()  ## 请求重绘
 
 ## 原地驻守：速度归零、面朝敌方来袭方向、播放待机动画
 func _hold_position() -> void:  ## 定义原地驻守的方法

@@ -31,6 +31,8 @@ const LOADING_OVERLAY_SCRIPT := preload("res://scenes/ui/loading_overlay.gd")
 var loading_overlay: CanvasLayer = null
 
 func _ready() -> void:
+	## Web 没有稳定的系统字体回退，启动时配置随包字体 fallback，避免 CJK/泰文变方框。
+	UIButtonHelper.configure_global_font_fallbacks()
 	## 挂载加载遮罩（autoload 场景之外，保证任何场景切换都存在）
 	loading_overlay = LOADING_OVERLAY_SCRIPT.new()
 	add_child(loading_overlay)

@@ -36,19 +36,14 @@ update/
 GuGuGaGa War.exe
 GuGuGaGa War.pck
 GuGuGaGa War.console.exe
-Android/*.apk
-Android/*.idsig
-Android/*.pck
-Android/*.wasm
-Android/GuGuGaGaWar.html
-Android/GuGuGaGaWar.js
-Android/GuGuGaGaWar.*.worklet.js
-Android/GuGuGaGaWar.icon.png
-Android/GuGuGaGaWar.icon.png.import
-Android/GuGuGaGaWar.apple-touch-icon.png
-Android/GuGuGaGaWar.apple-touch-icon.png.import
-Android/GuGuGaGaWar.png
-Android/GuGuGaGaWar.png.import
+# 整体忽略 Android 导出目录（Web 包 + app_userdata 用户存档）
+Android/
+# 运行时用户存档（user:// 落盘，每台机器不同）
+Godot/app_userdata/
+# 运行日志（godot.log / mcp_server.log 等）
+*.log
+# 部署元数据（非源码）
+deploy-meta/
 
 # ---------- 临时 / 调试脚本与残留（按命名约定，跨目录生效） ----------
 _tmp_*

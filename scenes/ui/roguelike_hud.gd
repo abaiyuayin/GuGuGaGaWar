@@ -10,12 +10,13 @@ signal card_deployed(unit_id: String, world_pos: Vector2)
 
 ## 单张卡牌的最小尺寸
 const CARD_SIZE: Vector2 = Vector2(132, 140)
-## 可部署区域（世界坐标）—— 肉鸽模式地图正中央环绕水晶的区域（#7：原左侧半场）
-## #7：放置区由左侧半场移到地图中央（环绕中央水晶），玩家从两翼防守合围的敌军
+## 可部署区域（世界坐标）—— 肉鸽模式地图正中央环绕水晶的区域
+## X 由玩家部署带决定；Y 必须与 Constants.FIELD_Y_MIN/MAX 一致，
+## 否则高亮框画出的上下边缘落点会被 _clamp_to_field 竖直瞬移。
 const DEPLOY_X_MIN: float = -180.0
 const DEPLOY_X_MAX: float = 180.0
-const DEPLOY_Y_MIN: float = -70.0
-const DEPLOY_Y_MAX: float = 130.0
+const DEPLOY_Y_MIN: float = Constants.FIELD_Y_MIN
+const DEPLOY_Y_MAX: float = Constants.FIELD_Y_MAX
 ## 拖拽预览：落点合法时的着色
 const COLOR_VALID: Color = Color(0.45, 1.0, 0.55, 0.9)
 ## 拖拽预览：落点非法时的着色
@@ -38,7 +39,7 @@ const CARD_LEVEL_BADGE_COLORS: Array[Color] = [
 ## 提示语恢复默认文本的延迟（秒）
 const HINT_RESET_DELAY: float = 1.5
 ## 默认提示文本
-const HINT_DEFAULT: String = "拖动卡牌到左半场部署兵种"
+const HINT_DEFAULT: String = "拖动卡牌到中央区域（环绕水晶）部署兵种"
 ## 每张卡牌默认一次部署的兵种数量
 const UNITS_PER_CARD: int = 3
 ## 同一张卡牌多次出兵的落点偏移（避免完全重叠）
@@ -57,13 +58,7 @@ const WAVE_LABEL_COLOR: Color = Color(1.0, 0.92, 0.74, 1.0)
 const HINT_DEFAULT_COLOR: Color = Color(0.82, 0.84, 0.86, 0.92)
 ## 军令生效等正向反馈的提示色（暖金）
 const HINT_HIGHLIGHT_COLOR: Color = Color(1.0, 0.86, 0.48, 1.0)
-## 军令栏整体宽度（像素）
-const ORDER_BAR_WIDTH: float = 188.0
-## 军令栏距屏幕右 / 下边缘的留白
-const ORDER_BAR_MARGIN: float = 20.0
-## 军令栏纵向可用高度（超出后由 ScrollContainer 滚动）
-const ORDER_BAR_HEIGHT: float = 300.0
-## 各稀有度军令按钮的边框色（索引 0 未使用，稀有度从 1 起）
+## 各稀有度军令卡的边框色（索引 0 未使用，稀有度从 1 起）
 const ORDER_RARITY_COLORS: Array[Color] = [
 	Color(0.6, 0.6, 0.6, 1.0),
 	Color(0.78, 0.78, 0.74, 1.0),
@@ -109,12 +104,6 @@ var _drag_index: int = -1
 var _preview_icon: TextureRect = null
 ## 己方半场高亮提示框
 var _deploy_zone: Panel = null
-## 军令袋整体面板（无军令时隐藏）
-var _order_panel: PanelContainer = null
-## 军令袋按钮列表容器（代码构建，位于屏幕右下）
-var _order_list: VBoxContainer = null
-## 军令袋标题（显示当前持有数量）
-var _order_title: Label = null
 
 ## 英雄技能栏容器（#8，位于 CardHand 左侧）
 var _skill_hand: HBoxContainer = null
@@ -129,6 +118,8 @@ var _skill_defs: Dictionary = {}
 var _crystal_bar: ProgressBar = null
 ## 水晶血条上的读数文本
 var _crystal_text: Label = null
+## 场上兵力 / 人口上限读数
+var _population_label: Label = null
 
 func _ready() -> void:
 	_build_drag_preview()
@@ -137,9 +128,10 @@ func _ready() -> void:
 	_style_top_labels()
 	gold_label.text = "金币 %d" % RoguelikeManager.get_gold()
 	RoguelikeManager.gold_changed.connect(_on_gold_changed)
-	_build_order_bar()
-	RoguelikeManager.orders_changed.connect(_on_orders_changed)
-	_refresh_orders()
+	RoguelikeManager.card_cooldown_changed.connect(_on_card_cooldown_changed)
+	BattleManager.unit_spawned.connect(_on_population_changed)
+	BattleManager.unit_removed.connect(_on_population_changed_id)
+	_build_population_label()
 	_refresh_hand()
 	## #8：英雄技能栏（位于手牌区左侧）
 	_build_skill_bar()
@@ -152,8 +144,12 @@ func _exit_tree() -> void:
 		RoguelikeManager.hand_changed.disconnect(_on_hand_changed)
 	if RoguelikeManager.gold_changed.is_connected(_on_gold_changed):
 		RoguelikeManager.gold_changed.disconnect(_on_gold_changed)
-	if RoguelikeManager.orders_changed.is_connected(_on_orders_changed):
-		RoguelikeManager.orders_changed.disconnect(_on_orders_changed)
+	if RoguelikeManager.card_cooldown_changed.is_connected(_on_card_cooldown_changed):
+		RoguelikeManager.card_cooldown_changed.disconnect(_on_card_cooldown_changed)
+	if BattleManager.unit_spawned.is_connected(_on_population_changed):
+		BattleManager.unit_spawned.disconnect(_on_population_changed)
+	if BattleManager.unit_removed.is_connected(_on_population_changed_id):
+		BattleManager.unit_removed.disconnect(_on_population_changed_id)
 	## #8：断开英雄技能相关信号（CD 变化 / 场上单位增减刷新英雄在场状态）
 	if HeroSkillManager.skill_cd_changed.is_connected(_on_skill_cd_changed):
 		HeroSkillManager.skill_cd_changed.disconnect(_on_skill_cd_changed)
@@ -166,7 +162,74 @@ func _exit_tree() -> void:
 		if _battlefield.base_hp_changed.is_connected(_on_crystal_hp_changed):
 			_battlefield.base_hp_changed.disconnect(_on_crystal_hp_changed)
 
-## #27：构建肉鸽控制台入口按钮（左上角，避开顶部波次标签与右侧军令栏）
+## 构建人口读数标签（场上兵力 / 上限），位于水晶血条下方
+func _build_population_label() -> void:
+	var lbl := Label.new()
+	lbl.name = "PopulationLabel"
+	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	lbl.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	lbl.offset_left = CRYSTAL_BAR_MARGIN.x
+	lbl.offset_top = CRYSTAL_BAR_MARGIN.y + CRYSTAL_BAR_SIZE.y + 4.0
+	lbl.offset_right = CRYSTAL_BAR_MARGIN.x + CRYSTAL_BAR_SIZE.x
+	lbl.offset_bottom = CRYSTAL_BAR_MARGIN.y + CRYSTAL_BAR_SIZE.y + 26.0
+	lbl.add_theme_font_size_override("font_size", 13)
+	lbl.add_theme_color_override("font_color", HINT_DEFAULT_COLOR)
+	lbl.add_theme_color_override("font_outline_color", Color(0.0, 0.0, 0.0, 0.7))
+	lbl.add_theme_constant_override("outline_size", 3)
+	add_child(lbl)
+	_population_label = lbl
+	_refresh_population_label()
+
+## 刷新人口读数；接近上限时转为警示色
+func _refresh_population_label() -> void:
+	if _population_label == null or not is_instance_valid(_population_label):
+		return
+	var cur: int = BattleManager.player_units.size()
+	var cap: int = Constants.ROGUELIKE_POPULATION_CAP
+	_population_label.text = "兵力 %d / %d" % [cur, cap]
+	_population_label.add_theme_color_override("font_color",
+			COLOR_INVALID if cur >= cap else HINT_DEFAULT_COLOR)
+
+## 场上单位增减 → 刷新人口读数与手牌可用状态（人口满时手牌置灰）
+func _on_population_changed(_unit: Node2D, _player_id: int = 0) -> void:
+	_refresh_population_label()
+	_refresh_card_states()
+
+func _on_population_changed_id(_player_id: int) -> void:
+	_refresh_population_label()
+	_refresh_card_states()
+
+## 某张卡冷却变化 → 刷新对应卡面读秒与灰显
+func _on_card_cooldown_changed(_unit_id: String, _remaining: float) -> void:
+	_refresh_card_states()
+
+## 按「冷却中 / 人口已满」刷新全部手牌卡面的灰显与读秒
+## 军令卡不受人口上限影响（不出兵），只吃冷却
+func _refresh_card_states() -> void:
+	var pop_full: bool = BattleManager.player_units.size() >= Constants.ROGUELIKE_POPULATION_CAP
+	for i in range(card_hand.get_child_count()):
+		var card := card_hand.get_child(i) as PanelContainer
+		if card == null:
+			continue
+		var card_id: String = String(card.get_meta("unit_id", ""))
+		if card_id.is_empty():
+			continue
+		var is_order: bool = RoguelikeManager.is_order_card(card_id)
+		var cd: float = RoguelikeManager.get_card_cooldown(card_id)
+		var blocked: bool = cd > 0.0 or (pop_full and not is_order)
+		card.modulate = Color(0.45, 0.45, 0.45, 1.0) if blocked else Color.WHITE
+		var cd_lbl := card.get_node_or_null("CooldownLabel") as Label
+		if cd_lbl != null:
+			if cd > 0.0:
+				cd_lbl.text = "%.1fs" % cd
+				cd_lbl.visible = true
+			elif pop_full and not is_order:
+				cd_lbl.text = "兵力已满"
+				cd_lbl.visible = true
+			else:
+				cd_lbl.visible = false
+
+## #27：构建肉鸽控制台入口按钮（左上角，避开顶部波次标签）
 func _build_debug_button() -> void:
 	var btn := Button.new()
 	btn.text = "控制台"
@@ -292,14 +355,126 @@ func _on_hand_changed(_hand_ids: Array[String]) -> void:
 	_refresh_hand()
 
 ## 重建全部手牌卡面
+## 卡面回调一律绑 entry["hand_index"]（手牌真实下标），不用列表下标 ——
+## get_hand_entries 会跳过数据缺失的卡，两者可能错位，用错会打出隔壁那张牌。
 func _refresh_hand() -> void:
 	for child in card_hand.get_children():
+		card_hand.remove_child(child)
 		child.queue_free()
-	var hand_res: Array[UnitResource] = RoguelikeManager.get_hand_resources()
-	for i in range(hand_res.size()):
-		card_hand.add_child(_create_card(hand_res[i], i))
+	var entries: Array[Dictionary] = RoguelikeManager.get_hand_entries()
+	for e: Dictionary in entries:
+		var hand_index: int = int(e.get("hand_index", 0))
+		if bool(e.get("is_order", false)):
+			card_hand.add_child(_create_order_card(e["order_data"] as MilitaryOrderData, String(e["card_id"]), hand_index))
+		else:
+			card_hand.add_child(_create_card(e["unit_res"] as UnitResource, hand_index))
+	_refresh_card_states()
 
-## 创建一张卡牌控件
+## 创建一张军令卡（与兵种卡同尺寸，占同一手牌位；点击即打出）
+func _create_order_card(od: MilitaryOrderData, card_id: String, index: int) -> PanelContainer:
+	var card := PanelContainer.new()
+	card.custom_minimum_size = CARD_SIZE
+	card.mouse_filter = Control.MOUSE_FILTER_STOP
+	card.tooltip_text = "%s〔%s〕\n\n%s\n\n%s" % [
+		od.display_name, od.get_rarity_name(), od.description, od.get_duration_text()
+	]
+	var accent: Color = ORDER_RARITY_COLORS[clampi(od.rarity, 1, ORDER_RARITY_COLORS.size() - 1)]
+	card.add_theme_stylebox_override("panel", _make_order_card_style(accent))
+	card.gui_input.connect(_on_order_card_gui_input.bind(index))
+	card.set_meta("unit_id", card_id)
+
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 4)
+	vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	card.add_child(vbox)
+
+	## 「令」字角标，一眼区分军令卡与兵种卡
+	var tag := Label.new()
+	tag.text = "令"
+	tag.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	tag.add_theme_font_size_override("font_size", 26)
+	tag.add_theme_color_override("font_color", accent)
+	tag.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	vbox.add_child(tag)
+
+	var name_lbl := Label.new()
+	name_lbl.text = od.display_name
+	name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	name_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	name_lbl.add_theme_font_size_override("font_size", 14)
+	name_lbl.add_theme_color_override("font_color", accent)
+	name_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	vbox.add_child(name_lbl)
+
+	var desc_lbl := Label.new()
+	desc_lbl.text = od.description
+	desc_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	desc_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	desc_lbl.add_theme_font_size_override("font_size", 10)
+	desc_lbl.add_theme_color_override("font_color", Color(0.82, 0.80, 0.72, 1.0))
+	desc_lbl.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	desc_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	vbox.add_child(desc_lbl)
+
+	card.add_child(_make_cooldown_label())
+	return card
+
+## 军令卡底板样式（深底 + 稀有度描边，与兵种卡区分靠角标与配色）
+func _make_order_card_style(accent: Color) -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.10, 0.09, 0.12, 0.95)
+	style.set_border_width_all(2)
+	style.border_color = accent
+	style.set_corner_radius_all(6)
+	style.content_margin_left = 6
+	style.content_margin_right = 6
+	style.content_margin_top = 6
+	style.content_margin_bottom = 6
+	return style
+
+## 冷却 / 兵力已满读秒覆盖层（兵种卡与军令卡共用）
+func _make_cooldown_label() -> Label:
+	var cd_lbl := Label.new()
+	cd_lbl.name = "CooldownLabel"
+	cd_lbl.set_anchors_preset(Control.PRESET_FULL_RECT)
+	cd_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	cd_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	cd_lbl.add_theme_font_size_override("font_size", 22)
+	cd_lbl.add_theme_color_override("font_color", Color(1.0, 0.95, 0.85, 1.0))
+	cd_lbl.add_theme_color_override("font_outline_color", Color(0.0, 0.0, 0.0, 0.85))
+	cd_lbl.add_theme_constant_override("outline_size", 5)
+	cd_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	cd_lbl.visible = false
+	return cd_lbl
+
+## 军令卡点击：直接打出（军令不需要拖到战场，效果作用于全局）
+func _on_order_card_gui_input(event: InputEvent, index: int) -> void:
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
+		_play_order_at(index)
+		get_viewport().set_input_as_handled()
+
+## 打出指定手牌位上的军令卡：一次性效果由 roguelike_director 监听 order_played 执行，
+## 持续型加成由 RunModifiers 自动读取，本处只负责触发与反馈。
+func _play_order_at(index: int) -> void:
+	if index < 0 or index >= RoguelikeManager.hand.size():
+		return
+	var card_id: String = RoguelikeManager.hand[index]
+	var od := ItemDatabase.get_order(RoguelikeManager.order_id_of(card_id))
+	if od == null:
+		return
+	var cd: float = RoguelikeManager.get_card_cooldown(card_id)
+	if cd > 0.0:
+		_flash_hint("该军令冷却中（剩余 %.1f 秒）" % cd)
+		return
+	## 通用提示必须早于 play_order_card —— 一次性军令的具体反馈由 director 覆盖本条
+	show_hint("已下达：%s" % od.display_name)
+	if not RoguelikeManager.play_order_card(index):
+		_flash_hint("军令无法下达")
+		return
+	RoguelikeManager.add_stat("orders_played")
+	AudioManager.play_ui_click()
+
+## 创建一张兵种卡控件
 func _create_card(res: UnitResource, index: int) -> PanelContainer:
 	var card := PanelContainer.new()
 	card.custom_minimum_size = CARD_SIZE
@@ -341,6 +516,10 @@ func _create_card(res: UnitResource, index: int) -> PanelContainer:
 	tier_lbl.add_theme_color_override("font_color", Color(0.85, 0.85, 0.7, 1.0))
 	tier_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vbox.add_child(tier_lbl)
+
+	## 冷却 / 兵力已满读秒覆盖层（居中显示在卡面上，默认隐藏）
+	card.set_meta("unit_id", res.unit_id)
+	card.add_child(_make_cooldown_label())
 
 	return card
 
@@ -409,12 +588,22 @@ func _on_card_gui_input(event: InputEvent, index: int) -> void:
 		_begin_drag(index)
 		get_viewport().set_input_as_handled()
 
-## 开始拖拽指定手牌
+## 开始拖拽指定手牌（军令卡 / 冷却中 / 人口已满时不允许起拖，直接给原因提示）
 func _begin_drag(index: int) -> void:
 	if index < 0 or index >= RoguelikeManager.hand.size():
 		return
+	var unit_id: String = RoguelikeManager.hand[index]
+	if RoguelikeManager.is_order_card(unit_id):
+		return  ## 军令卡走点击直发，不参与拖放
+	var cd: float = RoguelikeManager.get_card_cooldown(unit_id)
+	if cd > 0.0:
+		_flash_hint("该兵种冷却中（剩余 %.1f 秒）" % cd)
+		return
+	if BattleManager.player_units.size() >= Constants.ROGUELIKE_POPULATION_CAP:
+		_flash_hint("场上兵力已达上限 %d，无法继续部署" % Constants.ROGUELIKE_POPULATION_CAP)
+		return
 	_drag_index = index
-	var res := UnitDatabase.get_unit(RoguelikeManager.hand[index]) as UnitResource
+	var res := UnitDatabase.get_unit(unit_id) as UnitResource
 	if res != null and _preview_icon != null:
 		_preview_icon.texture = _load_unit_icon(res.unit_id)
 	drag_preview.visible = true
@@ -451,14 +640,16 @@ func _finish_drag() -> void:
 		_flash_hint("只能部署在中央区域（环绕水晶）")
 		return
 	var world_pos: Vector2 = _get_drop_world_pos()
-	## play_card 内部会发 hand_changed，卡面由 _refresh_hand 自动重建
+	## play_card 内部会发 hand_changed，卡面由 _refresh_hand 自动重建；冷却中会返回 null
 	var res: UnitResource = RoguelikeManager.play_card(index)
 	if res == null:
 		return
-	## 单卡召唤数量由兵种数据决定（高级兵 2 / 普通 3）并经休息升级翻倍，受肉鸽全场部署上限约束
+	## 单卡召唤数量由兵种数据决定（高级兵 2 / 普通 3）并经训练强化叠加，受场上人口上限约束
 	var deploy_count: int = RoguelikeManager.get_deploy_count(res.unit_id)
+	RoguelikeManager.add_stat("cards_played")
 	for i in range(deploy_count):
-		if BattleManager.player_units.size() >= Constants.ROGUELIKE_MAX_UNITS_PER_SIDE:
+		if BattleManager.player_units.size() >= Constants.ROGUELIKE_POPULATION_CAP:
+			_flash_hint("场上兵力已达上限 %d" % Constants.ROGUELIKE_POPULATION_CAP)
 			break
 		var spawn_pos: Vector2 = world_pos + _deploy_offset(i)
 		spawn_pos.x = clampf(spawn_pos.x, Constants.FIELD_X_MIN, Constants.FIELD_X_MAX)
@@ -538,111 +729,6 @@ func _flash_hint_colored(text: String, color: Color, duration: float = HINT_RESE
 		hint_label.add_theme_color_override("font_color", HINT_DEFAULT_COLOR)
 	)
 
-# ---------- 军令袋（战斗中一次性打出） ----------
-
-## 构建屏幕右下角的军令袋容器（标题 + 可滚动按钮列表）
-## 军令只在战斗内可打出，因此这套 UI 只存在于本 HUD，不进地图 hub。
-func _build_order_bar() -> void:
-	var panel := PanelContainer.new()
-	panel.name = "OrderBar"
-	panel.anchor_left = 1.0
-	panel.anchor_top = 1.0
-	panel.anchor_right = 1.0
-	panel.anchor_bottom = 1.0
-	panel.offset_left = -(ORDER_BAR_WIDTH + ORDER_BAR_MARGIN)
-	panel.offset_right = -ORDER_BAR_MARGIN
-	panel.offset_top = -(ORDER_BAR_HEIGHT + ORDER_BAR_MARGIN)
-	panel.offset_bottom = -ORDER_BAR_MARGIN
-	panel.grow_horizontal = Control.GROW_DIRECTION_BEGIN
-	panel.grow_vertical = Control.GROW_DIRECTION_BEGIN
-	panel.add_theme_stylebox_override("panel", _make_order_panel_style())
-	add_child(panel)
-	_order_panel = panel
-
-	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 6)
-	panel.add_child(vbox)
-
-	_order_title = Label.new()
-	_order_title.text = "军令袋"
-	_order_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_order_title.add_theme_font_size_override("font_size", 15)
-	_order_title.add_theme_color_override("font_color", HINT_HIGHLIGHT_COLOR)
-	_order_title.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	vbox.add_child(_order_title)
-
-	var scroll := ScrollContainer.new()
-	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	vbox.add_child(scroll)
-
-	_order_list = VBoxContainer.new()
-	_order_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_order_list.add_theme_constant_override("separation", 5)
-	scroll.add_child(_order_list)
-
-## 军令袋底板样式（深色半透明，与顶部标签同一套视觉语言）
-func _make_order_panel_style() -> StyleBoxFlat:
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.08, 0.07, 0.06, 0.78)
-	style.border_color = Color(0.62, 0.50, 0.28, 0.75)
-	style.set_border_width_all(2)
-	style.corner_radius_top_left = 8
-	style.corner_radius_top_right = 8
-	style.corner_radius_bottom_left = 8
-	style.corner_radius_bottom_right = 8
-	style.content_margin_left = 8.0
-	style.content_margin_right = 8.0
-	style.content_margin_top = 6.0
-	style.content_margin_bottom = 8.0
-	return style
-
-## 持有军令变化时重建按钮列表
-func _on_orders_changed(_order_ids: Array[String]) -> void:
-	_refresh_orders()
-
-## 重建军令按钮列表；无军令时整块面板隐藏，避免空框占屏
-func _refresh_orders() -> void:
-	if _order_list == null or not is_instance_valid(_order_list):
-		return
-	for child in _order_list.get_children():
-		child.queue_free()
-	var ids: Array[String] = RoguelikeManager.owned_orders
-	if _order_panel != null and is_instance_valid(_order_panel):
-		_order_panel.visible = not ids.is_empty()
-	if _order_title != null:
-		_order_title.text = "军令袋 (%d)" % ids.size()
-	for i in range(ids.size()):
-		var od := ItemDatabase.get_order(ids[i])
-		if od == null:
-			continue
-		_order_list.add_child(_create_order_button(od, ids[i]))
-
-## 创建一枚军令按钮（点击即打出，一次性消耗）
-func _create_order_button(od: MilitaryOrderData, order_id: String) -> Button:
-	var btn := Button.new()
-	btn.text = od.display_name
-	btn.tooltip_text = "%s\n\n%s" % [od.display_name, od.description]
-	btn.clip_text = true
-	btn.add_theme_font_size_override("font_size", 14)
-	btn.add_theme_color_override("font_color", ORDER_RARITY_COLORS[clampi(od.rarity, 1, ORDER_RARITY_COLORS.size() - 1)])
-	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	btn.pressed.connect(_on_order_pressed.bind(order_id))
-	return btn
-
-## 打出一张军令：一次性效果由 roguelike_director 监听 order_played 执行，
-## 持续型加成由 RunModifiers 自动读取，本处只负责触发与音效反馈。
-func _on_order_pressed(order_id: String) -> void:
-	var od := ItemDatabase.get_order(order_id)
-	if od == null:
-		return
-	## 先打通用提示，再执行 —— 一次性军令的具体反馈会由 director 覆盖掉这一条
-	show_hint("已下达：%s" % od.display_name)
-	if not RoguelikeManager.play_order(order_id):
-		_flash_hint("军令已不在袋中")
-		return
-	AudioManager.play_ui_click()
-
 # ---------- 英雄技能栏（#8，位于手牌区左侧） ----------
 
 ## 构建英雄技能栏：按当前英雄的技能定义建独立卡（每技能一张），并连接 CD / 在场状态刷新信号
@@ -661,6 +747,8 @@ func _build_skill_bar() -> void:
 	add_child(_skill_hand)
 
 	var skills := HeroSkillManager.get_skills_for_hero(RoguelikeManager.selected_hero)
+	## 该英雄没有登记技能时整条栏隐藏，避免留一块空白占位
+	_skill_hand.visible = not skills.is_empty()
 	for def in skills:
 		_build_skill_card(def)
 
@@ -820,7 +908,7 @@ func _open_skill_popup(skill_id: String) -> void:
 	title.add_theme_font_size_override("font_size", 19)
 	vbox.add_child(title)
 
-	var type_txt: String = "登场技能（需爱弥斯在场）" if def["type"] == "on_field" else "非登场技能（无需英雄在场）"
+	var type_txt: String = "登场技能（需%s在场）" % _hero_display_name() if def["type"] == "on_field" else "非登场技能（无需英雄在场）"
 	var type_lbl := Label.new()
 	type_lbl.text = type_txt
 	type_lbl.add_theme_color_override("font_color", SKILL_CARD_BORDER)
@@ -857,6 +945,12 @@ func _open_skill_popup(skill_id: String) -> void:
 	btn_use.pressed.connect(func() -> void: _on_skill_use_confirmed(skill_id, popup))
 	btn_close.pressed.connect(func() -> void: popup.queue_free())
 
+## 当前所选英雄的显示名（用于技能提示文案），缺失时回落到 ID
+func _hero_display_name() -> String:
+	var hero_id: String = RoguelikeManager.selected_hero
+	var res := UnitDatabase.get_unit(hero_id) as UnitResource
+	return res.get_display_name() if res != null else hero_id
+
 ## 根据当前可用性设置弹窗「使用」按钮状态与提示
 func _update_popup_button_state(btn_use: Button, skill_id: String, hint_lbl: Label) -> void:
 	if HeroSkillManager.get_cd(skill_id) > 0:
@@ -864,7 +958,7 @@ func _update_popup_button_state(btn_use: Button, skill_id: String, hint_lbl: Lab
 		hint_lbl.text = "冷却中（剩余 %d 波）" % HeroSkillManager.get_cd(skill_id)
 	elif _skill_defs.get(skill_id, {}).get("type", "") == "on_field" and not HeroSkillManager.hero_on_field():
 		btn_use.disabled = true
-		hint_lbl.text = "需先派出英雄（爱弥斯）上场"
+		hint_lbl.text = "需先派出英雄（%s）上场" % _hero_display_name()
 	else:
 		btn_use.disabled = false
 		hint_lbl.text = "点击「使用」立即释放该技能"
@@ -880,7 +974,7 @@ func _on_skill_use_confirmed(skill_id: String, popup: Control) -> void:
 		if HeroSkillManager.get_cd(skill_id) > 0:
 			reason = "冷却中（剩余 %d 波）" % HeroSkillManager.get_cd(skill_id)
 		elif def.get("type", "") == "on_field" and not HeroSkillManager.hero_on_field():
-			reason = "需先派出英雄（爱弥斯）上场"
+			reason = "需先派出英雄（%s）上场" % _hero_display_name()
 		_flash_hint(reason)
 	popup.queue_free()
 	_refresh_skill_visuals()

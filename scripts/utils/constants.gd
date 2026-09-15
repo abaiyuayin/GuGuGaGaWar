@@ -20,7 +20,8 @@ const UNIT_TO_PIXELS: float = 32.0
 ## 基地的最大生命值（HP）
 ## 历史：原值 5000 -> #109 减半为 2500 -> #150 在原已减半基础上再下调一半 = 1250
 ## #12（2026-08-09 用户拍板）：1250 -> 1000（双方水晶最大血量改 1000）
-const BASE_HP: int = 1000
+## 2026-09-11 用户拍板：1000 -> 800（普通模式双方水晶最大血量；肉鸽水晶另有 ROGUELIKE_CRYSTAL_HP 不动）
+const BASE_HP: int = 800
 ## 常规模式双方水晶每秒自动恢复量（#13 用户拍板：血量不满时每秒恢复 5 点）
 const BASE_REGEN_PER_SEC: int = 5
 ## 水晶/基地回血脱战延迟（秒）：受到实际伤害后需等该时长才开始回血（#8 2026-08-15：原 0/无延迟改 3s）
@@ -55,8 +56,21 @@ const MAX_ROUND: int = 200
 const MAX_UNITS_PER_SIDE: int = 10
 ## 人口升级后的人口上限封顶（#138：默认 10 + 升级加成，最高 45）
 const MAX_POPULATION_CAP: int = 45
-## 肉鸽模式单位部署上限（独立于正常模式人口；肉鸽无人口/收入概念，上限由玩家拍板=100）
-const ROGUELIKE_MAX_UNITS_PER_SIDE: int = 100
+## 肉鸽模式己方场上人口上限（用户拍板 40）：达到上限后手牌置灰不可部署
+const ROGUELIKE_POPULATION_CAP: int = 40
+## 肉鸽模式单张手牌打出后的冷却（秒，用户拍板 6 秒），可被军令「疾行军令」按百分比缩短
+const ROGUELIKE_CARD_COOLDOWN_SEC: float = 6.0
+
+## ── 肉鸽敌方成长曲线（用户拍板：每层 +8% 血 / +5% 伤 / +1 护甲）────
+## 层数以 1 起算，第 1 层为基准（无加成）
+const ROGUELIKE_ENEMY_HP_PER_FLOOR: float = 0.08
+const ROGUELIKE_ENEMY_DMG_PER_FLOOR: float = 0.05
+const ROGUELIKE_ENEMY_ARMOR_PER_FLOOR: int = 1
+## 精英 / Boss 节点在层数成长之上的额外倍率
+const ROGUELIKE_ELITE_STAT_MULT: float = 1.25
+const ROGUELIKE_BOSS_STAT_MULT: float = 1.6
+## Boss 节点敌军的体型放大倍率（用户拍板：刷出来的 Boss 体型放大两倍）
+const ROGUELIKE_BOSS_SCALE_MULT: float = 2.0
 ## 克制关系中的伤害倍率（克制时伤害乘以 1.5）
 const COUNTER_MULTIPLIER: float = 1.5
 ## 被克制关系中的伤害倍率（被克制时伤害乘以 0.6）
@@ -65,6 +79,7 @@ const WEAK_MULTIPLIER: float = 0.6
 const NORMAL_MULTIPLIER: float = 1.0
 ## 远程攻击的距离阈值（标准单位），攻击距离大于此值视为远程单位
 ## 设为 2.0 以区分长柄近战武器（attack_range=1.5，如长戟/关刀/巨镰）和真正的远程单位
+## 肉鸽文物的 melee/ranged 加成通道复用同一阈值（见 RunModifiers.is_ranged_unit），避免双标
 const RANGED_THRESHOLD: float = 2.0
 
 ## 单位生成 Y 坐标范围：限定在战场区域内
@@ -94,9 +109,8 @@ const RETREAT_SAFE_DISTANCE_PX: float = 96.0  ## 3 格 × 32px/格
 ## #5（2026-08-08）：攻击状态下朝向滞回死区（像素）。
 ## 目标在自身水平 ±24px 以内时不翻转朝向，杜绝「攻击循环 + 后撤」期间的左右疯狂抽搐。
 const ATTACK_FACING_DEADBAND_PX: float = 24.0
-## #5（2026-08-09）：中远程兵种攻击后的硬后摇时长（秒）。
-## 攻击周期（前摇+命中+后摇）结束后再锁定 0.5s：不可移动、不可后撤、可转身，锁定结束才进入风筝恢复期。
-const RANGED_ATTACK_RECOVERY_TIME: float = 0.5
+## 中远程兵种攻击后的默认硬后摇时长（秒）。实际普通单位后摇由 UnitResource.get_attack_recovery_time() 统一提供。
+const RANGED_ATTACK_RECOVERY_TIME: float = 1.5
 ## #6（2026-08-09）：远程攻击状态「超射程防抖」时长（秒）。
 ## 目标在射程边缘振荡时，攻击状态累计超射程达此时长才切回默认状态，杜绝 move↔attack↔idle 每帧循环导致的抽搐不攻击。
 const RANGED_ATTACK_LOSE_TIMER: float = 0.3
@@ -125,6 +139,11 @@ const GUARD_ARRIVE_TOLERANCE: float = 12.0
 ## 远程跟随己方近战前压时，与该近战保持的身位区间（像素）
 const GUARD_ESCORT_STANDOFF_MIN: float = 64.0
 const GUARD_ESCORT_STANDOFF_MAX: float = 200.0
+## 框选移动令「到位后线性判定」的水晶警戒圈倍率（#框选 2026-09-05 用户拍板）
+## 警戒半径 = 该倍率 × 肉鸽统一锁定半径（RoguelikeManager.chase_range_px）。
+## 以水晶自身为圆心向两侧辐射，半径内出现敌人 → 刚到位的单位折返迎击；没有才走回驻守锚点。
+## 1.0 = 恰好一个兵种的锁定攻击范围；调大 = 更早折返护晶，调小 = 更愿意留在指定位置。
+const ROGUELIKE_CRYSTAL_ALERT_RATIO: float = 1.0
 
 ## ============================================================
 ## 伤害类型机制系数

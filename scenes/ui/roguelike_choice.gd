@@ -40,7 +40,7 @@ func _build_ui(title: String, options: Array[Dictionary]) -> void:
 	title_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vbox.add_child(title_lbl)
 
-	## 空状态兜底：没有任何选项时给出提示，避免空白弹窗被误认为卡死
+	## 空状态兜底：没有任何选项时给出提示 + 关闭按钮，避免弹窗关不掉导致 hub 卡死
 	if options.is_empty():
 		var empty_hint := Label.new()
 		empty_hint.text = "这里空无一物，没有可做的事。"
@@ -49,6 +49,11 @@ func _build_ui(title: String, options: Array[Dictionary]) -> void:
 		empty_hint.add_theme_color_override("font_color", Color(0.75, 0.75, 0.7, 1.0))
 		empty_hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		vbox.add_child(empty_hint)
+		var close_btn := Button.new()
+		close_btn.text = "离开"
+		close_btn.add_theme_font_size_override("font_size", OPTION_FONT_SIZE)
+		close_btn.pressed.connect(queue_free)
+		vbox.add_child(close_btn)
 		return
 
 	for opt in options:

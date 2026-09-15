@@ -1,0 +1,32 @@
+[gd_resource type="Resource" script_class="UnitResource" format=3]
+
+[ext_resource type="Script" path="res://resources/units/unit_base_resource.gd" id="1_base"]
+[ext_resource type="Script" path="res://resources/affixes/affix_resource.gd" id="1_aff"]
+
+[resource]
+script = ExtResource("1_base")
+unit_id = "S6"
+display_name = "小猫臭臭舞"
+description = "异象阵营兵种。小猫臭臭舞，仅做为过场加载动画使用，不入战斗池（loading_overlay 从 hidden_units 抽取）。"
+tier = 3
+supply_cost = 2
+cost = 200
+max_hp = 200
+armor_value = 100
+move_speed = 2.0
+damage = 20
+damage_types = Array[int]([0])
+damage_by_type = {
+0: 20
+}
+attack_speed = 2.0
+damage_by_hit = [{
+0: 20
+}]
+attack_hit_frame_start = 5
+attack_sound_frame = 5
+display_height = 50.0
+move_display_height = 50.0
+move_display_width = 45.0
+color_red = Color(0.9, 0.7, 0.3, 1)
+color_blue = Color(0.8, 0.5, 0.2, 1)

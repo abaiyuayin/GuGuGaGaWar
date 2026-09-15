@@ -9,7 +9,7 @@ const UNIT_ORDER: Array[String] = [
 	"D1", "D2", "D3", "D4", "D5", "D6",
 	"F1", "F2", "F3", "F4", "F5",
 	"N1", "N2", "N3", "N4", "N5",
-	"Hero1",
+	"Hero1", "Hero2", "Hero3", "Hero4", "Hero5",
 ]
 const FACTION_GROUPS: Array = [["G", "咕嘎"], ["D", "Doro"], ["F", "菲比"], ["N", "糯糯"], ["H", "英雄"]]
 ## 可调属性定义：prop=字段名 / label=显示 / min/max/step / is_int
@@ -173,8 +173,17 @@ func _append_ai_tuning(content: VBoxContainer) -> void:
 		func(v: float) -> void: RoguelikeManager.chase_range_px = v)
 	_add_ai_slider_row(vbox, "追击牵引半径 (px):", RoguelikeManager.chase_leash_px, 50.0, 1200.0, 5.0,
 		func(v: float) -> void: RoguelikeManager.chase_leash_px = v)
+	_add_ai_slider_row(vbox, "水晶耐久上限:", float(RoguelikeManager.crystal_max_hp), 100.0, 99999.0, 50.0,
+		func(v: float) -> void:
+			var delta: int = int(v) - RoguelikeManager.crystal_max_hp
+			if delta > 0:
+				RoguelikeManager.boost_crystal_max_hp(delta)
+			elif delta < 0:
+				RoguelikeManager.crystal_max_hp = maxi(int(v), 1)
+				RoguelikeManager.crystal_hp = mini(RoguelikeManager.crystal_hp, RoguelikeManager.crystal_max_hp)
+				RoguelikeManager.crystal_hp_changed.emit(RoguelikeManager.crystal_hp, RoguelikeManager.crystal_max_hp))
 	var note := Label.new()
-	note.text = "数值调整已自动持久化到 user://roguelike_unit_override.json，跨 run 保留；AI 调参为运行态，下一局复位。"
+	note.text = "数值调整已自动持久化到 user://roguelike_unit_override.json，跨 run 保留；AI 调参与水晶上限为运行态，下一局复位。"
 	note.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7, 1))
 	note.add_theme_font_size_override("font_size", 11)
 	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART

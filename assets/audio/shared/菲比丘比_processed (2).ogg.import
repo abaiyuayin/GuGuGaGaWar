@@ -1,0 +1,19 @@
+[remap]
+
+importer="oggvorbisstr"
+type="AudioStreamOggVorbis"
+uid="uid://ch1ui3gunji33"
+path="res://.godot/imported/菲比丘比_processed (2).ogg-51708627a2459394227085b516a89189.oggvorbisstr"
+
+[deps]
+
+source_file="res://assets/audio/shared/菲比丘比_processed (2).ogg"
+dest_files=["res://.godot/imported/菲比丘比_processed (2).ogg-51708627a2459394227085b516a89189.oggvorbisstr"]
+
+[params]
+
+loop=false
+loop_offset=0
+bpm=0
+beat_count=0
+bar_beats=4

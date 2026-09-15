@@ -1,8 +1,16 @@
-[gd_scene load_steps=4 format=3 uid="uid://hud"]
+[gd_scene load_steps=6 format=3 uid="uid://hud"]
 
 [ext_resource type="Script" path="res://scenes/ui/hud.gd" id="1_hud"]
 [ext_resource type="Texture2D" path="res://assets/ui/info_panel.png" id="2_info_panel"]
+[ext_resource type="Texture2D" path="res://assets/ui/button_topbar_2.png" id="3_btn2"]
 [sub_resource type="StyleBoxEmpty" id="StyleBoxEmpty_transparent"]
+[sub_resource type="StyleBoxTexture" id="StyleBoxTexture_btn2"]
+texture = ExtResource("3_btn2")
+texture_margin_left = 20.0
+texture_margin_right = 20.0
+texture_margin_top = 15.0
+texture_margin_bottom = 15.0
+
 
 [node name="HUD" type="CanvasLayer"]
 layer = 2
@@ -99,26 +107,56 @@ alignment = 1
 [node name="HelpBtn" type="Button" parent="TopCenterButtons"]
 custom_minimum_size = Vector2(80, 28)
 layout_mode = 2
+theme_override_styles/normal = SubResource("StyleBoxTexture_btn2")
+theme_override_styles/hover = SubResource("StyleBoxTexture_btn2")
+theme_override_styles/pressed = SubResource("StyleBoxTexture_btn2")
+theme_override_colors/font_color = Color(0.2, 0.1, 0.05, 1)
+theme_override_colors/font_hover_color = Color(0.3, 0.15, 0.05, 1)
+theme_override_colors/font_pressed_color = Color(0.1, 0.05, 0.02, 1)
 text = "游戏帮助"
 
 [node name="SettingsBtn" type="Button" parent="TopCenterButtons"]
 custom_minimum_size = Vector2(80, 28)
 layout_mode = 2
+theme_override_styles/normal = SubResource("StyleBoxTexture_btn2")
+theme_override_styles/hover = SubResource("StyleBoxTexture_btn2")
+theme_override_styles/pressed = SubResource("StyleBoxTexture_btn2")
+theme_override_colors/font_color = Color(0.2, 0.1, 0.05, 1)
+theme_override_colors/font_hover_color = Color(0.3, 0.15, 0.05, 1)
+theme_override_colors/font_pressed_color = Color(0.1, 0.05, 0.02, 1)
 text = "游戏设置"
 
 [node name="AdjustBtn" type="Button" parent="TopCenterButtons"]
 custom_minimum_size = Vector2(80, 28)
 layout_mode = 2
+theme_override_styles/normal = SubResource("StyleBoxTexture_btn2")
+theme_override_styles/hover = SubResource("StyleBoxTexture_btn2")
+theme_override_styles/pressed = SubResource("StyleBoxTexture_btn2")
+theme_override_colors/font_color = Color(0.2, 0.1, 0.05, 1)
+theme_override_colors/font_hover_color = Color(0.3, 0.15, 0.05, 1)
+theme_override_colors/font_pressed_color = Color(0.1, 0.05, 0.02, 1)
 text = "调整"
 
 [node name="ExitBtn" type="Button" parent="TopCenterButtons"]
 custom_minimum_size = Vector2(80, 28)
 layout_mode = 2
+theme_override_styles/normal = SubResource("StyleBoxTexture_btn2")
+theme_override_styles/hover = SubResource("StyleBoxTexture_btn2")
+theme_override_styles/pressed = SubResource("StyleBoxTexture_btn2")
+theme_override_colors/font_color = Color(0.2, 0.1, 0.05, 1)
+theme_override_colors/font_hover_color = Color(0.3, 0.15, 0.05, 1)
+theme_override_colors/font_pressed_color = Color(0.1, 0.05, 0.02, 1)
 text = "退出"
 
 [node name="DevBtn" type="Button" parent="TopCenterButtons"]
 custom_minimum_size = Vector2(80, 28)
 layout_mode = 2
+theme_override_styles/normal = SubResource("StyleBoxTexture_btn2")
+theme_override_styles/hover = SubResource("StyleBoxTexture_btn2")
+theme_override_styles/pressed = SubResource("StyleBoxTexture_btn2")
+theme_override_colors/font_color = Color(0.2, 0.1, 0.05, 1)
+theme_override_colors/font_hover_color = Color(0.3, 0.15, 0.05, 1)
+theme_override_colors/font_pressed_color = Color(0.1, 0.05, 0.02, 1)
 text = "开发工具"
 
 [node name="UndoDeployBtn" type="Button" parent="TopCenterButtons"]

@@ -34,9 +34,9 @@ var is_paused: bool = false
 var is_two_player: bool = false
 
 ## #自由事件（2026-08-15）：仓鼠士兵觉醒状态（#18-8：手动触发已改为直接召唤 S2，不再有变身标记）
-## _g1_hamster_force：开发工具百分百开关——部署 G1 时 1% 随机觉醒必中（每次部署必变）
+## _g1_hamster_force：开发工具百分百开关——部署 G1 时随机觉醒必中（每次部署必变）
 ## 范围：战役/全面战争仅我方（红方）；双人模式红蓝双方都有效。肉鸽不触发。
-## 凑企鹅（Y2）每回合 1% 触发开关（战役/全面战争；双人不触发）
+## 凑企鹅（Y2）每回合按异象衰减概率触发（战役/全面战争；双人不触发）
 var _penguin_event_enabled: bool = true
 ## 开发工具：仓鼠士兵觉醒强制百分百触发（部署 G1 时掷点必中）
 var _g1_hamster_force: bool = false
@@ -48,6 +48,10 @@ var _hamster_autotrigger_enabled: bool = true
 ## 范围：战役 / 全面战争（非双人、非肉鸽）
 var _y1_triggered: bool = false  ## 死亡使者（Y1）事件本局是否已触发
 var _s1_triggered: bool = false  ## 蓝女巫（S1）事件本局是否已触发
+## 自动特殊/异象事件基础概率 0.5%；同类每触发一次，下一次概率减半（按局重置）
+const FREE_EVENT_BASE_CHANCE: float = 0.005
+var _special_event_chance: float = FREE_EVENT_BASE_CHANCE
+var _anomaly_event_chance: float = FREE_EVENT_BASE_CHANCE
 
 ## 开发工具：全面战争（单人沙盒）模式下敌方 AI 可出动的阵营开关
 ## 键为阵营前缀（G=咕嘎, D=Doro, F=菲比, N=糯糯），值为是否允许敌方部署
@@ -89,6 +93,9 @@ const RANGED_DISTRIBUTE_INTERVAL: float = 0.1
 ## 每个玩家独立的持续出兵计时器（控制出兵频率）
 ## 索引 0=红方, 1=蓝方；按各自剩余金币动态加速
 var spawn_timers: Array[float] = [0.0, 0.0]
+## 开发工具：标准模式随机出兵。
+var dev_random_spawn_enabled: bool = false
+var _dev_random_spawn_previous_selections: Array[Resource] = [null, null]
 ## 基础出兵间隔（秒），实际间隔 = SPAWN_INTERVAL / 速度倍率
 const SPAWN_INTERVAL: float = 1.0
 ## 出兵速度加速阈值：剩余金币每达到此值的倍数，出兵速度 +0.25
@@ -112,12 +119,15 @@ func _process(delta: float) -> void:
 
 	## 持续出兵逻辑：每个玩家独立的出兵计时器，按剩余金币动态加速
 	## 速度倍率 = 1.0 + floor(gold / 500) * 0.25（剩余金币越多出兵越快）
+	## 肉鸽模式没有「选中兵种自动出兵」概念（出兵一律靠手牌拖放），整段跳过
 	for player_id in range(2):
-		## #11 单发出兵：开启后禁用持续自动出兵，仅在“选中/点击”事件时出 1 个（见 set_selected_unit / deploy_selected_once）
-		if DevMode.single_spawn:
+		if RoguelikeManager.is_active:
+			break
+		## #11 单发出兵：非随机模式下禁用持续自动出兵，仅在“选中/点击”事件时出 1 个。
+		if DevMode.single_spawn and not dev_random_spawn_enabled:
 			continue
 		## 仅当该玩家已选择兵种时才尝试出兵
-		if selected_units[player_id] == null:
+		if not dev_random_spawn_enabled and selected_units[player_id] == null:
 			continue
 		## 按剩余金币计算该玩家的出兵速度倍率
 		var speed_mult: float = get_spawn_speed_multiplier(player_id)
@@ -140,15 +150,18 @@ func _process(delta: float) -> void:
 				batch_count = 2
 		## 批量出兵：每次尝试购买+生成一个单位，金币不足或人口到顶则停止本批
 		for _i in range(batch_count):
+			var unit_res: Resource = _get_dev_random_spawn_unit(player_id) if dev_random_spawn_enabled else selected_units[player_id]
+			if unit_res == null:
+				break
 			## 根据玩家 ID 获取当前己方单位数量
 			var current_count: int = player_units.size() if player_id == 0 else enemy_units.size()
 			## 检查是否已达单方单位上限（含人口升级加成，#138）
 			if current_count >= EconomyManager.get_max_population(player_id):
 				break  ## 人口到顶，本批停止
 			## 尝试购买兵种，购买成功则生成单位；金币不足则停止本批
-			if not EconomyManager.purchase_unit(player_id, selected_units[player_id]):
+			if not EconomyManager.purchase_unit(player_id, unit_res):
 				break  ## 金币不足，本批停止
-			spawn_unit(selected_units[player_id], player_id)
+			spawn_unit(unit_res, player_id)
 
 	## #19：远程火力均衡分配（仅常规模式：战役/双人/全面战争）
 	## 肉鸽模式守卫 AI 有独立的索敌/牵引体系（chase_range/leash），不干预。
@@ -158,6 +171,11 @@ func _process(delta: float) -> void:
 	if _ranged_distribute_accum >= RANGED_DISTRIBUTE_INTERVAL:
 		_ranged_distribute_accum = 0.0
 		_distribute_ranged_targets()
+
+	## 肉鸽模式没有回合 / 倒计时 / 经济结算（出兵靠手牌，收入靠节点通关金币），
+	## 整条回合循环在此提前返回：否则 execute_round 会持续给双方发无用金币并推进回合数。
+	if RoguelikeManager.is_active:
+		return
 
 	## 倒计时递减
 	countdown_timer -= delta
@@ -185,6 +203,8 @@ func get_spawn_speed_multiplier(player_id: int) -> float:
 ## 清空所有单位列表、选择状态、计时器，并将战斗状态设为未激活
 func reset() -> void:
 	selected_units = [null, null]  ## 清空双方兵种选择
+	dev_random_spawn_enabled = false
+	_dev_random_spawn_previous_selections = [null, null]
 	countdown_timer = EconomyManager.get_round_time()  ## 从经济管理器获取本回合倒计时时长
 	is_battle_active = false  ## 战斗状态置为未激活
 	is_paused = false  ## 暂停状态置为否
@@ -195,6 +215,36 @@ func reset() -> void:
 	## （_g1_hamster_force 为开关，跨局保留由 DevMode 控制台管理）
 	_y1_triggered = false  ## 死亡使者事件按局清空
 	_s1_triggered = false  ## 蓝女巫事件按局清空
+	_special_event_chance = FREE_EVENT_BASE_CHANCE
+	_anomaly_event_chance = FREE_EVENT_BASE_CHANCE
+
+## 切换标准模式随机出兵；关闭时恢复开启前双方选择。
+func set_dev_random_spawn_enabled(value: bool) -> void:
+	if RoguelikeManager.is_active or GameManager.is_battlefield_mode:
+		value = false
+	if dev_random_spawn_enabled == value:
+		return
+	if value:
+		_dev_random_spawn_previous_selections = selected_units.duplicate()
+		spawn_timers = [0.0, 0.0]
+	dev_random_spawn_enabled = value
+	if not value:
+		for player_id in range(2):
+			var previous: Resource = _dev_random_spawn_previous_selections[player_id]
+			selected_units[player_id] = previous
+			selection_changed.emit(player_id, previous)
+	print("[调试] 红蓝双方随机出兵: ", "开" if dev_random_spawn_enabled else "关")
+
+## 随机出兵只使用 G/D/F/N 四系兵种；红方使用玩家编成，蓝方复用敌方 AI 编成。
+func _get_dev_random_spawn_unit(player_id: int) -> Resource:
+	var gold: int = 2147483647 if DevMode.infinite_gold else EconomyManager.get_gold(player_id)
+	var candidates: Array = UnitDatabase.get_ai_affordable_units(gold) if player_id == 1 else UnitDatabase.get_affordable_units(gold)
+	candidates = candidates.filter(func(unit: Resource) -> bool:
+		var unit_id: String = (unit as UnitResource).unit_id
+		return unit_id.begins_with("G") or unit_id.begins_with("D") or unit_id.begins_with("F") or unit_id.begins_with("N"))
+	if candidates.is_empty():
+		return null
+	return candidates.pick_random() as Resource
 
 ## 开始战斗的方法
 ## 重置经济与战斗数据，激活战斗状态并启动倒计时
@@ -232,13 +282,18 @@ func execute_round() -> void:
 	if not RoguelikeManager.is_active and not is_two_player:
 		_check_death_reaper_event()
 	
-	## 凑企鹅事件（2026-08-15）：每回合倒计时结束掷 1%，命中敌方刷一只凑企鹅（Y2）
+	## 凑企鹅事件（2026-08-15）：每回合倒计时结束按异象衰减概率判定，命中敌方刷一只凑企鹅（Y2）
 	## 范围：战役/全面战争；双人不触发；肉鸽不触发
 	if _penguin_event_enabled and not RoguelikeManager.is_active and not is_two_player:
-		if randf() < 0.01:
+		if _roll_anomaly_event():
 			_try_spawn_penguin_event()
 
-## 凑企鹅事件：敌方刷一只凑企鹅（Y2），并开启「存活期间每秒 5% 召 S1 蓝女巫入我方」追踪
+	## 特殊/异象事件：每回合倒计时结束按衰减概率刷新事件单位
+	## 香蕉猫（Y3）/ 我的刀盾（Y4）作为异象刷敌方蓝方；咕嘎工钢（S5）刷红方；双人不触发、肉鸽不触发
+	if not RoguelikeManager.is_active and not is_two_player:
+		_check_ally_special_events()
+
+## 凑企鹅事件：敌方刷一只凑企鹅（Y2），并开启「存活期间按特殊事件衰减概率召 S1 蓝女巫入我方」追踪
 func _try_spawn_penguin_event() -> void:
 	var res: Resource = UnitDatabase.get_unit("Y2")
 	if res == null:
@@ -249,10 +304,10 @@ func _try_spawn_penguin_event() -> void:
 		event_unit_focus_requested.emit(enemy_units.back())
 	## 解锁隐藏成就「异象入侵」（Y 前缀异象单位登场，与异象入侵事件同源）
 	Achievements.unlock_by_id("anomaly_invasion")
-	## 追踪凑企鹅存活：每秒 5% 召 S1 蓝女巫入我方（#自由事件：专召 S1）
+	## 追踪凑企鹅存活：每秒按特殊事件衰减概率召 S1 蓝女巫入我方（#自由事件：专召 S1）
 	_start_penguin_tracker()
 
-## 凑企鹅存活追踪器：每秒 5% 概率召 S1 蓝女巫（特殊阵营）加入我方红方
+## 凑企鹅存活追踪器：每秒按特殊事件衰减概率召 S1 蓝女巫（特殊阵营）加入我方红方
 ## 场上无存活凑企鹅（Y2）时自动销毁
 func _start_penguin_tracker() -> void:
 	var tracker := Timer.new()
@@ -273,7 +328,7 @@ func _start_penguin_tracker() -> void:
 		if not alive:
 			tracker.queue_free()
 			return
-		if randf() > 0.05:
+		if not _roll_special_event():
 			return
 		## 专召 S1 蓝女巫入我方（红方）
 		var s1: Resource = UnitDatabase.get_unit("S1")
@@ -287,17 +342,12 @@ func _start_penguin_tracker() -> void:
 		Achievements.unlock_by_id("parallel_heroes")
 	)
 
-## 死亡使者（Y1）异象事件：概率判定 + 触发（事件触发制，固定刷 Y1）
-## 难度映射：普通5% / 困难10% / 地狱15%；一局内最多触发一次
+## 死亡使者（Y1）异象事件：概率判定 + 触发（事件触发制，固定刷 Y1）；一局内最多触发一次
 func _check_death_reaper_event() -> void:
 	## 一局内最多触发一次（封顶）
 	if _y1_triggered:
 		return
-	## 难度映射：普通5% / 困难10% / 地狱15%
-	var diff: int = GameManager.current_difficulty
-	var chances: Array[float] = [0.05, 0.10, 0.15]
-	var chance: float = chances[clampi(diff, 0, 2)]
-	if randf() > chance:
+	if not _roll_anomaly_event():
 		return
 
 	var res: Resource = UnitDatabase.get_unit("Y1")
@@ -306,12 +356,11 @@ func _check_death_reaper_event() -> void:
 	_y1_triggered = true  ## 封顶：本局不再自然触发
 
 	## 触发文本动画后延迟生成异象敌兵（敌方 / 蓝方）
-	print("[异象入侵] 死亡使者降临！概率 %.0f%%" % [chance * 100])
+	print("[异象入侵] 死亡使者降临！概率 %.3f%%" % [_anomaly_event_chance * 100])
 	_show_anomaly_texts("Y1", res)
 
-## 异象入侵文本动画（#5 2026-08-11 调整 / 2026-08-14 简化）：
+## 异象事件文本动画（#5 2026-08-11 调整 / 2026-08-14 简化）：
 ## 仅保留「异象入侵！！！」红色大字（72号、3s，固定居中只淡入淡出）。
-## （原「诡异！」「无序！」小字已删除：需求删除无序/诡异文本，只保留异象入侵）
 ## #3（2026-08-11）：文本原直接挂 root（canvas layer 0），会被战场 Camera2D 的画布变换
 ## 带离屏幕（实际渲染在世界坐标附近、可视区外），故提示从未出现。现挂到专用 CanvasLayer(10)。
 func _get_event_text_layer() -> CanvasLayer:
@@ -384,7 +433,7 @@ func _spawn_anomaly_unit(unit_id: String, unit_res: Resource) -> void:
 	## 解锁隐藏成就「异象入侵」
 	Achievements.unlock_by_id("anomaly_invasion")  ## 经成就系统解锁，确保右下角弹框 + 提示音
 	
-	## 追踪异象单位存活状态：每秒 5% 概率触发特殊事件
+		## 追踪异象单位存活状态：每秒按特殊事件衰减概率触发特殊事件
 	var anomaly_tracker := Timer.new()
 	anomaly_tracker.wait_time = 1.0
 	anomaly_tracker.one_shot = false
@@ -407,8 +456,7 @@ func _spawn_anomaly_unit(unit_id: String, unit_res: Resource) -> void:
 		## 蓝女巫（S1）一局内最多触发一次（封顶）
 		if _s1_triggered:
 			return
-		## 10% 概率触发蓝女巫特殊事件
-		if randf() > 0.10:
+		if not _roll_special_event():
 			return
 		var s_res: Resource = UnitDatabase.get_unit("S1")
 		if s_res == null:
@@ -440,7 +488,7 @@ func dev_trigger_blue_witch_event() -> void:
 
 ## 开发工具：仓鼠士兵事件（#自由事件 2026-08-15 / #18-8 改：手动触发=直接召唤 S2）
 ## 用户拍板：手动触发 = 战役/全面战争红方召唤一只；双人模式红蓝双方各召唤一只。
-## 不设置任何 G1 变身状态——G1 变身仅由部署时的 1% 随机觉醒（dev_set_hamster_100pct 强制必中）触发。
+## 不设置任何 G1 变身状态——G1 变身仅由部署时的特殊事件随机觉醒（dev_set_hamster_100pct 强制必中）触发。
 func dev_trigger_hamster_event() -> void:
 	var s2: Resource = UnitDatabase.get_unit("S2")
 	if s2 == null:
@@ -461,7 +509,7 @@ func dev_set_hamster_100pct() -> void:
 	print("[仓鼠士兵事件] 触发概率已改为百分百（每次部署 G1 必变仓鼠士兵）")
 
 ## 开发工具：触发死亡使者异象（#自由事件 2026-08-15）
-## 专召 Y1 死亡使者加入敌方（蓝方）+ 异象文本 + 成就 + 存活追踪（5% 召 S1）
+## 专召 Y1 死亡使者加入敌方（蓝方）+ 异象文本 + 成就 + 存活追踪（按特殊事件衰减概率召 S1）
 func dev_trigger_death_reaper_event() -> void:
 	var res: Resource = UnitDatabase.get_unit("Y1")
 	if res == null:
@@ -472,7 +520,7 @@ func dev_trigger_death_reaper_event() -> void:
 	_show_anomaly_texts("Y1", res)
 
 ## 开发工具：触发凑企鹅异象（#自由事件 2026-08-15）
-## 专召 Y2 凑企鹅加入敌方（蓝方）+ 存活追踪（每秒 5% 召 S1 蓝女巫）
+## 专召 Y2 凑企鹅加入敌方（蓝方）+ 存活追踪（每秒按特殊事件衰减概率召 S1 蓝女巫）
 func dev_trigger_penguin_event() -> void:
 	var res: Resource = UnitDatabase.get_unit("Y2")
 	if res == null:
@@ -480,7 +528,133 @@ func dev_trigger_penguin_event() -> void:
 		return
 	_try_spawn_penguin_event()
 
-## 特殊事件触发：屏幕中央金色大字「平行时空的英雄到来！」（#5 2026-08-11）
+## 特殊/异象事件：每回合按同类衰减概率刷新事件单位
+## 香蕉猫（Y3）/我的刀盾（Y4）刷敌方蓝方；咕嘎工钢（S5）/大肥鱼（S7）/丽贝卡（S8）刷红方；双人不触发、肉鸽不触发
+func _check_ally_special_events() -> void:
+	if _roll_anomaly_event():
+		_try_spawn_ally_event("Y3", "banana_cat", 1)
+	if _roll_anomaly_event():
+		_try_spawn_ally_event("Y4", "my_sword_shield", 1)
+	if _roll_special_event():
+		_try_spawn_ally_event("S5", "")
+	## #新需求（2026-09-10）：S7/S8 接入随机特殊事件池（S 系走特殊序列，红方友军 + 首次召唤成就）
+	if _roll_special_event():
+		_try_spawn_ally_event("S7", "big_fish")
+	if _roll_special_event():
+		_try_spawn_ally_event("S8", "pelican")
+
+func _roll_special_event() -> bool:
+	if randf() >= _special_event_chance:
+		return false
+	_special_event_chance *= 0.5
+	return true
+
+func _roll_anomaly_event() -> bool:
+	if randf() >= _anomaly_event_chance:
+		return false
+	_anomaly_event_chance *= 0.5
+	return true
+
+## 生成一只特殊/异象事件单位，并可解锁配套「首次出现」成就
+## player_id：0=红方友军，1=蓝方敌军
+func _try_spawn_ally_event(unit_id: String, ach_id: String, player_id: int = 0) -> void:
+	var res: Resource = UnitDatabase.get_unit(unit_id)
+	if res == null:
+		return
+	spawn_unit(res, player_id)
+	var event_units: Array = enemy_units if player_id == 1 else player_units
+	if not event_units.is_empty():
+		event_unit_focus_requested.emit(event_units.back())
+	var side_text: String = "敌方" if player_id == 1 else "我方"
+	print("[自由事件] %s 降临！加入%s" % [str(res.display_name), side_text])
+	## #1（2026-08-26）：Y 系（香蕉猫 Y3 / 我的刀盾 Y4 等）属异象单位 → 红色「异象入侵！！！」；
+	## 其余特殊友军（S 系）才是金色「名称来了！」。
+	if unit_id.begins_with("Y"):
+		_show_anomaly_event_text()
+	else:
+		_show_special_event_text(unit_id)
+	## 首次出现解锁配套成就（沿用 _is_achievement_mode：开发者模式战役/全面/双人都判，非开发者仅战役）
+	if not ach_id.is_empty():
+		Achievements.unlock_by_id_in_mode(ach_id)
+		print("[成就] 特殊友军首次出现：%s" % ach_id)
+
+## 开发工具：触发香蕉猫事件（专召 Y3 加入敌方蓝方 + 成就）
+func dev_trigger_banana_cat_event() -> void:
+	if UnitDatabase.get_unit("Y3") == null:
+		push_warning("DevTool: 香蕉猫（Y3）资源缺失。")
+		return
+	_try_spawn_ally_event("Y3", "banana_cat", 1)
+	print("[香蕉猫事件] 开发工具触发！召唤香蕉猫加入敌方")
+
+## 开发工具：触发我的刀盾事件（专召 Y4 加入敌方蓝方 + 成就）
+func dev_trigger_sword_shield_event() -> void:
+	if UnitDatabase.get_unit("Y4") == null:
+		push_warning("DevTool: 我的刀盾（Y4）资源缺失。")
+		return
+	_try_spawn_ally_event("Y4", "my_sword_shield", 1)
+	print("[我的刀盾事件] 开发工具触发！召唤我的刀盾加入敌方")
+
+## 开发工具：触发咕嘎工钢事件（专召 S5 加入红方）
+func dev_trigger_tank_event() -> void:
+	if UnitDatabase.get_unit("S5") == null:
+		push_warning("DevTool: 咕嘎工钢（S5）资源缺失。")
+		return
+	_try_spawn_ally_event("S5", "")
+	print("[咕嘎工钢事件] 开发工具触发！召唤咕嘎工钢加入我方")
+
+## 开发工具：触发动力菲比事件（专召 S4 加入红方 + 成就）
+func dev_trigger_power_fei_event() -> void:
+	if UnitDatabase.get_unit("S4") == null:
+		push_warning("DevTool: 动力菲比（S4）资源缺失。")
+		return
+	_try_spawn_ally_event("S4", "power_fei")
+	print("[动力菲比事件] 开发工具触发！召唤动力菲比加入我方")
+
+## 开发工具：触发大肥鱼事件（专召 S7 加入红方友军）
+func dev_trigger_big_fish_event() -> void:
+	if UnitDatabase.get_unit("S7") == null:
+		push_warning("DevTool: 大肥鱼（S7）资源缺失。")
+		return
+	_try_spawn_ally_event("S7", "big_fish")
+	print("[大肥鱼事件] 开发工具触发！召唤大肥鱼加入我方")
+
+## 开发工具：触发丽贝卡事件（专召 S8 加入红方友军）
+func dev_trigger_rebecca_event() -> void:
+	if UnitDatabase.get_unit("S8") == null:
+		push_warning("DevTool: 丽贝卡（S8）资源缺失。")
+		return
+	_try_spawn_ally_event("S8", "pelican")
+	print("[丽贝卡事件] 开发工具触发！召唤丽贝卡加入我方")
+
+## 异象事件提示：屏幕中央红色大字「异象入侵！！！」（#1 2026-08-26）
+## 与 _show_anomaly_texts 的大字规格一致，但只播提示、不负责生成单位（调用方已自行生成）。
+func _show_anomaly_event_text() -> void:
+	var layer: CanvasLayer = _get_event_text_layer()
+	if layer == null:
+		return
+	var label := Label.new()
+	label.text = "异象入侵！！！"
+	label.add_theme_color_override("font_color", Color(1.0, 0.1, 0.1, 1.0))
+	label.add_theme_font_size_override("font_size", 72)
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	label.anchor_left = 0.5
+	label.anchor_top = 0.5
+	label.anchor_right = 0.5
+	label.anchor_bottom = 0.5
+	label.offset_left = -300
+	label.offset_top = -45
+	label.offset_right = 300
+	label.offset_bottom = 45
+	label.modulate.a = 0.0
+	layer.add_child(label)
+	var tween := layer.create_tween()
+	tween.tween_property(label, "modulate:a", 1.0, 0.5)
+	tween.tween_interval(2.0)
+	tween.tween_property(label, "modulate:a", 0.0, 1.0)
+	tween.tween_callback(label.queue_free)
+
+## 特殊事件触发：屏幕中央金色大字「名称来了！」（#5 2026-08-11）
 ## 规格：固定居中、5 秒后自动消失、渐入渐出、不缩放不位移。
 ## #3（2026-08-11）：同异象文本，改挂专用 CanvasLayer(10)，避免被 Camera2D 画布变换带离屏幕。
 func _show_special_event_text(unit_id: String) -> void:
@@ -488,7 +662,7 @@ func _show_special_event_text(unit_id: String) -> void:
 	if layer == null:
 		return
 	var label := Label.new()
-	label.text = "平行时空的英雄到来！"
+	label.text = _get_special_event_unit_name(unit_id) + "来了！"
 	## 金色：R=1, G=0.84, B=0（金黄）
 	label.add_theme_color_override("font_color", Color(1.0, 0.84, 0.0, 1.0))
 	label.add_theme_font_size_override("font_size", 72)
@@ -511,6 +685,13 @@ func _show_special_event_text(unit_id: String) -> void:
 	tween.tween_property(label, "modulate:a", 0.0, 1.1)  ## 淡出
 	tween.tween_callback(label.queue_free)
 
+
+func _get_special_event_unit_name(unit_id: String, unit_res: Resource = null) -> String:
+	var res: Resource = unit_res if unit_res != null else UnitDatabase.get_unit(unit_id)
+	if res == null:
+		return unit_id
+	return str(res.get("display_name"))
+
 ## 生成单位的方法
 ## unit_res: 兵种资源对象（包含属性数据）
 ## player_id: 所属玩家 ID（0=红方, 1=蓝方）
@@ -521,7 +702,7 @@ func spawn_unit(unit_res: Resource, player_id: int, at_position: Vector2 = Vecto
 	if unit_scene == null:
 		unit_scene = load("res://scenes/units/unit_base.tscn")  ## 加载单位基础场景
 	
-	## #自由事件：仓鼠士兵 G1 替换（部署 G1 时 1% 触发，本局该方 G1 全部变仓鼠士兵）
+	## #自由事件：仓鼠士兵 G1 替换（部署 G1 时按特殊事件衰减概率触发，当前这只 G1 变仓鼠士兵）
 	unit_res = _maybe_apply_hamster_replacement(unit_res, player_id)
 	
 	var unit = _unit_pool.pop_back() if not _unit_pool.is_empty() else unit_scene.instantiate()  ## 从对象池取，无则实例化
@@ -534,7 +715,10 @@ func spawn_unit(unit_res: Resource, player_id: int, at_position: Vector2 = Vecto
 	unit.set_process(true)
 	## 确保从池复用后物理层正确（setup 已设 collision_layer/mask，检测区掩码需重新应用）
 	if unit.detection_area != null:
-		unit.detection_area.monitoring = true  ## 恢复检测区监控（死亡时关闭）
+		## #性能（2026-08-27 竞技场）：竞技场沙盒不需要 DetectionArea（索敌由 state_move 的
+		## is_battlefield_mode 分支自行处理，不走进出回调），300 个常开 Area2D 的重叠检测
+		## 是纯浪费。与 unit_base 的 _apply_detection_monitoring 同一口径，其余模式照常开启。
+		unit._apply_detection_monitoring()  ## 恢复/关闭检测区监控（死亡时被关闭）
 	
 	## 设置出生位置（基地前方，使用实际 battlefield 坐标）
 	var spawn_x: float
@@ -568,9 +752,22 @@ func spawn_unit(unit_res: Resource, player_id: int, at_position: Vector2 = Vecto
 		enemy_units.append(unit)  ## 加入敌方单位列表
 	
 	unit_spawned.emit(unit, player_id)  ## 发出单位生成信号，通知场景树挂载该单位
+	_maybe_trigger_power_fei_event(unit_res, player_id)  ## 使用菲比兵种后按特殊事件衰减概率触发动力菲比事件
+
+## 动力菲比事件：玩家每次使用 F 系菲比兵种后，按特殊事件衰减概率召唤 S4 加入红方。
+## 仅标准模式生效；肉鸽模式不改动。开发工具直接触发仍保留用于测试。
+func _maybe_trigger_power_fei_event(unit_res: Resource, player_id: int) -> void:
+	if player_id != 0 or RoguelikeManager.is_active:
+		return
+	if unit_res == null or not str(unit_res.unit_id).begins_with("F"):
+		return
+	if not _roll_special_event():
+		return
+	print("[动力菲比事件] 使用菲比兵种触发特殊事件！")
+	_try_spawn_ally_event("S4", "power_fei")
 
 ## #自由事件：仓鼠士兵觉醒（2026-08-15 / #18-8 简化）
-## 部署 G1 时掷 1%（dev_set_hamster_100pct 开启则必中），命中即**当前这只 G1 变仓鼠士兵（S2）**，
+## 部署 G1 时按特殊事件衰减概率判定（dev_set_hamster_100pct 开启则必中），命中即**当前这只 G1 变仓鼠士兵（S2）**，
 ## 仅当次、不设本局替换状态——后续 G1 保持普通。
 ## 手动触发（dev_trigger_hamster_event）已改为直接召唤 S2，不经过本判定（#18-8 用户拍板）。
 ## 范围：战役/全面战争仅我方（player_id=0）有效；双人模式双方（player_id 0/1）都有效；肉鸽不触发。
@@ -585,11 +782,12 @@ func _maybe_apply_hamster_replacement(unit_res: Resource, player_id: int) -> Res
 	## 蓝方仅在双人模式有效（#18-7：双人红蓝双方都能触发；战役/全面战争敌方 AI 不触发）
 	if player_id == 1 and not is_two_player:
 		return unit_res
-	## 1% 随机觉醒（每次部署掷点，百分百开关必中）——命中即当前这只变 S2，仅当次
-	if _g1_hamster_force or randf() < 0.01:
+	## 随机觉醒（每次部署掷点，百分百开关必中）——命中即当前这只变 S2，仅当次
+	if _g1_hamster_force or _roll_special_event():
 		var s2: Resource = UnitDatabase.get_unit("S2")
 		if s2:
 			print("[自由事件] 仓鼠士兵觉醒！%s 方 G1 变为仓鼠士兵" % ("红" if player_id == 0 else "蓝"))
+			_show_special_event_text("S2")
 			## 解锁隐藏成就「平行时空的英雄们」（S 前缀特殊单位登场）
 			Achievements.unlock_by_id("parallel_heroes")
 			return s2
@@ -909,7 +1107,7 @@ func _apply_round_robin(ranged_units: Array, enemies: Array) -> void:
 		## ① 该单位在 move 状态锁着射程外目标，无法开火（只在推进）；
 		## ② 该 target 会污染 find_best_distributed_target 的锁定数统计（幻影锁定），
 		##    让射程内的其他远程平分失真 → 只有部分远程开火。
-		if unit.global_position.distance_to(target.global_position) > _unit_effective_range(unit):
+		if not _unit_can_reach(unit, target.global_position):
 			continue
 		unit.target = target  ## 写入均衡分配的目标
 
@@ -919,10 +1117,7 @@ func _apply_round_robin(ranged_units: Array, enemies: Array) -> void:
 static func _unit_effective_range(unit: Unit) -> float:
 	if unit == null or unit.unit_resource == null:
 		return 0.0
-	var res: UnitResource = unit.unit_resource
-	if res.use_elliptical_range:
-		return maxf(res.get_attack_range_h_px(), res.get_attack_range_v_px()) + 10.0
-	return res.attack_range * Constants.UNIT_TO_PIXELS + 10.0
+	return unit.get_attack_query_radius_px(10.0)
 
 ## #3：精确判定单位能否攻击到目标位置（椭圆/圆形），分配器与平分索敌统一用此方法
 ## unit: 远程单位
@@ -939,7 +1134,7 @@ static func _unit_can_reach(unit: Unit, target_pos: Vector2) -> bool:
 static func _has_valid_in_range_target(unit: Unit) -> bool:
 	if unit == null or unit.target == null or not is_instance_valid(unit.target) or unit.target.is_dead:
 		return false
-	return unit.global_position.distance_to(unit.target.global_position) <= _unit_effective_range(unit)
+	return _unit_can_reach(unit, unit.target.global_position)
 
 ## 切换暂停状态的方法
 ## 在暂停与继续之间切换，同时同步整个场景树的暂停状态

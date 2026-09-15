@@ -4,6 +4,9 @@ extends Control
 ## 由 roguelike_director 在 Boss 节点通关奖励选定后弹出。
 ## 仅做「通关庆祝 + 再来一局 / 返回主菜单」两枚按钮；战利品三选一已在通关奖励界面发放，不在此重复。
 
+## 结算战绩面板构建器（与失败界面共用），用 preload 而非全局类名，免依赖编辑器类名缓存
+const RUN_SUMMARY_PANEL := preload("res://scripts/roguelike/run_summary_panel.gd")
+
 ## 场景切换防重入：按钮按下进入跳转后屏蔽再次触发
 var _transitioning: bool = false
 
@@ -25,7 +28,10 @@ func _play_victory_bgm_guarded() -> void:
 	AudioManager.play_victory_bgm()
 
 func _build_ui() -> void:
-	set_anchors_preset(Control.PRESET_FULL_RECT)
+	## 必须用 set_anchors_and_offsets_preset：本界面是 .new() 出来后直接挂到 CanvasLayer 的，
+	## 挂进树时 size 仍为 0，此时 set_anchors_preset 会把 offset 改成 -1280/-720 以「保持当前矩形」，
+	## 结果根节点永远是 0×0 —— 遮罩不显示、面板被挤到屏幕左上角。
+	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_STOP
 
 	var backdrop := ColorRect.new()
@@ -67,6 +73,18 @@ func _build_ui() -> void:
 	sub.add_theme_color_override("font_color", Color(0.30, 0.22, 0.12, 1.0))
 	vbox.add_child(sub)
 
+	## 本局战绩 + 历史最佳（archive_run 已在 director 弹出本界面前调用，数据已刷新）
+	vbox.add_child(RUN_SUMMARY_PANEL.build())
+
+	## 进阶难度解锁提示：archive_run 通关时会 +1，这里回读最新解锁上限
+	var asc := Label.new()
+	asc.text = _ascension_text()
+	asc.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	asc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	asc.add_theme_font_size_override("font_size", 14)
+	asc.add_theme_color_override("font_color", Color(0.48, 0.20, 0.10, 1.0))
+	vbox.add_child(asc)
+
 	var btn_restart := Button.new()
 	btn_restart.text = "再来一局"
 	btn_restart.custom_minimum_size = Vector2(200, 48)
@@ -83,7 +101,15 @@ func _build_ui() -> void:
 
 	## Boss 通关时战场已被奖励界面冻结（paused）；保持暂停，仅本界面按钮可响应
 	get_tree().paused = true
-	AudioManager.play_victory_bgm()
+
+## 本局进阶难度与解锁进度文案（已解锁满级时不再提示下一级）
+func _ascension_text() -> String:
+	var cur: int = RoguelikeManager.ascension_level
+	var unlocked: int = RoguelikeManager.ascension_unlocked
+	var cur_text: String = "标准难度" if cur <= 0 else "进阶 %d" % cur
+	if unlocked >= RoguelikeManager.ASCENSION_MAX_LEVEL:
+		return "本局难度：%s ·  进阶难度已全部解锁（最高 %d 级）" % [cur_text, unlocked]
+	return "本局难度：%s ·  已解锁至进阶 %d，下一局可挑战更高难度" % [cur_text, unlocked]
 
 ## 羊皮纸风按钮样式（深棕底 + 金棕边框，悬停/按下明显变亮）
 func _setup_button_style(btn: Button) -> void:
@@ -112,8 +138,9 @@ func _on_restart_pressed() -> void:
 	get_tree().paused = false
 	GameManager.is_campaign_mode = false
 	BattleManager.is_two_player = false
+	var hero_id: String = RoguelikeManager.selected_hero
 	RoguelikeManager.end_run()
-	RoguelikeManager.start_run(RoguelikeManager.selected_hero)
+	RoguelikeManager.start_run(hero_id)
 	GameManager.enter_roguelike_map()
 
 func _on_menu_pressed() -> void:

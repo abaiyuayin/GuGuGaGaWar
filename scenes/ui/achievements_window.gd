@@ -112,7 +112,7 @@ func _create_row(entry: Dictionary) -> HBoxContainer:
 			icon_btn.modulate = LOCKED_ICON_MODULATE
 	elif not unlocked:
 		## 未上传图标时用锁形符号替代星形，进一步拉开辨识度
-		icon_btn.text = "🔒"
+		icon_btn.text = "锁"
 		icon_btn.add_theme_font_size_override("font_size", 18)
 	## 无论当前开发者模式开关状态都先连好信号并登记，
 	## 否则「窗口已打开 → 再开启开发者模式」时数组为空，功能无法恢复

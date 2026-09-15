@@ -66,8 +66,7 @@ Faction SFX prefixes: Doro→D, GuGuGa→G, Phoebe→F, Nuonuo→N (Nuonuo is N,
 
 - **Main menu**: click a button to enter the corresponding mode; the bottom-right has links to the original creator's Bilibili space and the official QQ group.
 - **Placement / targeting**: select a unit then place it; units auto-acquire targets and attack within range. Ranged units have an enter/exit hysteresis band to avoid jitter.
-- **Debug console**: in dev mode (toggle with F11) a "Console" button appears on the main menu to live-tune every unit's in-battle sprite size.
-- **Shortcuts**: F12 (dev mode) toggles the in-battle top button bar.
+- **Debug console**: in dev mode a "Console" button appears on the main menu to live-tune every unit's in-battle sprite size.
 
 ## Run Locally
 

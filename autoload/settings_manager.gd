@@ -15,10 +15,10 @@ const BGM_PATHS: Dictionary = {
 	"Falling Apart": "res://assets/audio/bgm/falling_apart.mp3",
 	"Decisive Battle": "res://assets/audio/bgm/decisive_battle.mp3",
 	"The Calm Before The Storm": "res://assets/audio/bgm/calm_before_storm.mp3",
-	"Victory!": "res://assets/audio/bgm/victory.wav",
+	"Victory!": "res://assets/audio/bgm/victory.ogg",
 }
 
-var window_mode: int = WINDOW_MODE_WINDOWED  ## 当前窗口模式，默认为普通窗口
+var window_mode: int = WINDOW_MODE_FULLSCREEN  ## 当前窗口模式，默认全屏（2026-09-03：与 project.godot 的 mode=3 对齐；此前默认窗口会在启动时把全屏覆盖回窗口模式，安卓/全新安装表现异常）
 var language: String = "zh"  ## 当前语言，默认为中文
 var master_volume: float = 0.8  ## 主音量（0.0~1.0），默认 0.8
 var music_volume: float = 0.7  ## 音乐音量（0.0~1.0），默认 0.7
@@ -26,7 +26,7 @@ var sfx_volume: float = 0.5  ## 音效音量（0.0~1.0），默认 0.5（设置�
 var show_damage_numbers: bool = true  ## 是否显示伤害量文本，默认开启
 var show_hp_armor_bar: bool = false  ## #16：是否在血条居中显示血量/护盾数值，默认关闭（玩家可在设置中打开；2026-08-18 用户拍板）
 var touch_controls: bool = false  ## 移动端触屏输入层开关：安卓/iOS 导出时由 OS.has_feature("mobile") 自动启用，桌面可手动开以便测试
-var audio_throttle: bool = false  ## #4：音频节流开关（默认关闭）。开启=现在的并发限制播放方式；关闭=以前的触发即播、无限制（2026-08-18 用户拍板默认关闭）
+var audio_throttle: bool = true  ## #4：音频节流开关（默认开启）。开启=现在的并发限制播放方式；关闭=以前的触发即播、无限制（2026-09-03 用户拍板默认开启，2026-08-18 的默认关闭作废）
 
 ## #17：单条音效文件音量表（res:// 音频路径 -> 0.0~1.0，缺省按 1.0 满音量）
 ## 由音效配置页「调整」视图的每个音效拖动条维护，播放时叠乘到 SFX 总线音量之上
@@ -44,6 +44,14 @@ var defeat_bgm: String = "默认"  ## 失败BGM名称（"无"=不播放）
 ##   type: 0=每次出兵都播放, 1=同时出N兵时播放, 2=累计出N兵时播放
 ##   count: 规则N值（同时出N兵或累计出N兵的N）
 var unit_sound_configs: Dictionary = {}
+
+## 内置默认兵种音效表（unit_id -> {click_sound/spawn_sound/attack_sound/spawn_rules}）
+## 2026-09-03：兵种音效此前 100% 依赖 user://settings.cfg（运行时用户目录，不随导出包分发），
+## 全新安装（安卓/新PC）点击/出兵/攻击音效全部静音。此表从开发机配置导出
+## （tools/export_default_unit_sounds.py），随包分发，作为无用户配置时的回退默认。
+## 注意必须用 .json（Godot Android 导出会跳过 .cfg 扩展名文件，2026-08-13 教训）。
+const DEFAULT_UNIT_SOUNDS_PATH: String = "res://data/default_unit_sounds.json"
+var _builtin_unit_sounds: Dictionary = {}
 
 ## 音效归属类型：音频路径 -> "shared" / "G" / "D" / "F" / "N"
 ## 用于"音效专享"：被标记为某阵营专属的音效，仅该阵营兵种的下拉可选（编辑功能见 #101）
@@ -162,6 +170,89 @@ func _load_settings() -> void:  ## 从配置文件加载设置（私有方法）
 	if cfg.has_section("sound_volumes"):
 		for key in cfg.get_section_keys("sound_volumes"):
 			sound_volumes[key] = clampf(float(cfg.get_value("sound_volumes", key)), 0.0, 2.0)
+
+	## #音效（2026-09-02）：历史存档里的 .wav 路径迁移到实际存在的扩展名（资源已整体转 OGG）
+	_migrate_audio_ext()
+
+## #音效（2026-09-02）：音频扩展名迁移
+## 背景：assets/audio 已整体 WAV→OGG，但 user://settings.cfg 里保存的兵种点击/出兵/攻击音效、
+## 单文件音量、归属标签、音效库排序全部仍是 .wav 路径 → 文件不存在 → 出兵音效与攻击音效全部静音。
+## 处理：把所有指向不存在文件的音频路径改写为同名的现存扩展名（.ogg/.mp3/.wav），一次性写盘。
+const AUDIO_EXT_CANDIDATES: Array[String] = [".ogg", ".mp3", ".wav"]
+
+## 解析单个音频路径：存在则原样返回；否则返回同名的现存扩展名路径；全无返回原路径
+func _resolve_audio_ext(path: String) -> String:
+	if path == "" or ResourceLoader.exists(path):
+		return path
+	var base: String = path.get_basename()
+	for ext in AUDIO_EXT_CANDIDATES:
+		var alt: String = base + ext
+		if alt != path and ResourceLoader.exists(alt):
+			return alt
+	return path
+
+## 遍历全部音效配置做扩展名迁移，有改动才写盘
+func _migrate_audio_ext() -> void:
+	var changed: bool = false
+	## 兵种音效配置：click_sound（String 或 Array）/ spawn_sound / spawn_rules[].sound
+	for unit_id in unit_sound_configs:
+		var config: Dictionary = unit_sound_configs[unit_id]
+		var click: Variant = config.get("click_sound", "")
+		if click is Array:
+			var arr: Array = click
+			for i in range(arr.size()):
+				var fixed: String = _resolve_audio_ext(str(arr[i]))
+				if fixed != str(arr[i]):
+					arr[i] = fixed
+					changed = true
+			config["click_sound"] = arr
+		else:
+			var fixed_click: String = _resolve_audio_ext(str(click))
+			if fixed_click != str(click):
+				config["click_sound"] = fixed_click
+				changed = true
+		var spawn: String = str(config.get("spawn_sound", ""))
+		var fixed_spawn: String = _resolve_audio_ext(spawn)
+		if fixed_spawn != spawn:
+			config["spawn_sound"] = fixed_spawn
+			changed = true
+		var attack: String = str(config.get("attack_sound", ""))
+		var fixed_attack: String = _resolve_audio_ext(attack)
+		if fixed_attack != attack:
+			config["attack_sound"] = fixed_attack
+			changed = true
+		for rule in config.get("spawn_rules", []):
+			if rule is Dictionary:
+				var snd: String = str(rule.get("sound", ""))
+				var fixed_snd: String = _resolve_audio_ext(snd)
+				if fixed_snd != snd:
+					rule["sound"] = fixed_snd
+					changed = true
+	## 归属标签表（键为音频路径）
+	var new_attribution: Dictionary = {}
+	for key in sound_attribution:
+		var fixed_key: String = _resolve_audio_ext(str(key))
+		if fixed_key != str(key):
+			changed = true
+		new_attribution[fixed_key] = sound_attribution[key]
+	sound_attribution = new_attribution
+	## 单文件音量表（键为音频路径）
+	var new_volumes: Dictionary = {}
+	for key in sound_volumes:
+		var fixed_key2: String = _resolve_audio_ext(str(key))
+		if fixed_key2 != str(key):
+			changed = true
+		new_volumes[fixed_key2] = sound_volumes[key]
+	sound_volumes = new_volumes
+	## 音效库自定义排序
+	for i in range(sound_library_order.size()):
+		var fixed_order: String = _resolve_audio_ext(sound_library_order[i])
+		if fixed_order != sound_library_order[i]:
+			sound_library_order[i] = fixed_order
+			changed = true
+	if changed:
+		_save_settings()
+		print("[音效] 已将存档中失效的音频路径迁移到现有扩展名（WAV→OGG）")
 
 func _save_settings() -> void:  ## 保存设置到配置文件（私有方法）
 	var cfg = ConfigFile.new()  ## 创建配置文件对象
@@ -354,10 +445,31 @@ func _normalize_spawn_rules(rules: Array) -> Array:
 			result.append({"type": t, "count": c, "sound": snd})
 	return result
 
-## 获取指定兵种的音效配置（不存在则用默认值填充并缓存）
+## 惰性加载内置默认兵种音效表（随包分发的出厂默认，见 DEFAULT_UNIT_SOUNDS_PATH 说明）
+## 在 get_unit_sound_config 首次调用时触发：AudioManager 在 autoload 顺序中先于本管理器 _ready，
+## 其启动预加载会早于 user://settings.cfg 的读取，惰性加载保证任意调用时点都能拿到内置默认。
+var _builtin_loaded: bool = false  ## 内置默认表是否已尝试加载（含加载失败，避免重复读盘）
+
+func _ensure_builtin_loaded() -> void:
+	if _builtin_loaded:
+		return
+	_builtin_loaded = true
+	if not FileAccess.file_exists(DEFAULT_UNIT_SOUNDS_PATH):
+		return
+	var parsed = JSON.parse_string(FileAccess.get_file_as_string(DEFAULT_UNIT_SOUNDS_PATH))
+	if parsed is Dictionary:
+		_builtin_unit_sounds = parsed
+
+## 获取指定兵种的音效配置
+## 优先级：用户配置（user://settings.cfg）> 内置默认表 > 空配置
+## 内置默认返回深拷贝且不写入用户配置表——用户未动过的兵种随包更新默认表后仍能生效
 func get_unit_sound_config(unit_id: String) -> Dictionary:
-	if not unit_sound_configs.has(unit_id):
-		unit_sound_configs[unit_id] = _get_default_unit_sound_config()
+	_ensure_builtin_loaded()
+	if unit_sound_configs.has(unit_id):
+		return unit_sound_configs[unit_id]
+	if _builtin_unit_sounds.has(unit_id):
+		return (_builtin_unit_sounds[unit_id] as Dictionary).duplicate(true)
+	unit_sound_configs[unit_id] = _get_default_unit_sound_config()
 	return unit_sound_configs[unit_id]
 
 ## 设置指定兵种的音效配置并立即保存

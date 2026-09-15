@@ -220,7 +220,7 @@ func _hit_target(hit_unit: Unit) -> void:  ## 定义命中目标的方法
 					hit_unit.apply_affix(affix, valid_attacker)
 		## 范围攻击：向命中点周围敌人溅射同额伤害（不含主目标）
 		if aoe_radius > 0.0 and valid_attacker != null and valid_attacker.has_method("_apply_aoe"):
-			valid_attacker._apply_aoe(global_position, hit_unit, carried_damage_entries)
+			valid_attacker._apply_aoe(global_position, carried_damage_entries, {hit_unit.get_instance_id(): true})
 
 	_play_hit_fx()  ## 播放命中消失动画并销毁
 

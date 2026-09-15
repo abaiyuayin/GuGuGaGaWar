@@ -97,22 +97,44 @@ func get_order(order_id: String) -> MilitaryOrderData:
 	return orders.get(order_id, null) as MilitaryOrderData
 
 ## 随机抽取 [param count] 件互不重复的文物，可用 [param exclude_ids] 排除已拥有的
+## 未持有的池不够 count 时，用已持有的补足 —— 文物允许重复持有以叠加效果，
+## 否则后期「全部集齐」会让宝箱 / 商店直接开不出文物。
 func roll_artifacts(count: int, exclude_ids: Array[String] = []) -> Array[ArtifactData]:
+	var want: int = maxi(count, 0)
 	var pool: Array[ArtifactData] = []
+	var owned_pool: Array[ArtifactData] = []
 	for art in artifact_list:
-		if not (art.artifact_id in exclude_ids):
+		if art.artifact_id in exclude_ids:
+			owned_pool.append(art)
+		else:
 			pool.append(art)
 	pool.shuffle()
-	return pool.slice(0, maxi(count, 0))
+	if pool.size() < want:
+		owned_pool.shuffle()
+		for art in owned_pool:
+			if pool.size() >= want:
+				break
+			pool.append(art)
+	return pool.slice(0, want)
 
-## 随机抽取 [param count] 张互不重复的军令
+## 随机抽取 [param count] 张互不重复的军令；池不足时同样用被排除的补足
 func roll_orders(count: int, exclude_ids: Array[String] = []) -> Array[MilitaryOrderData]:
+	var want: int = maxi(count, 0)
 	var pool: Array[MilitaryOrderData] = []
+	var excluded: Array[MilitaryOrderData] = []
 	for od in order_list:
-		if not (od.order_id in exclude_ids):
+		if od.order_id in exclude_ids:
+			excluded.append(od)
+		else:
 			pool.append(od)
 	pool.shuffle()
-	return pool.slice(0, maxi(count, 0))
+	if pool.size() < want:
+		excluded.shuffle()
+		for od in excluded:
+			if pool.size() >= want:
+				break
+			pool.append(od)
+	return pool.slice(0, want)
 
 ## 随机抽取一个宝箱奇遇事件；事件池为空返回 null（调用方做空状态兜底）
 func roll_chest_event() -> ChestEventData:
@@ -209,7 +231,7 @@ func _read_json(path: String) -> Dictionary:
 
 ## 载入文本覆盖文件（不存在视为无覆盖）
 func _load_overrides() -> void:
-	_overrides = {"units": {}, "artifacts": {}, "orders": {}}
+	_overrides = {"units": {}, "artifacts": {}, "orders": {}, "help": {}}
 	var path: String = _overrides_path()
 	if not FileAccess.file_exists(path):
 		return

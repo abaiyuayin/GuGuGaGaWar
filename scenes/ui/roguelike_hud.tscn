@@ -16,7 +16,7 @@ offset_right = 180.0
 offset_bottom = 74.0
 grow_horizontal = 2
 theme_override_font_sizes/font_size = 20
-text = "第 1 层 · 第 1 波"
+text = "第 1 层 · 第 1/1 波"
 horizontal_alignment = 1
 vertical_alignment = 1
 
@@ -30,7 +30,7 @@ offset_right = 220.0
 offset_bottom = 100.0
 grow_horizontal = 2
 theme_override_font_sizes/font_size = 14
-text = "拖动卡牌到左半场部署兵种"
+text = "拖动卡牌到中央区域（环绕水晶）部署兵种"
 horizontal_alignment = 1
 vertical_alignment = 1
 

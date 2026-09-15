@@ -21,7 +21,7 @@ damage_by_type = {
 attack_range = 8.0
 attack_speed = 3.0
 damage_by_hit = [{
-3: 40
+3: 25
 }]
 attack_hit_frame_start = 14
 attack_sound_frame = 14

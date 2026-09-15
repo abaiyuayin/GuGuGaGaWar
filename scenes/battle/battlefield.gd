@@ -40,10 +40,10 @@ var crystal_can_attack: bool = true
 var crystal_invincible: bool = false
 
 ## 基地攻击配置：战场缩小后范围相应缩小
-const BASE_ATTACK_RANGE: float = 160.0  ## 基地攻击范围（像素）
-## #8（2026-08-09 用户拍板）：双方水晶单次伤害 100 -> 50
-const BASE_ATTACK_DAMAGE: int = 50  ## 基地每次攻击造成的伤害值
-const BASE_ATTACK_INTERVAL: float = 1.0  ## 基地攻击间隔时间（秒）
+const BASE_ATTACK_RANGE: float = 288.0  ## 基地攻击范围（9 标准单位 × 32px）
+## #8（2026-08-09 用户拍板）：双方水晶单次伤害 100 -> 50；本次改为 10
+const BASE_ATTACK_DAMAGE: int = 10  ## 基地每次攻击造成的伤害值
+const BASE_ATTACK_INTERVAL: float = 1.5  ## 基地攻击间隔时间（秒）（2026-09-11 用户拍板：1.0 → 1.5）
 
 ## 获取基地攻击范围（供单位移动状态使用）
 func get_base_attack_range() -> float:  ## 定义获取基地攻击范围的方法，返回浮点数
@@ -62,13 +62,19 @@ func get_crystal_invincible() -> bool:
 ## radius: 半径（像素）
 ## team_filter: 阵营过滤（0/1 只返回该阵营；-1 返回所有阵营）
 ## 返回: 命中单位数组（类型化，便于调用方遍历）
+## #性能（2026-08-27）：改走 Unit 的共享空间索引做格级预筛，再逐个精确判距。
+## 旧实现每次调用都全量遍历 unit_container（竞技场 300 兵 = 300 次判定/调用），
+## 而范围攻击（_apply_aoe）在混战中每帧可被调用几十次。索引每物理帧只建一次、全场共享，
+## 这里只扫「半径盒覆盖到的格」，结果与全量遍历完全等价。
 func get_units_in_radius(center: Vector2, radius: float, team_filter: int = -1) -> Array[Unit]:
 	var result: Array[Unit] = []
 	if radius <= 0.0:
 		return result
 	var r2: float = radius * radius
-	for child in unit_container.get_children():
-		if is_instance_valid(child) and child is Unit and not child.is_base_unit and not child.is_dead:
+	Unit._ensure_spatial_index(unit_container)  ## 确保本物理帧索引已就绪（幂等）
+	for child in Unit._query_index_box(center, radius):
+		## 索引已保证 child 是存活 Unit；此处仍保留有效性判定（同帧内可能被释放）
+		if is_instance_valid(child) and not child.is_base_unit and not child.is_dead:
 			if team_filter != -1 and child.team != team_filter:
 				continue
 			if center.distance_squared_to(child.global_position) <= r2:
@@ -84,6 +90,8 @@ signal base_hp_changed(team: int, hp: int, max_hp: int)  ## 定义基地 HP 变�
 ## 信号：基地受到攻击造成扣血时发出（用于扣血日志条）
 ## team: 被攻击方阵营编号, damage: 本次扣血值, attacker: 攻击者（Unit 或 base_unit，可能为 null）
 signal base_damaged(team: int, damage: int, attacker: Node)  ## 定义基地扣血信号
+## 信号：水晶被击破但由文物「Doro 的破布娃娃」免死一次时发出（供战斗层提示）
+signal base_revive_requested()
 
 ## 节点就绪时自动调用
 func _ready() -> void:  ## 重写 _ready 生命周期方法
@@ -94,9 +102,13 @@ func _ready() -> void:  ## 重写 _ready 生命周期方法
 	## 水晶被摧毁 = 本局失败；敌方阵营不再拥有可被攻击的基地。
 	if RoguelikeManager.is_active:
 		is_crystal_mode = true
-		base_max_hp = Constants.ROGUELIKE_CRYSTAL_HP
+		## 水晶耐久上限走 run 级 crystal_max_hp（可被文物/事件抬高），首次进入时兜底到常量
+		if RoguelikeManager.crystal_max_hp <= 0:
+			RoguelikeManager.crystal_max_hp = Constants.ROGUELIKE_CRYSTAL_HP
+			RoguelikeManager.crystal_hp = RoguelikeManager.crystal_max_hp
+		base_max_hp = RoguelikeManager.crystal_max_hp
 		## #213：水晶耐久跨战斗保留 —— 继承 run 级 RoguelikeManager.crystal_hp（首场=满血）
-		red_base_hp = RoguelikeManager.crystal_hp
+		red_base_hp = clampi(RoguelikeManager.crystal_hp, 1, base_max_hp)
 		blue_base_hp = base_max_hp
 		_spawn_roguelike_crystal()
 	elif GameManager.is_battlefield_mode:
@@ -126,7 +138,7 @@ func _spawn_base_units() -> void:
 
 ## 创建方块水晶实体（#23，战役/双人模式）
 ## 代码构造 UnitResource：不继承兵种护甲/攻击/动画。
-## attack_range = BASE_ATTACK_RANGE(160px)/32 = 5.0 > RANGED_THRESHOLD(2.0) → is_ranged=true，
+## attack_range = BASE_ATTACK_RANGE(288px)/32 = 9.0 > RANGED_THRESHOLD(2.0) → is_ranged=true，
 ## perform_attack 走投射物路径，发射默认方块弹道（projectile 默认贴图即方块，按 team 染红/蓝）。
 ## box_color: 水晶方块颜色（红方红 / 蓝方蓝）
 func _create_crystal_unit(team_id: int, pos: Vector2, box_color: Color) -> Unit:
@@ -156,7 +168,7 @@ func _spawn_roguelike_crystal() -> void:
 	var res: UnitResource = UnitResource.new()
 	res.unit_id = "CRYSTAL"
 	res.display_name = tr("BATTLE_CRYSTAL")
-	res.max_hp = Constants.ROGUELIKE_CRYSTAL_HP
+	res.max_hp = base_max_hp
 	res.armor_value = 0  ## 水晶无护甲，伤害全额进血量，便于数值直观
 	res.move_speed = 0.0
 	res.damage = 0  ## 水晶不攻击
@@ -234,6 +246,10 @@ func _on_base_unit_died(_unit: Unit, killer_team: int, _killer_unit_id: String =
 		return
 	if destroyed_team == 1 and blue_base_hp <= 0:
 		return
+	## 文物「Doro 的破布娃娃」revive_once：肉鸽玩家水晶被击破时免死一次并回耐久
+	if destroyed_team == 0 and is_crystal_mode and RoguelikeManager.consume_crystal_revive():
+		_revive_crystal()
+		return
 	## 击杀方获胜，被摧毁方失败
 	## killer_team 是击杀方，所以被摧毁的是 1 - killer_team
 	if destroyed_team == 0:
@@ -242,6 +258,25 @@ func _on_base_unit_died(_unit: Unit, killer_team: int, _killer_unit_id: String =
 		blue_base_hp = 0
 	base_hp_changed.emit(destroyed_team, 0, base_max_hp)
 	base_destroyed.emit(killer_team)
+
+## 水晶免死：把水晶单位从「死亡」拉回并回复 REVIVE_HP_PCT 比例耐久
+const REVIVE_HP_PCT: float = 0.35
+
+func _revive_crystal() -> void:
+	var revive_hp: int = maxi(int(round(float(base_max_hp) * REVIVE_HP_PCT)), 1)
+	red_base_hp = revive_hp
+	RoguelikeManager.crystal_hp = revive_hp
+	if red_base_unit != null and is_instance_valid(red_base_unit):
+		red_base_unit.is_dead = false
+		red_base_unit.current_hp = revive_hp
+		red_base_unit.visible = true
+		red_base_unit.modulate = Color.WHITE
+		if red_base_unit.health_bar != null:
+			red_base_unit.health_bar.value = revive_hp
+		red_base_unit.change_state("base_defense")
+	_crystal_out_of_combat_timer = 0.0
+	base_hp_changed.emit(0, revive_hp, base_max_hp)
+	base_revive_requested.emit()
 
 ## 添加单位到战场
 ## unit: 要添加的单位节点
@@ -298,6 +333,8 @@ func heal_base(team: int, amount: int) -> int:
 	## 因此不能走 Unit.heal()（那会被兵种 max_hp 反向截断），直接改 current_hp。
 	var before: int = base_unit.current_hp
 	base_unit.current_hp = mini(base_unit.current_hp + amount, base_max_hp)
+	if base_unit.health_bar != null:
+		base_unit.health_bar.value = base_unit.current_hp
 	if team == 0:
 		red_base_hp = base_unit.current_hp
 	else:
@@ -336,6 +373,9 @@ func damage_base(team: int, damage: int, attacker: Node = null) -> void:  ## 定
 			## #8（2026-08-15）：基地受实际伤害 → 重置脱战计时，需再等 3s 才恢复回血
 			_crystal_out_of_combat_timer = 0.0
 			base_damaged.emit(team, actual_dmg, attacker)
+			## 肉鸽：累计水晶承受伤害，供结算统计展示
+			if is_crystal_mode and team == 0:
+				RoguelikeManager.add_stat("crystal_damage", actual_dmg)
 		base_hp_changed.emit(team, base_unit.current_hp, base_max_hp)
 		return
 	## 基地单位不存在或已死亡时的回退逻辑（直接扣 HP）

@@ -37,8 +37,8 @@ var team: int = 0  ## 阵营编号，默认为红方
 var current_hp: int  ## 当前 HP 值
 ## 当前状态机状态实例
 var current_state: UnitState  ## 当前所处的状态机状态
-## 攻击计时器，用于控制攻击间隔
-var attack_timer: float = 0.0  ## 攻击间隔计时器
+## 当前攻击动画已播放时间，仅用于无帧命中时定位命中时机。
+var attack_anim_elapsed: float = 0.0  ## 攻击动画计时器
 ## 当前攻击目标单位引用
 var target: Unit = null  ## 当前攻击目标
 ## 单位是否已死亡的标志
@@ -84,6 +84,7 @@ var _attack_dash_dir: Vector2 = Vector2.ZERO  ## 突进方向（朝目标）
 var _attack_dash_time: float = -1.0  ## 突进已进行时间（秒），<0 表示未激活
 var _attack_dash_triggered: bool = false  ## #18-2：本攻击周期是否已预触发突进（命中帧前一帧）
 var anim_sprint_frames: SpriteFrames = null  ## 冲刺动画帧资源
+var anim_walk_frames: SpriteFrames = null  ## 行走动画帧资源（#后摇 2026-09-11：后摇动画优先级 待机 > 行走 > 奔跑）
 var anim_idle_frames: SpriteFrames = null  ## 待机动画帧资源
 var anim_charge_frames: SpriteFrames = null  ## 出场动画帧资源（charge，蓝女巫等）
 var anim_death_frames: SpriteFrames = null  ## 死亡动画帧资源
@@ -100,6 +101,11 @@ var _frame_signal_connected: bool = false  ## frame_changed 是否已连接
 ## 攻击态施加为 sprite.offset，使攻击第 0 帧身体对齐移动姿态；攻击内前冲/挥砍保留，且不逐帧漂移。
 ## 角色已居中的兵种（含 S1 现版居中导出）该值≈0，零影响。
 var _attack_anchor_offset: Vector2 = Vector2.ZERO  ## 攻击态常量偏移（纹理px，已含缩放比折算；X 受 flip_h 翻转）
+## 全态身体锚点偏移（2026-09-11 死亡使者闪现根因修复）：取 move 首帧「画布中心-内容中心」的
+## X 分量，作为所有动画态共用的恒定 sprite.offset。角色整体在画布内偏左/偏右的兵种（如 Y1 偏右 ~32px）
+## 由此把身体中心对齐节点原点（血条正下方），且不动图集像素、不逐帧变化——帧间固有运动
+##（攻击挥砍轨迹等）完整保留，不会像逐帧像素重居中那样引入攻击闪现。角色已居中的兵种≈0、零影响。
+var _body_anchor_offset_x: float = 0.0  ## 全态身体锚点偏移 X（纹理px，受 flip_h 翻转）
 ## 远程技能自动施放定时器（死亡使者等异象兵种，5秒冷却远程攻击）
 var _ranged_skill_timer: Timer = null
 ## 远程技能冷却中标志
@@ -145,6 +151,7 @@ const ANIM_ROOT_DIR := "res://resources/units"  ## 动画资源根目录
 const ANIM_MOVE_FILE := "move_frames.tres"  ## 移动动画帧文件名
 const ANIM_ATTACK_FILE := "attack_frames.tres"  ## 攻击动画帧文件名
 const ANIM_SPRINT_FILE := "sprint_frames.tres"  ## 冲刺动画帧文件名
+const ANIM_WALK_FILE := "walk_frames.tres"  ## 行走动画帧文件名（#后摇 2026-09-11：后摇动画第二档）
 const ANIM_IDLE_FILE := "idle_frames.tres"  ## 待机动画帧文件名
 const ANIM_CHARGE_FILE := "charge_frames.tres"  ## 出场动画帧文件名（蓝女巫等特殊兵种）
 const ANIM_DEATH_FILE := "death_frames.tres"  ## 死亡动画帧文件名（#9：死亡使者等有独立死亡演出的兵种）
@@ -172,6 +179,37 @@ const DODGE_FORWARD_FACTOR: float = 0.7  ## 绕步时保留的前进速度比例
 ## 全局缓存：(unit_id + anim_name) → 帧纹理最大尺寸 Vector2(max_w, max_h)
 ## 避免每次切动画都重新扫描纹理尺寸，大幅提升性能
 static var _anim_content_size_cache: Dictionary = {}
+
+## ── 空间索引（#性能 2026-08-27 竞技场卡死根因修复）───────────────────────
+## 旧实现：find_nearest_enemy_in_range / _compute_ally_separation 各自遍历
+## UnitContainer 全部子节点（O(N) 每单位 → O(N²) 每次节流窗口），
+## find_best_distributed_target 更是对射程内每个敌人再遍历一遍全部子节点（O(N³)）。
+## 实测（隔离计时，非渲染场）：
+##   N=100 → 索敌 4.2ms / 分离 5.4ms / 平分锁敌 93ms
+##   N=300 → 索敌 37.6ms / 分离 48.3ms（平分锁敌外推至秒级 → 表现为「卡死」）
+## 常规模式单方人口上限仅十余人故无感，竞技场 MAX_SPAWN_UNITS=300 直接击穿。
+##
+## 新实现：每物理帧对 UnitContainer 扫描**一次**，建成
+##   ① _index_cells：均匀网格桶（Vector2i 格坐标 → 该格内单位数组）
+##   ② _index_locks：被锁定目标 → {阵营 → 己方远程锁定数}，供平分锁敌 O(1) 查询
+## 所有单位共享该索引；索敌改环形扩散查询、分离改邻格盒查询，整体降到 O(N)。
+## 索引按「物理帧序号 + 容器实例 id」缓存，一帧内首个查询者负责构建，其余直接复用。
+## 索引内**包含基地单位**（水晶）——各查询按原口径自行过滤，行为与旧实现逐条对齐：
+##   索敌 / 平分锁敌跳过基地单位；友军分离不跳过（旧实现即如此）。
+##
+## 网格边长取 48：略大于分离半径 40，使分离查询只覆盖 2×2~3×3 格。
+## 取过大（如 96）在混战抱团时会退化 —— 实测 150 兵挤进 200×200px 区域时
+## 96px 网格只占 4 格，盒查询等于把全部 150 个单位都捞回来，分离又变回 O(N²)。
+const INDEX_CELL_SIZE: float = 48.0  ## 网格边长（像素）：略 > 分离半径 40，兼顾环形扩散粒度
+static var _index_frame: int = -1  ## 索引构建时的物理帧序号
+static var _index_container_id: int = 0  ## 索引对应的 UnitContainer 实例 id
+static var _index_cells: Dictionary = {}  ## Vector2i(格坐标) → Array[Unit]
+static var _index_locks: Dictionary = {}  ## Unit(被锁目标) → Dictionary[int(阵营) → int(锁定数)]
+## 各阵营「可索敌单位（存活、非基地）所占据的格集合」：int(阵营) → Dictionary[Vector2i → true]
+## 全场索敌（半径 INF）靠它把搜索从「格坐标环形扩散」降成「只遍历真正有敌人的那几十个格」。
+static var _index_team_cells: Dictionary = {}
+static var _index_min_cell: Vector2i = Vector2i.ZERO  ## 已占用格的最小坐标（环形扩散上限）
+static var _index_max_cell: Vector2i = Vector2i.ZERO  ## 已占用格的最大坐标
 
 ## 调试开关：是否显示红蓝判定框（由 battle_root.gd 的 F3 切换）
 ## 红框=攻击判定框，蓝框=受击框
@@ -204,6 +242,11 @@ var hold_position: bool = false  ## 是否站定待命（战场模式专用）
 var combat_enabled: bool = true  ## 战场模式：是否允许交战（和平/停战=false → 完全不攻击）
 ## #竞技场（2026-08-24 需求3）：朝移动令目标推进时的「被卡住计时」，见 state_move._advance_to_order
 var _order_stuck_timer: float = 0.0
+## #框选攻击锁定（2026-09-04）：玩家框选己方单位后左键点敌人指定的强制攻击目标。
+## 非空即覆盖自动索敌：不自动换更近的目标、不受肉鸽水晶牵引半径约束，
+## 直到该敌人阵亡 / 被回收 / 玩家改令（下移动令或另点一个敌人）。
+## 由 scripts/battle/unit_command.gd 写入，state_move / state_guard / state_attack 消费。
+var forced_target: Unit = null
 ## AI 禁用标志（用于调试模拟，true 时单位不自动切换状态）
 var ai_disabled: bool = false
 ## 出生阵线 Y 坐标（在 _ready 时记录），单位被碰撞挤压后会缓慢回归这条阵线
@@ -211,6 +254,8 @@ var lane_y: float = 0.0  ## 出生阵线 Y
 ## 肉鸽守卫驻守偏移（像素）：近战单位驻守在水晶正前方的距离
 ## 在 setup 时随机抽一次并固定，避免所有近战叠在同一个点上（#210）
 var guard_front_offset: float = 0.0  ## 近战驻守前压距离
+## 额外视觉放大倍率（肉鸽 Boss 节点敌军 ×2），在 _apply_anim_scale 里叠乘
+var visual_scale_mult: float = 1.0
 
 ## 卡住绕步状态（单位级，跨状态保持，进入移动/攻击状态时清空）
 var _stuck_timer: float = 0.0  ## 连续前进受阻累计时间
@@ -280,6 +325,12 @@ func _ready() -> void:  ## 重写 _ready 生命周期方法
 	if detection_area:  ## 如果检测区域存在
 		detection_area.body_entered.connect(_on_detection_body_entered)  ## 连接进入信号
 		detection_area.body_exited.connect(_on_detection_body_exited)  ## 连接离开信号
+		## #性能（2026-08-27 竞技场）：在此处也落一次沙盒监控开关。
+		## setup() 与 BattleManager.spawn_unit 里的同一处判定对**新实例**是无效的 ——
+		## 两处都写在 add_child 之前，那时 _ready 还没跑、detection_area 仍是 null，
+		## 判定被 `if detection_area != null` 直接跳过（只有从对象池复用的实例才生效）。
+		## 结果 300 兵竞技场实测 300 个 Area2D 全部仍在监控。这里补齐新实例的路径。
+		_apply_detection_monitoring()
 
 	## 完成初始化
 	call_deferred("_finalize_setup")  ## 延迟调用完成初始化方法
@@ -291,6 +342,7 @@ func _ready() -> void:  ## 重写 _ready 生命周期方法
 func setup(res: UnitResource, team_id: int) -> void:  ## 定义初始化单位的方法
 	## ── 对象池复用复位（2026-08-18）：新实例这些字段本就是初值，幂等无副作用 ──
 	_setup_finalized = false  ## 允许 _finalize_setup 重新执行（血条/精灵/缩放重配）
+	visual_scale_mult = 1.0  ## 复位额外视觉倍率（Boss 放大），避免对象池复用带上一世的体型
 	is_dead = false  ## 重置死亡标志
 	current_state = null  ## 清空状态机，_physics_process 走 _fallback_move 兜底直到状态就绪
 	_clear_pool_residue()  ## 清理对象池残留（tween/词条/定时器/可见性）
@@ -305,10 +357,17 @@ func setup(res: UnitResource, team_id: int) -> void:  ## 定义初始化单位�
 	## 先快照肉鸽加成，再据此设置血量/护甲（顺序不能反）
 	_snapshot_run_modifiers()  ## 计算本单位的文物/军令加成
 	current_hp = buff_max_hp  ## 设置当前 HP 为（含加成的）最大值
-	current_armor = RunModifiers.player_armor(res.armor_value) if team == 0 else res.armor_value  ## 设置当前护甲
+	current_armor = RunModifiers.player_armor(res.armor_value) if team == 0 else res.armor_value + RunModifiers.enemy_scale_armor_flat()  ## 设置当前护甲
 	is_dead = false  ## 重置死亡标志
 	target = null  ## 清空攻击目标
-	attack_timer = 0.0  ## 重置攻击计时器
+	## 对象池复用复位：玩家指挥字段必须一起清，否则回池的单位会带着上一世的
+	## 移动令 / 攻击锁定复活（表现为「刚出的兵自己往上一局的落点跑」）。
+	## 竞技场的 _on_unit_spawned 在 spawn_unit 之后才写这两个字段，此处清空不影响它
+	forced_target = null  ## 清空玩家攻击锁定
+	order_pos = Vector2.INF  ## 清空玩家移动令
+	hold_position = false  ## 清空站定标记
+	_order_stuck_timer = 0.0  ## 清空移动令卡住计时
+	attack_anim_elapsed = 0.0  ## 重置攻击动画计时器
 	current_anim_state = "idle"  ## 重置动画状态为空闲
 	facing_dir = 1 if team == 0 else -1  ## 根据阵营设置初始朝向
 	## 无论 unit_sprite 是否已就绪都先加载动画帧资源
@@ -360,6 +419,21 @@ func setup(res: UnitResource, team_id: int) -> void:  ## 定义初始化单位�
 	if detection_area != null:  ## 检测区已就绪
 		detection_area.collision_mask = pending_detection_mask  ## 立即应用检测掩码
 		pending_detection_mask = -1  ## 标记已应用，避免 _ready 重复设置
+	## #性能（2026-08-27 竞技场）：沙盒关闭 DetectionArea 监控（详见 _apply_detection_monitoring）。
+	## 刻意放在上面的 `if detection_area != null` 之外：新实例走「先 setup 再 add_child」，
+	## 此刻 detection_area 仍为 null，判定必须留给 _ready 里的同一次调用兜住。
+	_apply_detection_monitoring()
+
+## 应用 DetectionArea 监控开关（#性能 2026-08-27 竞技场）
+## 竞技场沙盒不需要 DetectionArea：索敌由 state_move 的 is_battlefield_mode 分支每帧自行处理，
+## 完全不依赖 body_entered/exited 回调；而 300 个半径 150~300px 的常开 Area2D 在
+## 1312×736 的地图上互相重叠，物理宽相位对数实测破 4.5 万，是纯浪费的物理开销。
+## 其他模式（战役 / 全面战争 / 双人 / 肉鸽）一律保持原样开启，行为不变。
+## 由 _ready（新实例）与 setup / BattleManager.spawn_unit（池复用实例）共同调用。
+func _apply_detection_monitoring() -> void:
+	if detection_area == null:
+		return
+	detection_area.monitoring = not GameManager.is_battlefield_mode
 
 ## 快照本单位的肉鸽文物/军令加成（只在 setup 调用一次）
 ## 玩家方（team==0）吃 player_* 通道，敌方吃 enemy_* 通道；非肉鸽模式全部为中性值。
@@ -373,7 +447,8 @@ func _snapshot_run_modifiers() -> void:
 		buff_move_mult = RunModifiers.player_move_mult()
 		buff_attack_interval_mult = RunModifiers.player_attack_interval_mult()
 	else:
-		buff_max_hp = maxi(unit_resource.max_hp, 1)
+		## 敌方按层数成长曲线放大血量（精英 / Boss 另有节点倍率，见 RunModifiers.enemy_scale_*）
+		buff_max_hp = maxi(int(round(float(unit_resource.max_hp) * RunModifiers.enemy_scale_hp())), 1)
 		buff_damage_mult = RunModifiers.enemy_damage_mult()
 		buff_move_mult = 1.0
 		buff_attack_interval_mult = RunModifiers.enemy_attack_interval_mult()
@@ -403,8 +478,9 @@ func clamp_move_velocity(v: Vector2, speed_px: float) -> Vector2:
 		return v.normalized() * speed_px
 	return v
 
-## 本单位的实际攻击周期（秒，含攻速加成；值越小攻击越快）
-func get_attack_interval() -> float:
+## 历史兼容：无攻击动画的特殊单位使用的旧周期（秒）。
+## 普通单位不调用此方法；攻击节奏由攻击动画实际时长 + attack_recovery_time 决定。
+func get_legacy_attack_cycle_duration() -> float:
 	if unit_resource == null:
 		return 1.0
 	## #6：冰霜词条期间攻速 -30% → 攻击间隔 × 1/0.7 ≈ ×1.4286（其他加成不变）
@@ -414,6 +490,34 @@ func get_attack_interval() -> float:
 	if skill_slow_timer > 0.0 and skill_slow_percent > 0.0:
 		slow_mult = 1.0 / maxf(1.0 - skill_slow_percent, 0.1)
 	return maxf(unit_resource.attack_speed * buff_attack_interval_mult * frost_mult * slow_mult, 0.05)
+
+## 当前有效攻击后摇（秒）。普通单位的攻击频率由攻击动画时长 + 该后摇组成。
+## 旧的攻速/减速效果只改变后摇长度，不改变任何动画的视觉播放速度。
+func get_attack_recovery_duration() -> float:
+	if unit_resource == null:
+		return 0.0
+	var frost_mult: float = 1.0 / (1.0 - _frost_mult()) if _frost_timer > 0.0 else 1.0
+	var slow_mult: float = 1.0
+	if skill_slow_timer > 0.0 and skill_slow_percent > 0.0:
+		slow_mult = 1.0 / maxf(1.0 - skill_slow_percent, 0.1)
+	return maxf(unit_resource.get_attack_recovery_time() * buff_attack_interval_mult * frost_mult * slow_mult, 0.0)
+
+## 当前攻击动画的实际时长（秒，含播放倍率）。
+## 仅返回 attack 动画本身的实际播放时长；不含后摇，也不读取旧攻击间隔。
+func get_attack_animation_duration() -> float:
+	if unit_sprite == null:
+		return 0.0
+	var frames: SpriteFrames = unit_sprite.sprite_frames
+	if frames == null or not frames.has_animation("attack"):
+		return 0.0
+	var frame_count: int = frames.get_frame_count("attack")
+	var fps: float = frames.get_animation_speed("attack")
+	var speed_scale: float = unit_sprite.speed_scale
+	if frame_count <= 0 or fps <= 0.0:
+		return 0.0
+	if speed_scale <= 0.0:
+		speed_scale = 1.0
+	return float(frame_count) / (fps * speed_scale)
 
 ## #6：当前冰霜减攻速乘数（基础 0.3；非冰霜期返回 0 表示无效果）
 ## 单位是「value_percent」：FROST .value_percent=0.3 表示攻速 -30%
@@ -438,11 +542,17 @@ func load_animation_frames() -> void:  ## 定义加载动画帧的方法
 	## #双攻击（凑企鹅 Y4 等）：attack_alt_frames 指定第二套攻击动画，攻击动画每周期轮流播放
 	anim_attack_frames_alt = _load_cached_frames(unit_id, "attack_alt")  ## 加载备用攻击动画帧
 	anim_sprint_frames = _load_cached_frames(unit_id, "sprint")  ## 加载冲刺动画帧
+	anim_walk_frames = _load_cached_frames(unit_id, "walk")  ## 加载行走动画帧（#后摇 2026-09-11：后摇动画第二档）
 	anim_idle_frames = _load_cached_frames(unit_id, "idle")  ## 加载待机动画帧
 	anim_charge_frames = _load_cached_frames(unit_id, "charge")  ## 加载出场动画帧
 	anim_death_frames = _load_cached_frames(unit_id, "death")  ## 加载死亡动画帧（#9）
 	anim_skill_frames = _load_cached_frames(unit_id, "skill")  ## 加载技能动画帧（#技能系统，无此文件则为 null 并回退攻击动画）
 	_compute_attack_anchor_offset()  ## 计算攻击态身体锚点常量偏移（解决 move/attack 画布居中不一致导致的横移）
+	## #8（2026-08-26）：配置了逐帧锚点补偿的兵种才连 frame_changed（对象池复用只连一次）
+	if unit_sprite != null and not _frame_signal_connected \
+			and unit_resource != null and not unit_resource.frame_anchor_offsets.is_empty():
+		unit_sprite.frame_changed.connect(_on_sprite_frame_changed)
+		_frame_signal_connected = true
 	if unit_sprite:  ## 如果精灵节点存在
 		## 有出场动画先播放出场（charge 播完后切 idle 或 move）
 		if anim_charge_frames:
@@ -454,6 +564,7 @@ func load_animation_frames() -> void:  ## 定义加载动画帧的方法
 		if anim_move_frames:  ## 如果有移动动画帧
 			unit_sprite.sprite_frames = anim_move_frames  ## 设置移动动画帧
 			unit_sprite.play("move")  ## 播放移动动画
+			_apply_attack_anchor_offset()  ## 2026-09-11：初始帧即应用身体锚点（信号未必在起始帧触发）
 		elif anim_attack_frames:  ## 否则如果有攻击动画帧
 			unit_sprite.sprite_frames = anim_attack_frames  ## 设置攻击动画帧
 			unit_sprite.play("attack")  ## 播放攻击动画
@@ -479,9 +590,22 @@ func _compute_s1_attack_offsets() -> void:
 
 ## 求单帧纹理「画布中心 - 内容中心」偏移（纹理像素）；无内容时返回零向量
 ## 同时处理 AtlasTexture：取 region 子图扫描（对 AtlasTexture 直接 get_image() 返回 null，会漏算导致偏移恒为 0）
-func _texture_content_center_offset(tex: Texture2D) -> Vector2:
+##
+## #性能（2026-08-27 出兵卡顿根因）：本函数逐像素扫描整张纹理求内容包围盒 ——
+## G5 攻击首帧 500×348 = 17.4 万次 get_pixel，单次实测 48ms。
+## 它被 _compute_attack_anchor_offset 调用，而后者在 load_animation_frames 里
+## **每次 setup（即每次出兵/每次池复用）都跑一遍** → 单只兵出生成本 45~70ms，
+## 竞技场铺 60 只实测耗时 6.9 秒。SpriteFrames 本身有缓存，这个扫描结果却没有。
+## 现加按纹理实例 id 的静态缓存：同一纹理只扫一次，后续 O(1)。
+## 纹理来自 _sprite_frames_cache 里的 SpriteFrames，实例稳定；
+## 控制台改帧图后 clear_sprite_frames_cache() 会连带清本缓存，不会用到过期结果。
+static var _content_center_cache: Dictionary = {}  ## int(纹理实例 id) → Vector2(偏移)
+static func _texture_content_center_offset(tex: Texture2D) -> Vector2:
 	if tex == null:
 		return Vector2.ZERO
+	var cache_key: int = tex.get_instance_id()
+	if _content_center_cache.has(cache_key):
+		return _content_center_cache[cache_key]
 	var img: Image = null
 	if tex is AtlasTexture:
 		var atlas: AtlasTexture = tex as AtlasTexture
@@ -507,10 +631,13 @@ func _texture_content_center_offset(tex: Texture2D) -> Vector2:
 				if y < miny: miny = y
 				if y > maxy: maxy = y
 	if maxx < 0:
+		_content_center_cache[cache_key] = Vector2.ZERO  ## 全透明帧同样缓存，避免反复空扫
 		return Vector2.ZERO
 	var ccx: float = float(minx + maxx) / 2.0
 	var ccy: float = float(miny + maxy) / 2.0
-	return Vector2(float(w) / 2.0 - ccx, float(h) / 2.0 - ccy)
+	var result := Vector2(float(w) / 2.0 - ccx, float(h) / 2.0 - ccy)
+	_content_center_cache[cache_key] = result
+	return result
 
 ## 计算攻击态身体锚点常量偏移（#G2-offset 2026-08-14）
 ## 取 move 首帧与 attack 首帧的「画布中心-内容中心」偏移，按两套动画缩放比折算，
@@ -518,12 +645,17 @@ func _texture_content_center_offset(tex: Texture2D) -> Vector2:
 ## 角色已居中的兵种该值≈0，零影响；不影响 S1（其现版居中导出）。
 func _compute_attack_anchor_offset() -> void:
 	_attack_anchor_offset = Vector2.ZERO
+	_body_anchor_offset_x = 0.0
 	if anim_move_frames == null or anim_attack_frames == null:
 		return
 	if anim_move_frames.get_frame_count("move") <= 0 or anim_attack_frames.get_frame_count("attack") <= 0:
 		return
 	var m: Vector2 = _texture_content_center_offset(anim_move_frames.get_frame_texture("move", 0))
 	var a: Vector2 = _texture_content_center_offset(anim_attack_frames.get_frame_texture("attack", 0))
+	## 2026-09-11 全态身体锚点：move 首帧「画布中心-内容中心」即身体对齐原点所需偏移
+	##（无 offset 时画布中心对齐原点，身体显示在原点 + 内容中心*scale；offset=该值后身体正对原点）。
+	## 与缩放无关（offset 与纹理同处一个 scale 空间），各动画通用。放在早退前，attack 帧异常也能对齐血条。
+	_body_anchor_offset_x = m.x
 	var s_m: float = _compute_anim_scale(anim_move_frames, "move")
 	var s_a: float = _compute_anim_scale(anim_attack_frames, "attack")
 	if s_a <= 0.0:
@@ -535,20 +667,27 @@ func _compute_attack_anchor_offset() -> void:
 ## 把攻击首帧角色内容中心对齐到移动首帧，消除 move↔attack 切换时单位整块横移。
 ## 角色已居中的兵种（含 S1 现版居中导出）_attack_anchor_offset≈0 → 直接清零，零影响。
 ## X 分量受 flip_h 影响（镜像后偏移方向取反）。常量偏移、不逐帧变化 → 不会像 S1 旧补偿那样漂移。
+## #8（2026-08-26）：叠加 unit_resource.frame_anchor_offsets 的逐帧锚点补偿
+## （只有显式配置了该动画的兵种才有值，其余兵种行为完全不变）。
 func _apply_attack_anchor_offset() -> void:
 	if unit_sprite == null:
 		return
-	## #G2-offset（2026-08-14）：攻击态身体锚点常量偏移
-	## 把攻击首帧角色内容中心对齐到移动首帧，消除 move↔attack 切换时单位整块横移。
-	## 角色已居中的兵种（含 S1 现版居中导出）_attack_anchor_offset≈0 → 直接清零，零影响。
-	## X 分量受 flip_h 影响（镜像后偏移方向取反）。常量偏移、不逐帧变化 → 不会像 S1 旧补偿那样漂移。
-	if _attack_anchor_offset == Vector2.ZERO:
+	var per_frame_x: float = 0.0
+	if unit_resource != null and unit_resource.has_frame_anchor_offsets(unit_sprite.animation):
+		per_frame_x = unit_resource.get_frame_anchor_offset_x(unit_sprite.animation, unit_sprite.frame)
+	## 2026-09-11：全态身体锚点偏移对所有动画生效（角色偏画布一侧的兵种身体对齐原点/血条）；
+	## 攻击态再叠加原 #G2-offset 常量偏移（attack 首帧身体对齐 move 姿态）。均只动 X 分量以外的
+	## Y 保持原语义（attack 锚点 Y），身体锚点仅 X（血条水平居中问题）。
+	var base: Vector2 = Vector2(_body_anchor_offset_x, 0.0)
+	if unit_sprite.animation == "attack":
+		base += _attack_anchor_offset
+	if base == Vector2.ZERO and is_zero_approx(per_frame_x):
 		unit_sprite.offset = Vector2.ZERO
 		return
 	var fx: float = -1.0 if unit_sprite.flip_h else 1.0
-	unit_sprite.offset = Vector2(_attack_anchor_offset.x * fx, _attack_anchor_offset.y)
+	unit_sprite.offset = Vector2((base.x + per_frame_x) * fx, base.y)
 
-## frame_changed 回调：逐帧刷新攻击偏移（S1 旧逐帧补偿未连接信号，此处保留入口）
+## frame_changed 回调：逐帧刷新锚点偏移（攻击态常量偏移 + #8 逐帧身体锚点补偿）
 func _on_sprite_frame_changed() -> void:
 	_apply_attack_anchor_offset()
 
@@ -566,6 +705,7 @@ func _load_cached_frames(unit_id: String, anim_name: String) -> SpriteFrames:  #
 		"attack": ANIM_ATTACK_FILE,
 		"attack_alt": "",  ## 备用攻击动画：文件名取 unit_resource.attack_alt_frames
 		"sprint": ANIM_SPRINT_FILE,
+		"walk": ANIM_WALK_FILE,
 		"idle": ANIM_IDLE_FILE,
 		"charge": ANIM_CHARGE_FILE,
 		"death": ANIM_DEATH_FILE,
@@ -588,14 +728,22 @@ func _load_cached_frames(unit_id: String, anim_name: String) -> SpriteFrames:  #
 func _on_charge_finished() -> void:
 	if unit_sprite == null:
 		return
+	## 过期回调防御（2026-09-11 蓝女巫卡死根因）：charge 为循环动画（loop:true）时
+	## animation_finished 永不触发，one-shot 连接一直挂着，直到某次非循环动画
+	##（如攻击动画）播完才触发 —— 旧逻辑会把精灵切到 idle 循环，攻击周期的
+	## is_playing() 完成判定永不为真 → S1 攻击一次后卡死原地。只认 charge 自身播完。
+	if unit_sprite.animation != "charge":
+		return
 	if anim_idle_frames:
 		unit_sprite.sprite_frames = anim_idle_frames
 		unit_sprite.play("idle")
 		_apply_anim_scale(anim_idle_frames, "idle")
+		_apply_attack_anchor_offset()  ## 2026-09-11：切动画后应用身体锚点（未配置兵种为 no-op）
 	elif anim_move_frames:
 		unit_sprite.sprite_frames = anim_move_frames
 		unit_sprite.play("move")
 		_apply_anim_scale(anim_move_frames, "move")
+		_apply_attack_anchor_offset()  ## 2026-09-11：切动画后应用身体锚点（未配置兵种为 no-op）
 
 func play_anim(anim_name: String, force: bool = false) -> void:  ## 定义播放动画的方法
 	if unit_sprite == null:  ## 如果精灵节点不存在
@@ -614,15 +762,27 @@ func play_anim(anim_name: String, force: bool = false) -> void:  ## 定义播放
 				unit_sprite.play("move")  ## 播放移动动画
 			else:  ## 否则
 				unit_sprite.stop()  ## 停止动画
+		"walk":  ## 行走动画（#后摇 2026-09-11：后摇动画优先级 待机 > 行走 > 奔跑 的第二档）
+			unit_sprite.speed_scale = _get_anim_speed("walk" if anim_walk_frames else "move")  ## #4：按实际播放的动画取倍率（walk 与 move 共用倍率）
+			if anim_walk_frames:  ## 如果有行走动画帧
+				unit_sprite.sprite_frames = anim_walk_frames  ## 设置行走动画帧
+				_apply_anim_scale(anim_walk_frames, "walk")  ## 按基准高度统一显示尺寸
+				unit_sprite.play("walk")  ## 播放行走动画
+			elif anim_move_frames:  ## 否则回退到移动动画
+				unit_sprite.sprite_frames = anim_move_frames  ## 设置移动动画帧
+				_apply_anim_scale(anim_move_frames, "move")  ## 按基准高度统一显示尺寸
+				unit_sprite.play("move")  ## 播放移动动画
+			else:  ## 否则
+				unit_sprite.stop()  ## 停止动画
 		"attack":  ## 攻击动画
 			## #双攻击（凑企鹅 Y4 等）：attack_anim_toggle 为 true 且存在备用攻击动画时，播备用攻击动画
 			var _frames: SpriteFrames = anim_attack_frames_alt if (attack_anim_toggle and anim_attack_frames_alt != null) else anim_attack_frames
 			if _frames:  ## 如果有攻击动画帧
 				unit_sprite.sprite_frames = _frames  ## 设置攻击动画帧
 				_apply_anim_scale(_frames, "attack")  ## 按基准高度统一显示尺寸
-				_apply_attack_speed_scale()  ## 应用攻击动画速度
-				## 单次攻击不自动循环：彻底消除「多连挥」，攻击时长与攻击周期解耦，
-				## 控制台 attack_anim_speed 倍率原样生效（#回归修复 2026-08-15）
+				_apply_attack_anim_speed()  ## 应用攻击动画速度
+				## 单次攻击不自动循环：攻击动画播完即结束本轮动画，
+				## 后摇由攻击状态单独计时；attack_anim_speed 只影响视觉播放速度。
 				_frames.set_animation_loop("attack", false)
 				unit_sprite.play("attack")  ## 播放攻击动画（单次）
 				_apply_attack_anchor_offset()  ## 攻击态立即对第 0 帧定位（信号未必在起始帧触发）
@@ -668,17 +828,32 @@ func play_anim(anim_name: String, force: bool = false) -> void:  ## 定义播放
 	## 不同动画有独立的 flip_override（如 N3 attack_flip_override=1），不重新应用会继承上一动画的 flip_h，
 	## 导致红方攻击时朝左（倒着攻击）。move→attack 切换时尤其明显。
 	_apply_anim_flip()
+	## #8（2026-08-26）：切换动画后按新动画的当前帧重算锚点偏移
+	## （非攻击动画在上方被清零，配置了逐帧补偿的兵种需要在这里补回来）
+	## 2026-09-11：身体锚点偏移不再依赖 frame_anchor_offsets 配置，所有兵种切换动画后统一重算
+	##（内部对全零兵种是 no-op）。
+	_apply_attack_anchor_offset()
 
-## 后摇站定动画（2026-08-21 用户拍板）：后摇站定时段（近战范围内站定 / 远程原地不动）按优先级切换：
+## 后摇动画（2026-09-11 用户拍板）：所有后摇播放点统一按优先级选动画
 ##   1. 有待机动画 → 播待机
-##   2. 无待机动画 → 播奔跑
-func play_backswing_stand() -> void:
+##   2. 无待机动画 → 播行走
+##   3. 无行走动画 → 播奔跑
+## 注意：此规则只用于「站定/无位移」的后摇段；后摇期间需要跑动追击或后撤时仍播奔跑（动画必须与位移匹配）。
+func play_backswing_anim() -> void:
 	if unit_sprite == null:
 		return
 	if anim_idle_frames != null:
 		play_anim("idle")  ## 有待机动画播放待机
 		return
-	play_anim("move")  ## 无待机动画播放奔跑
+	if anim_walk_frames != null:
+		play_anim("walk")  ## 无待机动画播放行走
+		return
+	play_anim("move")  ## 无待机/行走动画播放奔跑
+
+## 后摇站定动画（2026-08-21 用户拍板，2026-09-11 补入行走档）：后摇站定时段
+## （近战范围内站定 / 远程原地不动 / 攻击水晶后摇）按 待机 > 行走 > 奔跑 选动画。
+func play_backswing_stand() -> void:
+	play_backswing_anim()
 
 ## 竞技场站定定格（#竞技场 2026-08-24 用户拍板）
 ## 和平模式站着不动 / 战争模式无目标站着不动时，一律定格在行走动画第一帧；
@@ -704,6 +879,9 @@ func play_arena_stand() -> void:
 	unit_sprite.frame = 0
 	unit_sprite.stop()  ## 定格第一帧
 	_apply_anim_flip()
+	## #8（2026-08-26）：定格帧同样应用逐帧锚点补偿（未配置的兵种为 no-op）
+	## 2026-09-11：身体锚点偏移也在此应用（角色偏画布一侧的兵种定格帧身体对齐原点）
+	_apply_attack_anchor_offset()
 
 ## 清空动画缩放缓存（控制台修改显示尺寸后调用，使新尺寸立即生效）
 static func clear_anim_scale_cache() -> void:  ## 定义清空缩放缓存的方法
@@ -714,6 +892,9 @@ static func clear_anim_scale_cache() -> void:  ## 定义清空缩放缓存的方
 ## 仍指向旧实例（编辑器同进程运行），不清缓存则战斗中 load 到旧帧 → 调整不生效（#6）
 static func clear_sprite_frames_cache() -> void:
 	_sprite_frames_cache.clear()
+	## #性能（2026-08-27）：帧内容包围盒缓存按纹理实例 id 索引，帧图换新后旧 id 失效，
+	## 必须一并清掉，否则新帧会沿用旧帧的锚点偏移。
+	_content_center_cache.clear()
 
 ## 预热指定兵种的 SpriteFrames 缓存（2026-08-19 对象池改造）
 ## 进入局内前把该兵种各动画的 .tres 预先 load 进 _sprite_frames_cache，
@@ -727,6 +908,7 @@ static func prewarm_sprite_frames(unit_id: String, attack_alt_file: String = "")
 		"move": ANIM_MOVE_FILE,
 		"attack": ANIM_ATTACK_FILE,
 		"sprint": ANIM_SPRINT_FILE,
+		"walk": ANIM_WALK_FILE,
 		"idle": ANIM_IDLE_FILE,
 		"charge": ANIM_CHARGE_FILE,
 		"death": ANIM_DEATH_FILE,
@@ -748,7 +930,24 @@ static func prewarm_sprite_frames(unit_id: String, attack_alt_file: String = "")
 		if frames != null:
 			_sprite_frames_cache[cache_key] = frames
 			loaded += 1
+	## #性能（2026-08-27）：顺带预热 move/attack 首帧的内容包围盒。
+	## _compute_attack_anchor_offset 每次 setup 都要这两个值，而逐像素扫描 500×348
+	## 纹理单帧就要 ~48ms —— 不预热的话这笔开销会落在「第一次出该兵种」那一帧上。
+	## 预热在加载框内一次付清，池复用与后续出兵全部命中缓存。
+	_prewarm_anchor_textures(unit_id)
 	return loaded
+
+## 预热指定兵种 move/attack 首帧的内容包围盒缓存（#性能 2026-08-27）
+## 只扫首帧：_compute_attack_anchor_offset 只用首帧，逐帧补偿走 UnitResource 的显式配置表。
+static func _prewarm_anchor_textures(unit_id: String) -> void:
+	for anim_name in ["move", "attack"]:
+		var frames: Variant = _sprite_frames_cache.get(unit_id + "_" + anim_name)
+		if frames == null:
+			continue
+		var sf: SpriteFrames = frames as SpriteFrames
+		if sf == null or not sf.has_animation(anim_name) or sf.get_frame_count(anim_name) <= 0:
+			continue
+		_texture_content_center_offset(sf.get_frame_texture(anim_name, 0))
 
 ## 根据纹理尺寸，动态计算并设置当前动画的 scale
 ## 完全复刻控制台（debug_units.gd::_apply_preview_scale）的算法：
@@ -765,6 +964,9 @@ func _apply_anim_scale(frames: SpriteFrames, anim_name: String) -> void:  ## 定
 	## 基地单位额外放大 3 倍（替代水晶的视觉存在感）
 	if is_base_unit:
 		unit_sprite.scale *= 3.0
+	## 肉鸽 Boss 节点敌军额外放大（visual_scale_mult 默认 1.0，不影响其他模式）
+	if visual_scale_mult != 1.0:
+		unit_sprite.scale *= visual_scale_mult
 
 ## 计算指定动画的缩放系数，与控制台预览完全一致
 ## 取首帧纹理尺寸，按「目标宽/高」双向约束取较小值，保证画面不超出配置框
@@ -906,34 +1108,19 @@ func _get_anim_target_width(anim_name: String) -> float:  ## 定义获取动画�
 	return unit_resource.display_width if unit_resource.display_width > 0.0 else UNIFIED_DISPLAY_HEIGHT
 
 ## 取指定动画在控制台里配置的播放速度倍率（#4）
-## 与攻速（attack_speed，攻击间隔秒数）无关，只影响「一次动画播多快」
+## 各动画倍率只影响对应动画的视觉播放速度。
 func _get_anim_speed(anim_name: String) -> float:
 	if unit_resource == null:
 		return 1.0
 	return unit_resource.get_anim_speed(anim_name)
 
-## 应用攻击动画的播放速度（#4）
-## - attack_anim_sync_interval = true：动画拉伸到与攻击间隔等长（攻速加成同步影响动画，
-##   避免「攻速加成生效但挥砍动画还是原速」的表里不一，B-攻速一致性），再乘控制台倍率
-## - false：与攻速彻底解耦，只按控制台配置的 attack_anim_speed 播放
-func _apply_attack_speed_scale() -> void:  ## 定义应用攻击速度的方法
-	if unit_resource == null or unit_sprite == null:  ## 如果缺少必要资源
-		return  ## 直接返回
-	var _cur_frames: SpriteFrames = anim_attack_frames_alt if (attack_anim_toggle and anim_attack_frames_alt != null) else anim_attack_frames
-	if _cur_frames == null:  ## 当前攻击动画帧缺失
-		return  ## 直接返回
-	var user_scale: float = _get_anim_speed("attack")  ## 控制台配置的播放倍率
-	if not unit_resource.attack_anim_sync_interval:  ## 不跟随攻速：纯播放倍率
-		unit_sprite.speed_scale = user_scale
+## 应用攻击动画的播放速度（#4）。
+## 只使用 attack_anim_speed；攻击代码和 attack_speed 不会改变动画播放倍率。
+func _apply_attack_anim_speed() -> void:  ## 仅应用攻击动画自身的播放倍率
+	if unit_resource == null or unit_sprite == null:
 		return
-	var frame_count: int = _cur_frames.get_frame_count("attack")  ## 获取攻击动画总帧数
-	var anim_speed: float = _cur_frames.get_animation_speed("attack")  ## 获取动画原始 FPS
-	var interval: float = get_attack_interval()  ## 实际攻击周期（秒，含加成）
-	if frame_count <= 0 or anim_speed <= 0.0 or interval <= 0.0:  ## 如果参数无效
-		unit_sprite.speed_scale = user_scale  ## 回落到纯播放倍率
-		return  ## 直接返回
-	var anim_duration: float = frame_count / anim_speed  ## 计算动画原始时长
-	unit_sprite.speed_scale = (anim_duration / interval) * user_scale  ## 拉伸到攻击间隔后再乘播放倍率
+	## 攻击动画速度是纯视觉参数，不再由旧攻击间隔拉伸。
+	unit_sprite.speed_scale = _get_anim_speed("attack")
 
 func set_facing_direction(direction: float) -> void:  ## 定义设置朝向的方法
 	if direction > 0.0:  ## 如果方向为正（向右）
@@ -986,7 +1173,9 @@ func _apply_anim_flip() -> void:
 		unit_sprite.flip_h = base_flip
 	## #G2-offset：flip_h 变更后立即刷新攻击态锚点偏移（offset.x 依赖 flip_h 方向），
 	## 否则 play_anim 里先设 offset、后应用 flip，攻击首帧偏移方向会短暂错误
-	if unit_sprite.animation == "attack":
+	## #8（2026-08-26）：配置了逐帧锚点补偿的兵种，所有动画都要跟着 flip 刷新
+	if unit_sprite.animation == "attack" \
+			or (unit_resource != null and not unit_resource.frame_anchor_offsets.is_empty()):
 		_apply_attack_anchor_offset()
 
 ## 设置护甲条的灰色样式（背景深灰，填充灰色）
@@ -1321,7 +1510,11 @@ func _process(delta: float) -> void:  ## 重写 _process 方法
 		var _mouse_dist: float = get_global_mouse_position().distance_to(global_position)
 		_info_panel.visible = _mouse_dist < 90.0
 	## 远程单位每帧请求重绘以显示射程圆圈
-	if unit_resource != null and unit_resource.is_ranged:
+	## #性能（2026-08-27）：加 show_attack_ranges 守卫。_draw() 在该开关关闭时第一行就 return，
+	## 旧代码却仍每帧给每个远程兵排一次重绘 → 白付 CanvasItem 重绘调度成本。
+	## 竞技场是 DevMode 专属入口且 battlefield_mode._ready 直接开 show_attack_ranges，
+	## 300 兵时等于每帧 300 次 64 段 draw_arc。
+	if show_attack_ranges and unit_resource != null and unit_resource.is_ranged:
 		queue_redraw()
 	## 红蓝判定框开启时每帧重绘，确保判定框始终跟随单位
 	## （避免被碰撞挤压或切换状态时，判定框残留在旧位置不更新）
@@ -1470,9 +1663,11 @@ func apply_crystal_look(box_size: float, box_color: Color) -> void:
 		## ① tween_property 用绝对值 TAU 作目标，首圈 0→TAU 正常，后续循环 TAU→TAU 无变化（视觉停止）；
 		## ② apply_crystal_look 被多次调用时旧 tween 未杀掉，多个 tween 竞争同属性。
 		## 修复：杀掉旧 tween；红方旋转改 as_relative()，每圈 +TAU 实现持续旋转。
-		var old_tween: Variant = crystal_sprite_final.get_meta("crystal_tween", null)
-		if old_tween is Tween and (old_tween as Tween).is_valid():
-			(old_tween as Tween).kill()
+		## get_meta 的默认值传 null 仍会报「does not have any meta values」错误，必须先 has_meta 判定。
+		if crystal_sprite_final.has_meta("crystal_tween"):
+			var old_tween: Variant = crystal_sprite_final.get_meta("crystal_tween")
+			if old_tween is Tween and (old_tween as Tween).is_valid():
+				(old_tween as Tween).kill()
 		var crystal_tween := create_tween().set_loops()
 		crystal_sprite_final.set_meta("crystal_tween", crystal_tween)
 		if team == 0:
@@ -1561,9 +1756,9 @@ func _create_info_panel() -> void:
 		if battlefield_node and battlefield_node.get_parent() and battlefield_node.get_parent().has_method("_unlock_camera"):
 			battlefield_node.get_parent()._unlock_camera()
 	)
-	## 静态属性标签（名字、伤害、攻速、移速、射程、造价）
+	## 静态属性标签（名字、伤害、后摇、移速、射程、造价）
 	var info_text = tr("UNIT_INFO_STATS") % [
-		unit_resource.get_display_name(), unit_resource.damage, unit_resource.attack_speed,
+		unit_resource.get_display_name(), unit_resource.damage, get_attack_recovery_duration(),
 		unit_resource.move_speed, unit_resource.attack_range, unit_resource.cost]
 	var static_label = Label.new()
 	static_label.text = info_text
@@ -1652,6 +1847,14 @@ func _draw() -> void:  ## 重写 _draw 方法
 		var atk_offset_y: float = unit_resource.attack_box_offset_y
 		var atk_rect := Rect2(atk_offset_x - atk_w * 0.5, atk_offset_y - atk_h * 0.5, atk_w, atk_h)
 		draw_rect(atk_rect, Color(1.0, 0.2, 0.2, 0.8), false, 1.5)
+
+## #性能（2026-08-27）：状态机每帧无条件调 unit.queue_redraw() 的统一替代入口。
+## _draw() 只在 show_attack_ranges / show_hitboxes 开启时才画东西（其余情况第一行就 return），
+## 所以两个开关全关时重绘请求纯属浪费 —— 300 兵 × 60FPS = 每秒 1.8 万次无效重绘调度。
+## 调试开关开启时行为与旧代码完全一致（照常每帧重绘，判定框/射程圈仍跟随单位）。
+func request_debug_redraw() -> void:
+	if show_attack_ranges or show_hitboxes:
+		queue_redraw()
 
 ## 检测攻击动画是否到达配置的命中帧，到达则发出 attack_animation_hit 信号
 ## 支持两种模式：
@@ -1879,6 +2082,11 @@ func _clamp_to_field() -> void:  ## 定义战场边界钳制方法
 	if is_base_unit:  ## 基地单位（水晶）位置固定，不参与钳制
 		return  ## 直接返回
 	## 基础兜底：FIELD 边界（防止极端异常位移直接飞出战场）
+	## 肉鸽：敌军刚从屏幕外（|x| > FIELD_X_MAX）走入战场期间不做钳制，
+	## 否则出生点会被立刻拉回边界内，「屏幕外进场」失效且左侧出生者会被推到水晶脸上。
+	if RoguelikeManager.is_active and team == 1 and absf(global_position.x) > Constants.FIELD_X_MAX:
+		global_position.y = clampf(global_position.y, Constants.FIELD_Y_MIN, Constants.FIELD_Y_MAX)
+		return
 	global_position.x = clampf(global_position.x, Constants.FIELD_X_MIN, Constants.FIELD_X_MAX)  ## 钳制 X
 	global_position.y = clampf(global_position.y, Constants.FIELD_Y_MIN, Constants.FIELD_Y_MAX)  ## 钳制 Y
 	## #BugA：水晶间钳制 + 扣精灵半宽（仅敌方有基地时生效）。
@@ -1887,6 +2095,10 @@ func _clamp_to_field() -> void:  ## 定义战场边界钳制方法
 	## 新逻辑：X 限制在 [己方水晶+半宽, 敌方水晶−半宽] 区间，单位到不了任何水晶后方。
 	## 肉鸽无敌方基地（has_base(1)=false）时不额外钳制，只保留 FIELD ±600 兜底——
 	## 红方守卫的驻守锚点在水晶后方（_guard_anchor 可到 -440），加下限会把守卫卡死在水晶前方原地打转。
+	## 肉鸽敌方（team 1）同样跳过：水晶在 x=0，钳到 [+hw, 576-hw] 会把左半场整个封死，
+	## 左侧出生的敌人会被瞬移到水晶旁边贴脸拆晶。
+	if RoguelikeManager.is_active and team == 1:
+		return
 	var unit_container: Node = get_parent()  ## 单位容器节点
 	var battlefield: Node = unit_container.get_parent() if unit_container != null else null  ## 战场节点
 	if battlefield != null and battlefield.has_method("has_base") and battlefield.has_method("get_base_position") \
@@ -1909,27 +2121,44 @@ func _fallback_move(delta: float) -> void:  ## 定义备用移动方法
 ## #BugB：旧实现遍历 detection_area.get_overlapping_bodies()，但 DetectionArea 的 collision_mask
 ## 只覆盖敌方层（MASK_DETECT_FOR_RED/BLUE），友军永远不会出现在结果里 → 推力恒为 ZERO，是死代码。
 ## 改为遍历 get_parent()（UnitContainer）兄弟节点——项目既定模式，与 get_children 寻敌一致。
+## #性能（2026-08-27）：改走共享空间索引的邻格盒查询。推力只在 SEPARATION_RADIUS(40px) 内非零，
+## 远于该半径的友军对结果零贡献（compute_separation_push 返回 ZERO），因此只查半径盒覆盖的格
+## 与全容器遍历**结果完全等价**。300 兵实测由 48.3ms 降至亚毫秒级。
 func _compute_ally_separation() -> Vector2:  ## 定义友军分离计算方法
 	if not is_instance_valid(self):  ## 单位可能已被释放，直接返回避免 Nil 访问
 		return Vector2.ZERO  ## 直接返回零向量
 	## 分离推力节流（2026-08-18）：与索敌共用 0.1s 窗口，中间帧返回缓存推力。
 	## 分离是软性防重叠（物理碰撞仍每帧兜底），0.1s 推力滞后在密集阵型下无感知差异，
-	## 但能把「每帧全扫友军 O(N)」降到 10 次/秒，大量单位时显著降 CPU。
+	## 但能把「每帧全扫友军」降到 10 次/秒，大量单位时显著降 CPU。
 	if not _pathfind_ready():
 		return _cached_separation  ## 返回缓存推力
 	var container: Node = get_parent()  ## 单位容器（同阵营单位互为兄弟节点）
 	if container == null:  ## 容器不存在（未入树/已被移除）
 		_cached_separation = Vector2.ZERO
 		return _cached_separation  ## 直接返回零向量
+	_ensure_spatial_index(container)  ## 确保本帧索引已就绪（与索敌共用，一帧只建一次）
 	var push := Vector2.ZERO  ## 累计推力（带距离权重，未归一化）
-	for body in container.get_children():  ## 遍历同容器兄弟节点
-		## 跳过自身、非单位、已销毁、已死亡、非同阵营的单位
-		if body == self or not (body is Unit) or not is_instance_valid(body) or body.is_dead or body.team != team:  ## 过滤无效/异阵营单位
+	## #3（2026-08-26）：己方「前排远程 ↔ 后排近战」互不产生分离推力。
+	## 物理掩码已让同阵营互相穿透，但分离推力仍会让一排远程把后面的近战顶住/挤开，
+	## 表现为前排远程挡住后排近战推进。跨类型（远程↔近战）直接跳过，同类型仍保留柔性散开。
+	var self_ranged: bool = unit_resource != null and unit_resource.is_ranged
+	var sep_r2: float = SEPARATION_RADIUS * SEPARATION_RADIUS  ## 分离半径平方（先用平方筛掉远处友军）
+	for body in _query_index_box(global_position, SEPARATION_RADIUS):  ## 只遍历分离半径覆盖的邻格
+		## 跳过自身、已释放、非同阵营的单位（非 Unit / is_dead 已在建索引时过滤）
+		if body == self or not is_instance_valid(body) or body.team != team:  ## 过滤无效/异阵营单位
 			continue
 		var offset: Vector2 = global_position - body.global_position  ## 自身相对友军的偏移
-		var d: float = offset.length()  ## 与友军距离
+		## #性能（2026-08-27）：先用距离平方剪枝。格盒是「外接」分离圆的，落在盒内但圆外的友军
+		## compute_separation_push 必返回 ZERO，对结果零贡献；先比平方可省掉 sqrt 与函数调用
+		## （人堆里每个单位的候选可达上百个，绝大多数都在 40px 外）。结果完全等价。
+		var d2: float = offset.length_squared()  ## 距离平方
+		if d2 >= sep_r2:  ## 超出分离半径：推力必为 0，直接跳过
+			continue
+		var other_ranged: bool = body.unit_resource != null and body.unit_resource.is_ranged
+		if other_ranged != self_ranged:  ## 同阵营跨类型（远程↔近战）：无碰撞体积、无分离推力
+			continue
 		## 复用纯函数（与单元测试同一份实现）：按 (R−d)/R 线性分级，越近推得越强
-		push += compute_separation_push(offset, d, SEPARATION_RADIUS, 1.0)  ## 单友军推力（强度先归一，末尾统一限幅）
+		push += compute_separation_push(offset, sqrt(d2), SEPARATION_RADIUS, 1.0)  ## 单友军推力（强度先归一，末尾统一限幅）
 	if push.length() > 0.0:  ## 有推力时归一化并按权重强度限幅（不超单倍强度，防分离力把合速度顶飞）
 		## 单侧较远友军（weight 小）→ 推力小；多侧近距围堵 → 封顶 SEPARATION_STRENGTH
 		push = push.normalized() * minf(SEPARATION_STRENGTH, push.length() * SEPARATION_STRENGTH)  ## 限幅
@@ -1990,6 +2219,43 @@ func get_chase_leash_px() -> float:  ## 定义追击牵引半径方法
 func get_idle_state_name() -> String:  ## 定义默认空闲状态名方法
 	return "guard" if is_guard_mode() else "move"
 
+## ── 框选攻击锁定（#框选 2026-09-04）───────────────────────────
+## 下达攻击锁定令：改打指定敌人并立刻切回默认状态由其接管接近/交战。
+## 攻击令与移动令互斥 —— 清掉 order_pos 与站定标记，否则 state_move 会先执行移动令。
+## enemy: 玩家点选的敌方单位
+func set_forced_target(enemy: Unit) -> void:  ## 定义下达攻击锁定令方法
+	if enemy == null or not is_instance_valid(enemy) or enemy.is_dead or enemy.team == team:
+		return
+	forced_target = enemy
+	order_pos = Vector2.INF
+	hold_position = false
+	_order_stuck_timer = 0.0
+	target = enemy
+	## 切回默认状态（move 推进 / guard 护晶）：两者开头都有攻击锁定分支，
+	## 会自行判断「进射程就打、没进就全向追」，比在此直接切 attack 更稳（远程超射程不会来回抖）
+	change_state(get_idle_state_name())
+
+## 清除攻击锁定令（下移动令 / 玩家取消时调用）；不动 target，交给状态机自然重新索敌
+func clear_forced_target() -> void:  ## 定义清除攻击锁定令方法
+	forced_target = null
+
+## 取当前有效的强制攻击目标；已阵亡 / 已回收 / 已变为友军时顺手清空并返回 null
+## 状态机每帧调用，锁定目标的生命周期由此统一收口
+## 返回值: 有效的强制目标，或 null
+func sync_forced_target() -> Unit:  ## 定义强制目标校验方法
+	if forced_target == null:
+		return null
+	if not is_instance_valid(forced_target) or forced_target.is_dead or forced_target.team == team:
+		forced_target = null
+		return null
+	return forced_target
+
+## 当前是否正锁定在玩家指定的目标上（用于跳过自动换锁与牵引半径回防）
+## 返回值: true 表示 target 就是玩家指定的强制目标
+func is_locked_on_forced_target() -> bool:  ## 定义锁定态判定方法
+	var forced: Unit = sync_forced_target()
+	return forced != null and target == forced
+
 ## 切换单位状态
 ## state_name: 目标状态名称（"idle"/"move"/"guard"/"attack"/"die"）
 func change_state(state_name: String) -> void:  ## 定义切换状态的方法
@@ -2038,7 +2304,11 @@ func is_target_out_of_attack_range(target_pos: Vector2, tolerance_px: float = 0.
 ## 索敌节流间隔（秒）：奔跑/后摇期间每 0.1s 最多真正扫描一次敌方列表（2026-08-18 用户拍板 0.1s）
 const PATHFIND_INTERVAL: float = 0.1
 ## 索敌节流累计计时器
-var _pathfind_accum: float = 0.0
+## #性能（2026-08-27）：初值改为在 [0, PATHFIND_INTERVAL) 内随机（原为 0.0）。
+## 旧行为下同一帧铺出来的一批兵（竞技场框选铺兵、清场后批量刷兵）节流相位完全对齐，
+## 每 0.1s 会在同一帧集体放行索敌+分离 → 表现为周期性顿卡而非均匀负载。
+## 随机化初相位把这批扫描摊到整个窗口的各帧上，峰值帧成本降到 1/6（60FPS × 0.1s）。
+var _pathfind_accum: float = randf() * PATHFIND_INTERVAL
 ## 索敌节流「本帧结论」缓存（2026-08-20）：记录上次算出放行结论的物理帧序号与结论值。
 ## 作用是让同一物理帧内的多个调用点（索敌 / 平分锁敌 / 友军分离）共享同一判定，
 ## 避免先调用者消费掉配额导致后调用者被迫用旧缓存 —— 那正是「进射程前突然卡一下」的根因。
@@ -2070,16 +2340,108 @@ func _pathfind_ready() -> bool:
 	_pathfind_gate_frame = frame
 	_pathfind_gate_value = _pathfind_accum >= PATHFIND_INTERVAL
 	if _pathfind_gate_value:
-		_pathfind_accum = 0.0  ## 本帧放行，重新开始累计（一帧只清零一次）
+		## #性能（2026-08-27 二次修）：放行后不再清零到 0.0，而是清到一个小随机余量。
+		## 只随机化「初相位」是不够的 —— 任何一帧里同时放行的一批兵，清零后相位就被
+		## 强行对齐，此后每 0.1s 永远一起放行，队伍越挤合并得越快（实测混战 300 兵有
+		## 单帧 202 个同时放行，帧耗时因此周期性尖刺）。放行后注入 [0, 25%) 的随机余量，
+		## 下次放行时刻落在 [0.75, 1.0] × 间隔内，抱团相位会持续自发散开；
+		## 节流窗口仍恒 ≤ PATHFIND_INTERVAL，索敌频率不会变慢。
+		_pathfind_accum = randf() * PATHFIND_INTERVAL * 0.25
 	return _pathfind_gate_value
 
+## ── 空间索引构建与查询（#性能 2026-08-27）─────────────────────────────
+## 把「每个单位各自遍历全场」换成「每帧全场只扫一次、所有单位共享」。
+## container: UnitContainer 节点；确保本物理帧的索引已就绪（幂等，重复调用零成本）
+static func _ensure_spatial_index(container: Node) -> void:
+	var frame: int = Engine.get_physics_frames()
+	var cid: int = container.get_instance_id()
+	## 同帧同容器 → 索引已就绪，直接复用（一帧内第 2~N 个查询者走这条）
+	if _index_frame == frame and _index_container_id == cid:
+		return
+	_index_frame = frame
+	_index_container_id = cid
+	_index_cells.clear()
+	_index_locks.clear()
+	_index_team_cells.clear()
+	var first: bool = true
+	for body in container.get_children():
+		## 过滤口径与旧实现一致：非 Unit / 已释放 / 已死亡一律不入索引。
+		## 基地单位**入索引**（友军分离旧实现不排除它），由各查询自行按需跳过。
+		if not (body is Unit) or not is_instance_valid(body) or body.is_dead:
+			continue
+		var unit := body as Unit
+		var cell := Vector2i(
+			int(floor(unit.global_position.x / INDEX_CELL_SIZE)),
+			int(floor(unit.global_position.y / INDEX_CELL_SIZE)))
+		if _index_cells.has(cell):
+			_index_cells[cell].append(unit)
+		else:
+			_index_cells[cell] = [unit]
+		## 各阵营的占用格集合（索敌口径：非基地单位才是可索敌目标）
+		if not unit.is_base_unit:
+			var tc: Dictionary = _index_team_cells.get(unit.team, {})
+			tc[cell] = true
+			_index_team_cells[unit.team] = tc
+		## 记录格坐标包围盒，供环形扩散判定「已无更多格可查」提前收敛
+		if first:
+			_index_min_cell = cell
+			_index_max_cell = cell
+			first = false
+		else:
+			_index_min_cell.x = mini(_index_min_cell.x, cell.x)
+			_index_min_cell.y = mini(_index_min_cell.y, cell.y)
+			_index_max_cell.x = maxi(_index_max_cell.x, cell.x)
+			_index_max_cell.y = maxi(_index_max_cell.y, cell.y)
+		## 锁定数预统计（替代 find_best_distributed_target 里的 O(N) 内层遍历）：
+		## 只统计「己方远程且持有有效 target」，键为被锁目标、值为按阵营分组的计数。
+		## #25 的射程校验（只统计「真正够得着该目标」的远程）在此一并完成 —— 该校验是
+		## 「ally 与 ally 自己的 target 之间」的距离判定，纯属 ally 自身属性，故可预统计，
+		## 与旧内层遍历的判定结果逐条等价（旧代码在 ally.target == enemy 时才比距离，
+		## 此时 enemy 就是 ally.target，两者是同一个距离）。
+		if unit.unit_resource != null and unit.unit_resource.is_ranged \
+				and unit.target != null and is_instance_valid(unit.target) and not unit.target.is_dead:
+			if unit.is_target_in_attack_range(unit.target.global_position, 10.0):
+				var by_team: Dictionary = _index_locks.get(unit.target, {})
+				by_team[unit.team] = int(by_team.get(unit.team, 0)) + 1
+				_index_locks[unit.target] = by_team
+	if first:
+		## 容器内无有效单位：包围盒退化为原点，环形扩散会立刻收敛
+		_index_min_cell = Vector2i.ZERO
+		_index_max_cell = Vector2i.ZERO
+
+## 收集以 center 为中心、radius 为半径的轴对齐盒所覆盖格内的全部单位
+## 只做格级筛选，精确距离由调用方判定（与旧实现的 distance_to 口径完全一致）
+static func _query_index_box(center: Vector2, radius: float) -> Array:
+	var result: Array = []
+	var min_cx: int = int(floor((center.x - radius) / INDEX_CELL_SIZE))
+	var max_cx: int = int(floor((center.x + radius) / INDEX_CELL_SIZE))
+	var min_cy: int = int(floor((center.y - radius) / INDEX_CELL_SIZE))
+	var max_cy: int = int(floor((center.y + radius) / INDEX_CELL_SIZE))
+	## 与索引包围盒求交，避免半径极大（如 INF 兜底后的钳制值）时空转海量格
+	min_cx = maxi(min_cx, _index_min_cell.x)
+	max_cx = mini(max_cx, _index_max_cell.x)
+	min_cy = maxi(min_cy, _index_min_cell.y)
+	max_cy = mini(max_cy, _index_max_cell.y)
+	for cx in range(min_cx, max_cx + 1):
+		for cy in range(min_cy, max_cy + 1):
+			var bucket: Variant = _index_cells.get(Vector2i(cx, cy))
+			if bucket != null:
+				result.append_array(bucket)
+	return result
+
 ## 在指定半径内查找最近的敌方单位
-## 直接扫描 UnitContainer 中的所有单位，不依赖 Area2D 物理检测（更可靠）
 ## 使用 2D 真实距离（等视角多线战场需要考虑 Y 轴）
 ## max_range_px: 索敌半径上限（像素），传 INF 表示全场索敌
 ## 返回值: 半径内最近的敌方单位，如果没有则返回 null
 ## 2026-08-18 性能优化：索敌节流 —— 每 PATHFIND_INTERVAL 秒最多真正扫描一次，
-## 节流窗口内返回上次扫描结果（target 缓存），避免大量单位每帧 O(N) 遍历。
+## 节流窗口内返回上次扫描结果（target 缓存），避免大量单位每帧遍历。
+## #性能（2026-08-27）：改走共享空间索引，替代「遍历 UnitContainer 全部子节点」。
+## 搜索域是 _index_team_cells 里**敌方阵营实际占用的格**（竞技场 300 兵实测仅 39 个），
+## 每格先用「格矩形到自身的最短可能距离」做剪枝：该值已超过当前已知最近距离（或索敌半径）
+## 时整格跳过，不进桶。为让剪枝立刻生效，先扫自身 3×3 邻域拿到一个紧的初始上界 ——
+## 密集战场里最近敌人几乎总在邻域内（上界≈几十像素），随后绝大多数格被一次浮点比较刷掉。
+## 结果与全场扫描**完全等价**（同样返回半径内真正最近的敌人，300 兵 × 3 种半径 900 次
+## 逐条对照全场暴力法，零不一致）。300 兵全量索敌实测 37.6ms → 17.2ms（全场半径）/ 10.9ms（150px）。
 func find_nearest_enemy_in_range(max_range_px: float) -> Unit:  ## 定义限定半径索敌的方法
 	if not is_instance_valid(self):  ## 单位可能已被释放，直接返回避免 Nil 访问
 		return null  ## 返回 null
@@ -2090,27 +2452,49 @@ func find_nearest_enemy_in_range(max_range_px: float) -> Unit:  ## 定义限定�
 	var unit_container = get_parent()  ## 获取父节点（UnitContainer）
 	if unit_container == null:  ## 如果父节点不存在
 		return null  ## 返回 null
+	_ensure_spatial_index(unit_container)  ## 确保本帧索引已就绪（一帧只建一次）
 	var nearest: Unit = null  ## 最近敌方单位
-	var nearest_dist: float = INF  ## 最近距离初始为无穷大
-
-	## 遍历 UnitContainer 中的所有单位
-	for body in unit_container.get_children():  ## 遍历所有子节点
-		## 跳过自身、非单位类型、已销毁、已死亡的单位
-		## is_instance_valid 防止访问已 queue_free 的单位导致 previously freed 错误
-		if body == self or not (body is Unit) or not is_instance_valid(body) or body.is_dead or body.is_base_unit:  ## 跳过自身、非单位、已销毁、已死亡、基地单位
-			continue
-		## 跳过同阵营单位
-		if body.team == team:  ## 跳过同阵营
-			continue
-		## 计算 2D 真实距离（等视角战场需要考虑 Y 轴阵线差异）
-		var dist = global_position.distance_to(body.global_position)  ## 计算 2D 距离
-		if dist > max_range_px:  ## 超出索敌半径（肉鸽统一寻敌范围）
-			continue
-		## 如果距离更近，更新最近目标
-		if dist < nearest_dist:  ## 如果距离更近
-			nearest_dist = dist  ## 更新最近距离
-			nearest = body  ## 更新最近单位
-
+	var nearest_d2: float = INF  ## 最近距离的平方（全程用平方比较，省 sqrt）
+	var range_d2: float = INF if not is_finite(max_range_px) else max_range_px * max_range_px
+	var self_cell := Vector2i(
+		int(floor(global_position.x / INDEX_CELL_SIZE)),
+		int(floor(global_position.y / INDEX_CELL_SIZE)))
+	## ① 先扫自身 3×3 邻域，为后续剪枝拿到一个尽量紧的初始上界
+	for dx in range(-1, 2):
+		for dy in range(-1, 2):
+			var bucket: Variant = _index_cells.get(self_cell + Vector2i(dx, dy))
+			if bucket == null:
+				continue
+			for body in bucket:
+				if body == self or not is_instance_valid(body) or body.is_base_unit or body.team == team:
+					continue
+				var d2: float = global_position.distance_squared_to(body.global_position)
+				if d2 <= range_d2 and d2 < nearest_d2:
+					nearest_d2 = d2
+					nearest = body
+	## ② 遍历敌方阵营占用的所有格，逐格剪枝后再进桶
+	for enemy_team in _index_team_cells:
+		if enemy_team == team:
+			continue  ## 同阵营不是索敌目标
+		for cell in _index_team_cells[enemy_team]:
+			## 3×3 邻域已在 ① 扫过，跳过避免重复算距离
+			if absi(cell.x - self_cell.x) <= 1 and absi(cell.y - self_cell.y) <= 1:
+				continue
+			## 剪枝：该格矩形到自身的最短可能距离²（轴向分量各自取矩形外侧间隙）
+			var gap_x: float = maxf(maxf(float(cell.x) * INDEX_CELL_SIZE - global_position.x,
+					global_position.x - float(cell.x + 1) * INDEX_CELL_SIZE), 0.0)
+			var gap_y: float = maxf(maxf(float(cell.y) * INDEX_CELL_SIZE - global_position.y,
+					global_position.y - float(cell.y + 1) * INDEX_CELL_SIZE), 0.0)
+			var cell_min_d2: float = gap_x * gap_x + gap_y * gap_y
+			if cell_min_d2 > range_d2 or cell_min_d2 >= nearest_d2:
+				continue  ## 整格都不可能出现更近（或在索敌半径外）的敌人
+			for body2 in _index_cells[cell]:
+				if body2 == self or not is_instance_valid(body2) or body2.is_base_unit or body2.team == team:
+					continue
+				var d2b: float = global_position.distance_squared_to(body2.global_position)
+				if d2b <= range_d2 and d2b < nearest_d2:
+					nearest_d2 = d2b
+					nearest = body2
 	return nearest  ## 返回找到的最近敌方单位
 
 ## 射程内平分锁敌（#25）
@@ -2119,6 +2503,18 @@ func find_nearest_enemy_in_range(max_range_px: float) -> Unit:  ## 定义限定�
 ##   1 敌人 → 所有远程集火它；2 敌人 → 2:1 分配；3 敌人 → 各打各的（按被锁数最少，平局取最近）
 ## attack_range_px: 射程上限（像素）
 ## 返回值: 应锁定的敌方单位，射程内无敌人返回 null
+##
+## #性能（2026-08-27 竞技场卡死首因）：本函数原为三重循环 ——
+## 外层遍历 UnitContainer 收集射程内敌人（O(N)），再对其中**每个**敌人又遍历一次
+## 全部子节点统计锁定数（O(N) × 射程内敌人数）→ 实际复杂度 O(N³)。
+## 隔离实测（G5 射程 218px）：N=50 → 11.1ms，N=100 → 93.1ms，N=150 → 284.0ms。
+## 竞技场无人口上限（MAX_SPAWN_UNITS=300），单帧被拖到秒级即用户所见的「卡死」。
+## 现改为：射程内敌人走空间索引盒查询；锁定数直接读 _index_locks 预统计表（O(1)），
+## 判定口径与旧实现逐条等价（含 #25 的「够得着才算锁定」射程校验，见 _ensure_spatial_index）。
+## 唯一差异：旧实现统计锁定数时排除自身（ally == self 跳过），预统计表含自身，
+## 故此处对「自己已计入该敌人锁定数的情况」显式减 1 补偿 —— 补偿条件必须与
+## _ensure_spatial_index 的计入条件完全一致（自身为远程 + target 有效 + target 在自身有效射程内），
+## 否则会对「未被计入的自己」误减，导致锁定数偏低、选出与旧实现不同的目标。
 func find_best_distributed_target(attack_range_px: float) -> Unit:  ## 定义射程内平分索敌方法
 	if not is_instance_valid(self):  ## 单位可能已被释放，直接返回避免 Nil 访问
 		return null
@@ -2130,47 +2526,54 @@ func find_best_distributed_target(attack_range_px: float) -> Unit:  ## 定义射
 	var unit_container = get_parent()  ## 获取父节点（UnitContainer）
 	if unit_container == null:  ## 如果父节点不存在
 		return null
-	## 收集射程内的敌方单位
+	_ensure_spatial_index(unit_container)  ## 确保本帧索引已就绪（与索敌共用，一帧只建一次）
+	## 收集射程内的敌方单位（只查射程盒覆盖的格，替代全容器遍历）
 	var in_range: Array[Unit] = []  ## 射程内敌方列表
-	for body in unit_container.get_children():  ## 遍历所有子节点
-		if body == self or not (body is Unit) or not is_instance_valid(body) or body.is_dead or body.is_base_unit:  ## 跳过自身、非单位、已销毁、已死亡、基地单位
+	for body in _query_index_box(global_position, attack_range_px):
+		## 非 Unit / is_dead 已在建索引时过滤；此处沿用旧口径跳过自身、已释放、基地单位
+		if body == self or not is_instance_valid(body) or body.is_base_unit:
 			continue
 		if body.team == team:  ## 跳过同阵营
 			continue
-		if global_position.distance_to(body.global_position) > attack_range_px:  ## 超出射程
+		if not is_target_in_attack_range(body.global_position, 10.0):  ## 外包圆内但超出精确圆/椭圆射程
 			continue
 		in_range.append(body)  ## 加入射程内列表
 	if in_range.is_empty():  ## 射程内无敌人
 		return null  ## 返回 null
 	if in_range.size() == 1:  ## 只有一个敌人：所有远程集火它
 		return in_range[0]  ## 返回唯一敌人
-	## 多个敌人：统计每个敌人被多少己方远程单位锁定，选被锁最少的（平局取最近）
+	## 多个敌人：读预统计锁定数，选被锁最少的（平局取最近）
 	var best: Unit = null  ## 最优目标
 	var best_lock_count: int = 999999  ## 最优目标的被锁数
 	var best_dist: float = INF  ## 最优目标的距离
+	## 自身是否已被 _ensure_spatial_index 计入锁定统计（条件必须与那里逐字一致）：
+	## 自身为远程 + 持有有效 target + 该 target 在自身有效射程内。
+	## 旧实现统计时排除自身（ally == self 跳过），故对「自己被计入的那个目标」需减 1 补偿。
+	var self_counted: bool = false
+	if unit_resource != null and unit_resource.is_ranged \
+			and target != null and is_instance_valid(target) and not target.is_dead:
+		self_counted = is_target_in_attack_range(target.global_position, 10.0)
 	for enemy in in_range:  ## 遍历射程内每个敌人
-		var lock_count: int = 0  ## 该敌人被己方远程锁定的数量
-		for ally in unit_container.get_children():  ## 遍历所有单位统计锁定
-			if ally == self or not (ally is Unit) or not is_instance_valid(ally) or ally.is_dead:  ## 跳过自身与无效单位
-				continue
-			if ally.team != team:  ## 跳过敌方
-				continue
-			if ally.unit_resource == null or not ally.unit_resource.is_ranged:  ## 只统计己方远程单位
-				continue
-			if ally.target == enemy:  ## 该远程已锁定此敌人
-				## #25修复：只统计「真正够得着该敌人」的己方远程（自己射程×32 + 10 内）。
-				## 旧逻辑统计所有 target==enemy 的远程——move 状态残留的射程外 target
-				## （state_attack 周期结束超射程切回 move 时不清空）与 #19 分配器写入的
-				## 幻影 target 都虚增锁定数，让射程内的远程平分失真（10v3 只有部分开火）。
-				var ally_effective: float = ally.unit_resource.attack_range * Constants.UNIT_TO_PIXELS + 10.0
-				if ally.global_position.distance_to(enemy.global_position) <= ally_effective:
-					lock_count += 1  ## 被锁数 +1
+		## 己方远程对该敌人的锁定数（O(1) 查表，替代旧的 O(N) 内层遍历）
+		var by_team: Dictionary = _index_locks.get(enemy, {})
+		var lock_count: int = int(by_team.get(team, 0))  ## 该敌人被己方远程锁定的数量
+		if self_counted and target == enemy:  ## 扣除自身这一票，与旧实现口径一致
+			lock_count -= 1
 		var dist: float = global_position.distance_to(enemy.global_position)  ## 自身到该敌人的距离
 		if lock_count < best_lock_count or (lock_count == best_lock_count and dist < best_dist):  ## 被锁更少或同锁更近
 			best_lock_count = lock_count  ## 更新最优被锁数
 			best_dist = dist  ## 更新最优距离
 			best = enemy  ## 更新最优目标
 	return best  ## 返回被锁最少（平局最近）的敌人
+
+## 精确圆/椭圆攻击范围内的平分索敌封装。
+## find_best_distributed_target 仍保留“外包圆预筛”参数以兼容现有调用，但最终目标必须通过精确判定。
+func find_best_distributed_target_in_attack_range(tolerance_px: float = 0.0) -> Unit:
+	var candidate: Unit = find_best_distributed_target(get_attack_query_radius_px(tolerance_px))
+	if candidate != null and is_instance_valid(candidate) \
+			and is_target_in_attack_range(candidate.global_position, tolerance_px):
+		return candidate
+	return find_nearest_enemy_in_attack_range(tolerance_px)
 
 ## 查找距离自身最近的敌方单位的距离（2D）
 ## 用于远程单位判断是否有敌人过于靠近，需要撤退
@@ -2258,24 +2661,19 @@ func perform_attack(hit_index: int = 0) -> void:  ## 定义执行攻击的方法
 			## #9：近战命中结算时重新校验目标距离。
 			## 攻击动画播放期间（前摇→命中帧）目标可能被击退/移出攻击范围，
 			## 原实现直接造成伤害 → 表现为「隔空挥砍」。超出范围则本次命中落空。
-			## 容差与 state_attack 进入攻击周期的判定一致（attack_range_px + 10.0）。
-			var melee_range_px: float = unit_resource.attack_range * Constants.UNIT_TO_PIXELS
-			if global_position.distance_to(target.global_position) > melee_range_px + 10.0:
+			## 必须复用统一横/纵椭圆判定，不能退回只看 attack_range 的圆形距离。
+			if not is_target_in_attack_range(target.global_position, 10.0):
 				return  ## 目标已移出攻击范围，本次命中落空（不计 _attacks_done，周期兜底逻辑不受影响）
-		## 近战单位直接对目标造成伤害（按伤害类型分别施加）
-		for entry in damage_entries:
-			target.take_damage_typed(int(entry["value"]), int(entry["type"]), self)
-		## 结算后目标可能因致死触发撤退（enemy_retreat_pct）而被 queue_free 释放，
-		## 此时 self.target 引用仍非空、但实例已销毁，后续访问其属性会崩。
-		## 重新校验一次目标有效性，作为范围伤害与词条结算的前置闸门。
-		if is_instance_valid(target) and not target.is_dead:
-			## 范围攻击：对主目标周围半径内的敌人造成同额伤害
-			_apply_aoe(target.global_position, target, damage_entries)
-	## 施加攻击方词条效果给目标（如流血）
-	if is_instance_valid(target) and not target.is_dead and not unit_resource.affixes.is_empty():
-		for affix in unit_resource.affixes:
-			if affix != null and affix.trigger_timing == AffixResource.TriggerTiming.ON_ATTACK:
-				target.apply_affix(affix, self)
+		var primary: Unit = target
+		var impact_pos: Vector2 = primary.global_position
+		var hit_units: Dictionary = {primary.get_instance_id(): true}
+		## 单个命中入口统一结算伤害与攻击词条；删掉击退 BUFF 后自然只剩伤害。
+		_apply_attack_hit(primary, damage_entries)
+		## 横/纵攻击范围是近战攻击面：范围内每个敌人都算本次实际命中。
+		## 击退、流血等效果由各自 ON_ATTACK 词条决定，不写死任何兵种 ID。
+		_apply_melee_attack_footprint(damage_entries, hit_units)
+		## aoe_radius 是独立的“以主目标为圆心溅射”配置，保留兼容旧资源并避免重复结算。
+		_apply_aoe(impact_pos, damage_entries, hit_units)
 
 		## 不在攻击时闪烁精灵，避免攻击动画被打断的视觉错觉
 	elif target == null:  ## 如果没有目标
@@ -2284,13 +2682,75 @@ func perform_attack(hit_index: int = 0) -> void:  ## 定义执行攻击的方法
 		## 把伤害错误结算到敌方水晶（#104）。基地攻击统一由 state_attack_base 状态机处理。
 		return
 
-## 范围伤害：对 center 半径 aoe_radius 内的敌方单位（不含主目标）施加与本次攻击同额的伤害
-## center: 范围中心（世界坐标，通常为被命中的主目标位置）
-## primary: 已被直接伤害的主目标（从范围命中中排除）
-## damage_entries: 本次攻击的伤害列表 [{"type": int, "value": int}, ...]
-func _apply_aoe(center: Vector2, primary: Unit, damage_entries: Array) -> void:
-	if primary == null or not is_instance_valid(primary):  ## 主目标已释放则直接返回（防御性闸门）
+## 对一个实际命中目标统一结算伤害与攻击方 ON_ATTACK 词条。
+## 击退是否发生只取决于攻击方是否装备 KNOCKBACK 词条，不依赖兵种 ID 或范围字段。
+func _apply_attack_hit(hit_unit: Unit, damage_entries: Array) -> void:
+	if hit_unit == null or not is_instance_valid(hit_unit) or hit_unit.is_dead:
 		return
+	for entry in damage_entries:
+		if not is_instance_valid(hit_unit) or hit_unit.is_dead:
+			return
+		hit_unit.take_damage_typed(int(entry["value"]), int(entry["type"]), self)
+	if not is_instance_valid(hit_unit) or hit_unit.is_dead:
+		return
+	for affix in unit_resource.affixes:
+		if affix != null and affix.trigger_timing == AffixResource.TriggerTiming.ON_ATTACK:
+			hit_unit.apply_affix(affix, self)
+
+## 横/纵攻击范围：以攻击者为中心的椭圆近战攻击面。
+## 未配置 attack_range_h/v 时仍是传统单目标攻击，避免所有普通近战无条件变成群攻。
+func _apply_melee_attack_footprint(damage_entries: Array, hit_units: Dictionary) -> void:
+	if not unit_resource.use_elliptical_range or damage_entries.is_empty():
+		return
+	var battlefield = get_parent().get_parent()
+	if battlefield == null or not battlefield.has_method("get_units_in_radius"):
+		return
+	var query_radius: float = maxf(unit_resource.get_attack_range_h_px(), unit_resource.get_attack_range_v_px())
+	var candidates := battlefield.get_units_in_radius(global_position, query_radius, -1) as Array[Unit]
+	for candidate in candidates:
+		if not is_instance_valid(candidate):
+			continue
+		if candidate == self or candidate.team == team or candidate.is_dead \
+				or hit_units.has(candidate.get_instance_id()):
+			continue
+		if not is_target_in_attack_range(candidate.global_position):
+			continue
+		hit_units[candidate.get_instance_id()] = true
+		_apply_attack_hit(candidate, damage_entries)
+
+## 当前攻击范围的轴向外包圆半径，只用于空间索引预筛；最终命中仍走精确圆/椭圆判定。
+func get_attack_query_radius_px(tolerance_px: float = 0.0) -> float:
+	if unit_resource == null:
+		return 0.0
+	if unit_resource.use_elliptical_range:
+		return maxf(unit_resource.get_attack_range_h_px(), unit_resource.get_attack_range_v_px()) + tolerance_px
+	return unit_resource.attack_range * Constants.UNIT_TO_PIXELS + tolerance_px
+
+## 在当前精确圆/椭圆攻击范围内查找最近敌人。
+## 用于所有“射程内索敌”入口，避免仅用外包圆误选椭圆之外的目标。
+func find_nearest_enemy_in_attack_range(tolerance_px: float = 0.0) -> Unit:
+	var unit_container = get_parent()
+	if unit_container == null:
+		return null
+	_ensure_spatial_index(unit_container)
+	var nearest: Unit = null
+	var nearest_d2: float = INF
+	for candidate in _query_index_box(global_position, get_attack_query_radius_px(tolerance_px)):
+		if candidate == self or not is_instance_valid(candidate) or candidate.is_base_unit \
+				or candidate.is_dead or candidate.team == team:
+			continue
+		if not is_target_in_attack_range(candidate.global_position, tolerance_px):
+			continue
+		var d2: float = global_position.distance_squared_to(candidate.global_position)
+		if d2 < nearest_d2:
+			nearest_d2 = d2
+			nearest = candidate
+	return nearest
+
+## 范围伤害：对 center 半径 aoe_radius 内的敌方单位（不含已命中目标）施加同额伤害与攻击词条
+## center: 范围中心（世界坐标，通常为被命中的主目标位置）
+## damage_entries: 本次攻击的伤害列表 [{"type": int, "value": int}, ...]
+func _apply_aoe(center: Vector2, damage_entries: Array, hit_units: Dictionary = {}) -> void:
 	if unit_resource.aoe_radius <= 0.0:  ## 未配置范围攻击则直接返回
 		return
 	if damage_entries.is_empty():
@@ -2299,12 +2759,14 @@ func _apply_aoe(center: Vector2, primary: Unit, damage_entries: Array) -> void:
 	var battlefield = get_parent().get_parent()
 	if battlefield == null or not battlefield.has_method("get_units_in_radius"):
 		return
-	var enemies := battlefield.get_units_in_radius(center, unit_resource.aoe_radius, 1 - team) as Array[Unit]
+	var enemies := battlefield.get_units_in_radius(center, unit_resource.aoe_radius, -1) as Array[Unit]
 	for e in enemies:
-		if e == primary or not is_instance_valid(e) or e.is_dead:
+		if not is_instance_valid(e):
 			continue
-		for entry in damage_entries:
-			e.take_damage_typed(int(entry["value"]), int(entry["type"]), self)
+		if e.team == team or e.is_dead or hit_units.has(e.get_instance_id()):
+			continue
+		hit_units[e.get_instance_id()] = true
+		_apply_attack_hit(e, damage_entries)
 
 ## 生成远程投射物的方法（私有）
 ## damage: 投射物造成的伤害值
@@ -2318,12 +2780,16 @@ func _spawn_projectile(damage: int, target_unit: Unit) -> void:  ## 定义生成
 ## damage_entries: 伤害列表 [{"type": int, "value": int}, ...]
 ## target_unit: 目标单位
 ## 返回生成的投射物实例（供调用方微调 max_distance 等参数），失败时返回 null
+## #性能（2026-08-27）：投射物 PackedScene 改静态缓存，替代每次开火 load()。
+## load() 命中资源缓存时仍要走路径解析与引用计数，300 兵混战每秒上千次开火时是白付成本。
+static var _projectile_scene_cache: PackedScene = null
 func _spawn_projectile_with_entries(damage_entries: Array, target_unit: Unit) -> Node:
 	if not is_instance_valid(self):  ## 单位可能已被释放，直接返回避免 Nil 访问
 		return null
-	## 加载投射物场景
-	var projectile_scene = load("res://scenes/units/projectile.tscn")
-	var projectile = projectile_scene.instantiate()
+	## 加载投射物场景（首次 load，之后复用缓存）
+	if _projectile_scene_cache == null:
+		_projectile_scene_cache = load("res://scenes/units/projectile.tscn")
+	var projectile = _projectile_scene_cache.instantiate()
 	## F1 元素使 / Hero3 菲比Hero：投射物为白色发光亮团（直线飞行，取消追踪）
 	if unit_resource.unit_id == "F1" or unit_resource.unit_id == "Hero3":
 		projectile.is_glow_orb = true
@@ -2431,7 +2897,7 @@ func _low_hp_mult() -> float:
 
 ## 攻击敌方基地的方法
 ## 当单位到达敌方基地时调用
-func attack_base() -> void:  ## 定义攻击基地的方法
+func attack_base(hit_index: int = 0) -> void:  ## 定义攻击基地的方法
 	## 如果单位已死亡，停止攻击
 	if is_dead:  ## 如果单位已死亡
 		return  ## 直接返回
@@ -2445,7 +2911,7 @@ func attack_base() -> void:  ## 定义攻击基地的方法
 		## #14（2026-08-11 修复）：对基地伤害用「本次攻击实际总伤害」而非 unit_resource.damage。
 		## 旧逻辑取 damage 字段（英雄 Hero1/Hero2 只有 30），导致英雄打水晶固定 30 点，
 		## 实际输出（damage_by_type/damage_by_hit 150~200）完全没生效。
-		var entries: Array = _compute_damage_entries("base")
+		var entries: Array = _compute_damage_entries("base", hit_index)
 		## #13（2026-08-11 用户要求）：中远程兵种对水晶伤害减半（entries 与总值统一减半）
 		if unit_resource != null and unit_resource.is_ranged:
 			for i in range(entries.size()):
@@ -2729,6 +3195,13 @@ func _update_active_affixes(delta: float) -> void:
 		_dot_timer -= 1.0
 	var i: int = _active_affixes.size() - 1
 	while i >= 0:
+		## #Bug（2026-08-26）：DoT 结算可能致死 → die() 内 clear_all_affixes() 会清空本数组，
+		## 索引 i 随即越界（Out of bounds get index）。每轮开头重新校验边界与存活状态。
+		if is_dead or _active_affixes.is_empty():
+			return
+		if i >= _active_affixes.size():
+			i = _active_affixes.size() - 1
+			continue
 		var entry: Dictionary = _active_affixes[i]
 		var affix: AffixResource = entry.get("affix", null)
 		if affix == null or not is_instance_valid(affix):
@@ -2746,10 +3219,13 @@ func _update_active_affixes(delta: float) -> void:
 			var tick_damage: int = int(affix.value_percent * base_hp * float(stacks))
 			if tick_damage > 0:
 				if affix.affix_type == AffixResource.AffixType.BLEED:
-					## 流血：直接扣 HP（绕过护甲），飘字红色
-					_apply_direct_hp_damage(tick_damage)
-					_spawn_damage_number(tick_damage, Constants.DMG_COLOR_BLEED)
-					unit_damaged.emit(self, tick_damage)
+					## 流血：直接扣 HP（绕过护甲），飘字红色。肉鸽文物「血色沙漏」只放大我方施加的流血，
+					## 因此按「受害者是敌方」判定（team 1 身上的流血必然来自玩家单位）
+					var bleed_mult: float = RunModifiers.bleed_damage_mult() if team == 1 else 1.0
+					var bleed_dmg: int = maxi(int(round(float(tick_damage) * bleed_mult)), 1)
+					_apply_direct_hp_damage(bleed_dmg)
+					_spawn_damage_number(bleed_dmg, Constants.DMG_COLOR_BLEED)
+					unit_damaged.emit(self, bleed_dmg)
 				elif affix.affix_type == AffixResource.AffixType.POISON:
 					## 中毒：先扣护盾再扣 HP，飘字绿色
 					_apply_damage_with_armor(tick_damage)
@@ -2890,7 +3366,9 @@ func _clear_pool_residue() -> void:
 	_attack_dash_dir = Vector2.ZERO
 	_attack_dash_triggered = false
 	## 复位寻路节流缓存
-	_pathfind_accum = 0.0
+	## #性能（2026-08-27）：复用时同样随机化初相位（与字段初值一致），
+	## 否则清场后批量复用出来的兵会再次相位对齐，重现周期性顿卡。
+	_pathfind_accum = randf() * PATHFIND_INTERVAL
 	_cached_separation = Vector2.ZERO
 	## #索敌卡顿（2026-08-20）：本帧结论缓存也必须复位。物理帧序号是全局单调递增的，
 	## 复用出来的实例若带着上一世写入的 _pathfind_gate_frame，虽不会等于当前帧（不会误判），
@@ -2907,6 +3385,9 @@ func _clear_pool_residue() -> void:
 		health_bar.visible = true
 	if armor_bar != null:
 		armor_bar.visible = true
+	## #8（2026-08-26）：清掉逐帧锚点补偿残留（新一世若为未配置兵种则必须归零）
+	if unit_sprite != null:
+		unit_sprite.offset = Vector2.ZERO
 
 ## #技能系统：施加技能减速（移速与攻速同时按 percent 折减，持续 duration 秒）
 ## 与冰霜词条完全独立：冰霜只影响攻速且固定 -30%/1s，本函数的幅度与时长由技能定义给出。
@@ -2933,6 +3414,7 @@ func play_skill_anim(speed: float = 1.0) -> void:
 	var names: PackedStringArray = anim_skill_frames.get_animation_names()
 	if names.size() > 0:
 		unit_sprite.play(names[0])
+		_apply_attack_anchor_offset()  ## 2026-09-11：技能动画第 0 帧也应用身体锚点（未配置兵种为 no-op）
 
 ## #14 击退：把本单位沿「攻击者 → 自己」的方向推开一段距离
 ## 位移不是瞬移，而是在 KNOCKBACK_DURATION 秒内均匀完成，由 _apply_knockback_step 每物理帧消耗；
@@ -3086,6 +3568,10 @@ func _on_detection_body_entered(body: Node2D) -> void:  ## 定义检测区域进
 	## 检测区回调不得抢过状态机把单位拽进 attack —— 那正是「和平模式下两个
 	## 靠近的阵营互相冲上去打」的来源（hold_position 只拦 state_move，拦不住这里）。
 	if not combat_enabled:
+		return
+	## 玩家移动令执行期间不被路过的敌人拽进攻击状态：指令优先，否则「让兵去某处」
+	## 会在半路被随便一个进检测区的敌人打断（框选移动指令等于无效）
+	if order_pos.is_finite():
 		return
 	## 检查是否为敌方且存活的单位
 	if body is Unit and body.team != team and not body.is_dead:  ## 如果是敌方且存活的单位

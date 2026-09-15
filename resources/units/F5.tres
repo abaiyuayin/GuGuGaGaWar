@@ -23,7 +23,7 @@ attack_range = 7.5
 attack_speed = 2.5
 attack_hit_types = Array[int]([1])
 damage_by_hit = [{
-1: 40
+1: 35
 }]
 attack_hit_frame_start = 8
 attack_sound_frame = 8

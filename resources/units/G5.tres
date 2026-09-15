@@ -22,14 +22,16 @@ attack_range = 6.5
 is_ranged_override = 1
 attack_speed = 2.5
 damage_by_hit = [{
-0: 30
+0: 25
 }]
 attack_hit_frame_start = 12
 attack_sound_frame = 12
-move_display_height = 60.0
-move_display_width = 60.0
-attack_display_height = 60.0
-attack_display_width = 86.2
+move_display_height = 67.0
+move_display_width = 67.0
+walk_display_height = 49.0
+walk_display_width = 49.0
+attack_display_height = 84.0
+attack_display_width = 84.0
 attack_anim_speed = 0.9
 projectile_texture = ExtResource("1_spear")
 projectile_rotation_offset = 90.0

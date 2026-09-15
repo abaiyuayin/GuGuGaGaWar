@@ -14,14 +14,13 @@ extends Control
 @onready var btn_map: Button = $VBoxContainer/BtnMap
 ## 返回主菜单按钮
 @onready var btn_menu: Button = $VBoxContainer/BtnMenu
-## 本局是否来自肉鸽模式（决定「再来一局」的重开行为）
-var _is_roguelike: bool = false
 
 func _ready() -> void:
 	## 设置为始终处理，确保暂停状态下按钮仍可响应
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	## 暂停战斗，避免后台战斗消耗 CPU 导致 UI 卡顿
 	get_tree().paused = true
+	_setup_parchment_frame()
 	## 为按钮应用清晰的自定义样式
 	_setup_button_style(btn_next)
 	_setup_button_style(btn_restart)
@@ -34,38 +33,62 @@ func _ready() -> void:
 	## 监听设置变化信号以重新应用本地化
 	SettingsManager.settings_changed.connect(_apply_localization)
 
-## 为按钮设置清晰的 StyleBoxFlat 样式（悬停/按下有明显颜色变化）
+## 为中央结算区域铺设与图二同款的米色描边面板，并将按钮样式统一为棕金风
+func _setup_parchment_frame() -> void:
+	var center := CenterContainer.new()
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	var panel := PanelContainer.new()
+	panel.custom_minimum_size = Vector2(560, 0)
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.93, 0.86, 0.70, 1.0)
+	style.border_color = Color(0.35, 0.25, 0.13, 1.0)
+	style.set_border_width_all(4)
+	style.set_corner_radius_all(10)
+	style.set_content_margin_all(28)
+	panel.add_theme_stylebox_override("panel", style)
+
+	var vbox := $VBoxContainer
+	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	vbox.add_theme_constant_override("separation", 18)
+	## ⚠️ Godot 4 的 add_child() 不会自动从旧父级摘除节点（会报 "already has a parent" 且后续语句照跑），
+	## 把 .tscn 里已有的节点收进面板必须用 reparent()。此前用 add_child 导致面板一个子节点都挂不上，
+	## 只剩「最小宽 560 + 内边距 56」的空壳渲染在屏幕正中。
+	result_label.reparent(vbox)
+	vbox.move_child(result_label, 0)
+	vbox.reparent(panel)
+	center.add_child(panel)
+	add_child(center)
+	move_child(center, 1)
+
+	result_label.custom_minimum_size = Vector2(480, 96)
+	result_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	result_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+
+
 func _setup_button_style(btn: Button) -> void:
-	## 普通状态：深棕底 + 金色边框
-	var normal = StyleBoxFlat.new()
-	normal.bg_color = Color(0.2, 0.15, 0.1, 0.95)
-	normal.border_color = Color(0.55, 0.45, 0.25, 1.0)
+	var normal := StyleBoxFlat.new()
+	normal.bg_color = Color(0.55, 0.40, 0.20, 1.0)
+	normal.border_color = Color(0.30, 0.20, 0.10, 1.0)
 	normal.set_border_width_all(2)
-	normal.set_corner_radius_all(4)
-	normal.set_content_margin_all(10)
+	normal.set_corner_radius_all(6)
+	normal.set_content_margin_all(12)
 	btn.add_theme_stylebox_override("normal", normal)
 	btn.add_theme_stylebox_override("disabled", normal)
-	## 悬停状态：亮金棕底 + 亮金边框（明显变亮）
-	var hover = StyleBoxFlat.new()
-	hover.bg_color = Color(0.5, 0.38, 0.2, 1.0)
-	hover.border_color = Color(1.0, 0.85, 0.4, 1.0)
-	hover.set_border_width_all(2)
-	hover.set_corner_radius_all(4)
-	hover.set_content_margin_all(10)
+
+	var hover := normal.duplicate() as StyleBoxFlat
+	hover.bg_color = Color(0.75, 0.55, 0.25, 1.0)
+	hover.border_color = Color(0.95, 0.80, 0.40, 1.0)
 	btn.add_theme_stylebox_override("hover", hover)
-	## 按下状态：最亮底色（明显的按压反馈）
-	var pressed = StyleBoxFlat.new()
-	pressed.bg_color = Color(0.7, 0.55, 0.3, 1.0)
-	pressed.border_color = Color(1.0, 0.9, 0.5, 1.0)
-	pressed.set_border_width_all(3)
-	pressed.set_corner_radius_all(4)
-	pressed.set_content_margin_all(10)
+
+	var pressed := hover.duplicate() as StyleBoxFlat
+	pressed.bg_color = Color(0.90, 0.70, 0.35, 1.0)
 	btn.add_theme_stylebox_override("pressed", pressed)
-	## 文字颜色
-	btn.add_theme_color_override("font_color", Color(1, 0.95, 0.8))
-	btn.add_theme_color_override("font_hover_color", Color(1, 1, 0.9))
-	btn.add_theme_color_override("font_pressed_color", Color(1, 1, 0.85))
-	btn.add_theme_color_override("font_disabled_color", Color(0.6, 0.6, 0.6))
+
+	btn.add_theme_color_override("font_color", Color(1.0, 0.95, 0.85, 1.0))
+	btn.add_theme_color_override("font_hover_color", Color(1.0, 1.0, 0.9, 1.0))
+	btn.add_theme_color_override("font_pressed_color", Color(1.0, 1.0, 0.85, 1.0))
 
 func _apply_localization() -> void:
 	## 更新按钮文本
@@ -77,31 +100,26 @@ func _apply_localization() -> void:
 ## 设置获胜方的方法
 ## winner_team: 获胜方的阵营编号（0=红方/玩家, 1=蓝方/AI）
 ## stats: battle_root 采集的战绩字典（成就系统用，可不传）
-## is_roguelike: 本局是否来自肉鸽模式（影响「再来一局」行为）
-func set_winner(winner_team: int, stats: Dictionary = {}, is_roguelike: bool = false) -> void:
-	_is_roguelike = is_roguelike
-	## 仅战役模式且非肉鸽显示「返回地图」；肉鸽/双人/全面战争无地图可返回，隐藏该按钮
-	btn_map.visible = GameManager.is_campaign_mode and not _is_roguelike
-	## 肉鸽模式的「再来一局」语义是开启全新的一局随机 run，按钮文案改为「再来一局」
-	if _is_roguelike:
-		btn_restart.text = "再来一局"
-	## #8：仅「战役模式 + 玩家胜利 + 当前不是最后一关」时提供「进入下一关」快捷入口，
-	## 避免失败界面、肉鸽、全面战争、通关末关时出现无意义按钮
+## 注：肉鸽模式有专属胜利 / 失败界面（RoguelikeVictoryScreen / RoguelikeDefeatScreen），
+##     不会走到本界面，故此处不再保留肉鸽分支。
+func set_winner(winner_team: int, stats: Dictionary = {}) -> void:
+	## 仅战役模式显示「返回地图」；双人/全面战争无地图可返回，隐藏该按钮
+	btn_map.visible = GameManager.is_campaign_mode
+	## #8：仅「战役模式 + 玩家胜利 + 当前不是最后一关」时提供「进入下一关」快捷入口
 	btn_next.visible = (
 		winner_team == 0
 		and GameManager.is_campaign_mode
-		and not _is_roguelike
 		and GameManager.selected_campaign_level < CampaignProgress.MAX_LEVEL
 	)
 	## 玩家（红方）获胜
 	if winner_team == 0:
 		## 显示胜利文本
 		result_label.text = tr("YOU_WIN")
-		## 设置文字颜色为红色（红方主题色）
-		result_label.add_theme_color_override("font_color", Color(1, 0.3, 0.3))
+		result_label.add_theme_font_size_override("font_size", 72)
+		## 羊皮卷纸风格标题色（深红棕）
+		result_label.add_theme_color_override("font_color", Color(0.45, 0.12, 0.08))
 		## 战役模式下标记当前关卡的当前难度为已完成（解锁下一难度/下一关）
-		## 肉鸽模式不触发战役解锁逻辑（避免误弹兵种解锁/标记完成）
-		if GameManager.is_campaign_mode and not _is_roguelike:
+		if GameManager.is_campaign_mode:
 			CampaignProgress.mark_difficulty_completed(GameManager.selected_campaign_level, GameManager.current_difficulty)
 			## 首通关卡时弹出解锁兵种通知
 			_show_unlock_notification(GameManager.selected_campaign_level)
@@ -112,9 +130,9 @@ func set_winner(winner_team: int, stats: Dictionary = {}, is_roguelike: bool = f
 	else:
 		## 蓝方（AI）获胜，显示失败文本
 		result_label.text = tr("YOU_LOSE")
-		## #18：失败文本改为红色，字号放大到约 10 倍（160 ≈ 16×10），强化败北反馈
-		result_label.add_theme_color_override("font_color", Color(1, 0, 0, 1))
-		result_label.add_theme_font_size_override("font_size", 160)
+		## #18：失败文本保持大字号；标题色与羊皮卷纸风格统一
+		result_label.add_theme_color_override("font_color", Color(0.45, 0.12, 0.08))
+		result_label.add_theme_font_size_override("font_size", 72)
 
 ## 首通关卡时显示解锁兵种通知（延迟弹出，在结算界面显示后再出现）
 func _show_unlock_notification(level: int) -> void:
@@ -127,54 +145,9 @@ func _show_unlock_notification(level: int) -> void:
 		if res.unit_id == new_unit_id:
 			display_name = res.get_display_name()
 			break
-	## 创建解锁通知弹窗（延迟 0.5 秒弹出，确保结算界面先渲染）
+	## 延迟 0.5 秒弹共享解锁框，确保结算界面先渲染；样式与奔跑动画由共享实现维护
 	get_tree().create_timer(0.5).timeout.connect(func() -> void:
-		var popup := Window.new()
-		popup.title = "兵种解锁"
-		popup.size = Vector2i(300, 180)
-		popup.unresizable = true
-		## 弹窗设为始终保持处理（忽略场景暂停）
-		popup.process_mode = Node.PROCESS_MODE_ALWAYS
-		var vbox := VBoxContainer.new()
-		vbox.set_anchors_preset(Control.PRESET_FULL_RECT)
-		vbox.add_theme_constant_override("separation", 12)
-		popup.add_child(vbox)
-		var title_lbl := Label.new()
-		title_lbl.text = "获得新兵种！"
-		title_lbl.add_theme_font_size_override("font_size", 20)
-		title_lbl.add_theme_color_override("font_color", Color(1, 0.85, 0.4, 1))
-		title_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		vbox.add_child(title_lbl)
-		var spacer1 := Control.new()
-		spacer1.custom_minimum_size = Vector2(0, 8)
-		vbox.add_child(spacer1)
-		var name_lbl := Label.new()
-		name_lbl.text = "%s（%s）" % [display_name, new_unit_id]
-		name_lbl.add_theme_font_size_override("font_size", 18)
-		name_lbl.add_theme_color_override("font_color", Color(1, 1, 1, 1))
-		name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		vbox.add_child(name_lbl)
-		var spacer2 := Control.new()
-		spacer2.custom_minimum_size = Vector2(0, 8)
-		vbox.add_child(spacer2)
-		var desc_lbl := Label.new()
-		desc_lbl.text = "已加入编成，可在后续关卡中部署"
-		desc_lbl.add_theme_font_size_override("font_size", 13)
-		desc_lbl.add_theme_color_override("font_color", Color(0.7, 0.8, 0.7, 1))
-		desc_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		vbox.add_child(desc_lbl)
-		var btn_ok := Button.new()
-		btn_ok.text = "确定"
-		btn_ok.custom_minimum_size = Vector2(80, 36)
-		btn_ok.pressed.connect(popup.queue_free)
-		vbox.add_child(btn_ok)
-		## 居中显示在视口上
-		## #2（2026-08-09）：连接 close_requested，右上角 X 才能关闭弹窗（未连接则点击无反应）
-		popup.close_requested.connect(popup.queue_free)
-		add_child(popup)
-		popup.popup_centered(Vector2i(300, 180))
-		## 播放 UI 点击音效，提示玩家注意弹窗
-		AudioManager.play_ui_click()
+		UIButtonHelper.show_unit_unlock_popup(self, display_name, new_unit_id)
 	)
 
 ## 禁用所有按钮的输入处理，防止场景跳转延迟窗口内触发 !is_inside_tree() 报错
@@ -205,13 +178,6 @@ func _on_restart_pressed() -> void:
 	AudioManager.play_menu_bgm()
 	## 取消暂停，避免新场景被卡住
 	get_tree().paused = false
-	## 肉鸽模式：重置模式标志后开启全新的一局随机 run
-	if _is_roguelike:
-		GameManager.is_campaign_mode = false
-		BattleManager.is_two_player = false
-		RoguelikeManager.start_run()
-		GameManager.start_game(1)
-		return
 	## 使用当前难度重新开始游戏
 	GameManager.start_game(GameManager.current_difficulty)
 

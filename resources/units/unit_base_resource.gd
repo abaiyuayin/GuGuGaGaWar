@@ -40,18 +40,20 @@ class_name UnitResource extends Resource  ## 声明类名为 UnitResource，继�
 @export var damage_by_type: Dictionary = {}
 ## 攻击距离（标准单位），大于 RANGED_THRESHOLD（2.0）视为远程单位
 @export var attack_range: float = 1.0
-## #3：横向攻击半径（标准单位）。0 表示「沿用 attack_range」，>0 时启用椭圆/矩形判定
+## #3：横向攻击半径（标准单位）。0 表示「沿用 attack_range」，>0 时启用椭圆判定；
+## 对近战单位，该椭圆同时是一次攻击会命中的多目标攻击面。
 ##   蓝女巫（S1）攻击纵向一条线：h 小、v 大；D6 大锤手攻击横向宽范围：h 大、v 小
 @export var attack_range_h: float = 0.0
-## #3：纵向攻击半径（标准单位）。0 表示「沿用 attack_range」，>0 时启用椭圆/矩形判定
+## #3：纵向攻击半径（标准单位）。0 表示「沿用 attack_range」，>0 时启用椭圆判定。
 @export var attack_range_v: float = 0.0
 ## 远程/近战覆盖设置（-1=自动根据 attack_range 判断，0=强制近战，1=强制远程）
 ## 在调试界面可手动切换，用于测试不同兵种类型的行为
 @export var is_ranged_override: int = -1
-## 攻击速度（秒/次），值越小攻击频率越高
+## 历史兼容字段：旧版攻击间隔（秒/次）。普通攻击流程不再读取它，实际攻击节奏由
+## 攻击动画播放速度和 attack_recovery_time 决定；保留字段避免旧存档/工具读写报错。
 @export var attack_speed: float = 1.5
-## 单次攻击周期内的攻击次数（1=单次攻击，2=二连击如G6）
-## 在一个 attack_speed 周期内均匀分布多次命中
+## 单次攻击动画内的攻击次数（1=单次攻击，2=二连击如G6）
+## 多段命中按 attack_hit_frames 或攻击动画实际时长分布。
 @export var attack_count: int = 1
 ## 每次命中对应的伤害类型列表（与 attack_count 对应）
 ## 留空则所有命中使用 damage_types；设置了则第 i 次命中使用 attack_hit_types[i] 的类型
@@ -63,10 +65,13 @@ class_name UnitResource extends Resource  ## 声明类名为 UnitResource，继�
 ## 例如二连击第一击 10 挥砍+5 魔法、第二击 20 钝击：damage_by_hit = [{0:10, 3:5}, {2:20}]
 ## 每个元素是 Dictionary（同 damage_by_type 格式：{type_int: value_int}）
 @export var damage_by_hit: Array = []
-## 攻击音效播放时机（0.0~1.0，相对于 attack_speed 的比例）
+## 攻击音效播放时机（0.0~1.0，相对于攻击动画实际时长的比例）
 ## 0.0=周期开始即播放，1.0=周期结束播放，默认 0.95（与近战命中点一致）
 ## 可在调试界面调整并永久保存到 .tres
 @export var attack_sound_timing: float = 0.95
+## 攻击表现动画模式：""（默认播攻击动画）；"idle"（无攻击动画坦克，近敌播待机，S5 咕嘎工钢）；
+## "charge"（无攻击动画，保持奔跑撞击敌人，攻击周期内继续冲撞，S4 动力菲比）
+@export var attack_anim_mode: String = ""
 ## 攻击动画中的命中帧索引（0 开始），-1 表示不通过动画帧触发伤害
 ## 配置后，state_attack 会在动画播放到该帧时执行 perform_attack()
 @export var attack_hit_frame: int = -1
@@ -136,8 +141,7 @@ class_name UnitResource extends Resource  ## 声明类名为 UnitResource，继�
 @export var ranged_skill_range: float = 0.0
 
 ## ── 动画播放速度（#4）────────────────────────────────────────
-## 与 attack_speed（攻击间隔秒数）是两个完全独立的概念：
-## attack_speed 决定「多久打一次」，下面这些倍率只决定「一次动画播多快」。
+## 这些倍率只控制各自动画的视觉播放速度，与攻击伤害和攻击后摇分离。
 ## 1.0 = 按 SpriteFrames 里配置的原始 FPS 播放。
 ## 移动动画播放速度倍率
 @export var move_anim_speed: float = 1.0
@@ -146,10 +150,8 @@ class_name UnitResource extends Resource  ## 声明类名为 UnitResource，继�
 ## 第二套攻击动画帧文件名（可选，如 "attack2_frames.tres"）：凑企鹅等双攻击兵种，
 ## 每攻击周期轮流使用 attack 与 attack_alt（先攻击1、再攻击2）。空 = 单攻击动画。
 @export var attack_alt_frames: String = ""
-## #攻击特效（2026-08-15 / #14 补丁）：命中后是否等待攻击动画完整播完才进入后摇。
-## 默认 true = 所有兵种攻击动画完整播放（#14 用户拍板）。
-## false = 命中已出即进后摇（唯一例外 H2：其攻击动画 frame 14 后帧内容尺寸暴涨
-## 403→619px，完整播放会视觉膨胀偏移，故 H2 保持 #12「命中即后摇」不完整播放）。
+## 历史兼容字段：攻击动画是否播完才进入后摇。当前攻击流程始终等待攻击动画结束，
+## 该字段不再改变流程。
 @export var attack_wait_anim_end: bool = true
 ## #突进（2026-08-15）：命中帧朝目标方向突进位移（像素）。0 = 不突进。
 ## 凑企鹅（Y2）等打击感兵种使用。位移曲线：前 90% 距离快速、后 10% 减速，总时长 1 秒。
@@ -158,15 +160,12 @@ class_name UnitResource extends Resource  ## 声明类名为 UnitResource，继�
 @export var sprint_anim_speed: float = 1.0
 ## 待机动画播放速度倍率
 @export var idle_anim_speed: float = 1.0
-## 攻击动画是否拉伸到与攻击间隔等长（true=一次攻击刚好播完一遍动画，攻速加成会同步影响动画；
-## false=攻击动画只按 attack_anim_speed 播放，与攻速彻底解耦）
-## 2026-08-14：默认由 true 改为 false——原默认开启会把「播放速度」倍率淹没在「拉伸到攻击间隔」里，
-## 导致控制台调了攻击动画速度、局内看着像没生效。改为默认关闭后，「播放速度」直接、明显地控制局内攻击动画快慢。
+## 历史兼容字段：攻击动画是否拉伸到 attack_speed。当前不再使用，动画始终只按各自倍率播放。
 @export var attack_anim_sync_interval: bool = false
 
-## 攻击硬后摇时长（秒）：攻击周期结束后的固定僵直锁定（不可移动/不可后撤，可转身）
-## -1 = 跟随兵种类型默认（远程 0.5s / 近战 0s）；显式设置 >=0 时优先用该值
-## 可在调试界面「数值调整」中调校并永久保存到 .tres（中远程兵种默认 0.5 秒后摇）
+## 攻击后摇时长（秒）：攻击动画结束后的固定僵直锁定（不可移动/不可后撤，可转身）
+## -1 = 跟随兵种类型默认（中远程 1.5s / 近战 1.0s）；显式设置 >=0 时优先用该值
+## 可在调试界面「数值调整」中调校并永久保存到 .tres（中远程兵种默认 1.5 秒、近战默认 1.0 秒后摇）
 @export var attack_recovery_time: float = -1.0
 
 ## 移动动画是否独立翻转（null=跟随 default_facing，true=强制翻转，false=强制不翻转）
@@ -250,6 +249,33 @@ func get_attack_range_v_px() -> float:
 ## 例如 N1 持矛勇士带流血词条：攻击时给目标施加流血效果
 @export var affixes: Array[AffixResource] = []
 
+## 逐帧身体锚点补偿（#8 2026-08-26）
+## 键 = 动画名（move / walk / attack / sprint / idle），值 = PackedFloat32Array，
+## 每个元素是该帧应施加的 sprite.offset.x（纹理像素，正=右移）。
+## 用途：某些兵种的切片是「按整帧内容边界框逐帧居中」导出的，武器/披风挥出去时
+## 边界框变宽 → 身体被反向顶偏，局内表现为逐帧左右抖动。这里按「双脚锚点」把
+## 每帧身体钉回该动画的锚点中位数，抖动即消除（不改图、不改缩放）。
+## 空字典 = 不启用（默认，对全部既有兵种零影响）。
+@export var frame_anchor_offsets: Dictionary = {}
+
+## 取某动画某帧的锚点补偿 X（纹理像素）；未配置返回 0
+func get_frame_anchor_offset_x(anim_name: String, frame_index: int) -> float:
+	if frame_anchor_offsets.is_empty() or not frame_anchor_offsets.has(anim_name):
+		return 0.0
+	var arr = frame_anchor_offsets[anim_name]
+	if arr == null:
+		return 0.0
+	if frame_index < 0 or frame_index >= arr.size():
+		return 0.0
+	return float(arr[frame_index])
+
+## 该动画是否配置了逐帧锚点补偿
+func has_frame_anchor_offsets(anim_name: String) -> bool:
+	if frame_anchor_offsets.is_empty() or not frame_anchor_offsets.has(anim_name):
+		return false
+	var arr = frame_anchor_offsets[anim_name]
+	return arr != null and arr.size() > 0
+
 ## 取指定动画的播放速度倍率（#4）
 ## anim_name: move / walk / attack / sprint / idle
 ## 返回值: 倍率，非法值一律回落到 1.0
@@ -280,11 +306,11 @@ func set_anim_speed(anim_name: String, value: float) -> void:
 			idle_anim_speed = v
 
 ## 获取攻击硬后摇时长（秒）
-## -1（未显式配置）时跟随兵种类型默认（#需求21 用户拍板强制落地）：近战 0.5s / 中远程 1s
+## -1（未显式配置）时跟随兵种类型默认：近战 1.0s / 中远程 1.5s
 func get_attack_recovery_time() -> float:
 	if attack_recovery_time >= 0.0:
 		return attack_recovery_time
-	return 1.0 if is_ranged else 0.5
+	return 1.5 if is_ranged else 1.0
 
 ## 获取当前语言下的显示名称
 func get_display_name() -> String:
