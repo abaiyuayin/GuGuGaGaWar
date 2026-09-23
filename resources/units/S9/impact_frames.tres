@@ -1,0 +1,188 @@
+[gd_resource type="SpriteFrames" load_steps=23 format=3]
+
+[ext_resource type="Texture2D" path="res://resources/units/S9/impact_sheet.png" id="1_impact_sheet"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_impact_0"]
+atlas = ExtResource("1_impact_sheet")
+region = Rect2(0, 0, 400, 318)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_impact_1"]
+atlas = ExtResource("1_impact_sheet")
+region = Rect2(400, 0, 400, 318)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_impact_2"]
+atlas = ExtResource("1_impact_sheet")
+region = Rect2(800, 0, 400, 318)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_impact_3"]
+atlas = ExtResource("1_impact_sheet")
+region = Rect2(1200, 0, 400, 318)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_impact_4"]
+atlas = ExtResource("1_impact_sheet")
+region = Rect2(1600, 0, 400, 318)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_impact_5"]
+atlas = ExtResource("1_impact_sheet")
+region = Rect2(2000, 0, 400, 318)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_impact_6"]
+atlas = ExtResource("1_impact_sheet")
+region = Rect2(2400, 0, 400, 318)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_impact_7"]
+atlas = ExtResource("1_impact_sheet")
+region = Rect2(2800, 0, 400, 318)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_impact_8"]
+atlas = ExtResource("1_impact_sheet")
+region = Rect2(3200, 0, 400, 318)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_impact_9"]
+atlas = ExtResource("1_impact_sheet")
+region = Rect2(3600, 0, 400, 318)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_impact_10"]
+atlas = ExtResource("1_impact_sheet")
+region = Rect2(0, 318, 400, 318)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_impact_11"]
+atlas = ExtResource("1_impact_sheet")
+region = Rect2(400, 318, 400, 318)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_impact_12"]
+atlas = ExtResource("1_impact_sheet")
+region = Rect2(800, 318, 400, 318)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_impact_13"]
+atlas = ExtResource("1_impact_sheet")
+region = Rect2(1200, 318, 400, 318)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_impact_14"]
+atlas = ExtResource("1_impact_sheet")
+region = Rect2(1600, 318, 400, 318)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_impact_15"]
+atlas = ExtResource("1_impact_sheet")
+region = Rect2(2000, 318, 400, 318)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_impact_16"]
+atlas = ExtResource("1_impact_sheet")
+region = Rect2(2400, 318, 400, 318)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_impact_17"]
+atlas = ExtResource("1_impact_sheet")
+region = Rect2(2800, 318, 400, 318)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_impact_18"]
+atlas = ExtResource("1_impact_sheet")
+region = Rect2(3200, 318, 400, 318)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_impact_19"]
+atlas = ExtResource("1_impact_sheet")
+region = Rect2(3600, 318, 400, 318)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_impact_20"]
+atlas = ExtResource("1_impact_sheet")
+region = Rect2(0, 636, 400, 318)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_impact_21"]
+atlas = ExtResource("1_impact_sheet")
+region = Rect2(400, 636, 400, 318)
+
+[resource]
+animations = [{
+"frames": [
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_impact_0")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_impact_1")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_impact_2")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_impact_3")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_impact_4")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_impact_5")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_impact_6")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_impact_7")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_impact_8")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_impact_9")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_impact_10")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_impact_11")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_impact_12")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_impact_13")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_impact_14")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_impact_15")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_impact_16")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_impact_17")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_impact_18")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_impact_19")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_impact_20")
+},
+{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_impact_21")
+}
+],
+"loop": false,
+"name": &"impact",
+"speed": 30.0
+}]

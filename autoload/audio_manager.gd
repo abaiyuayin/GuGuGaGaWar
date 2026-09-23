@@ -27,6 +27,8 @@ const AUDIO_EXT_FALLBACK: Array[String] = [".ogg", ".mp3", ".wav"]
 var _resolved_path_cache: Dictionary = {}
 ## 攻击音效资源缓存（unit_id -> AudioStream）
 var _attack_sound_cache: Dictionary = {}
+## 多段攻击音效的按路径资源缓存（res:// 路径 -> AudioStream，2026-09-20）
+var _attack_path_stream_cache: Dictionary = {}
 ## 当前正在播放攻击音效的播放器列表
 var _active_attack_players: Array[AudioStreamPlayer] = []
 ## 音效播放器对象池（复用避免频繁创建）
@@ -53,8 +55,7 @@ var _unit_spawn_state: Dictionary = {}
 ## 同时出兵判定窗口（秒），略大于 SPAWN_INTERVAL(1.0s)，用于判定"同时出兵"
 const SPAWN_SOUND_WINDOW: float = 1.2
 ## 优先播放攻击音效的兵种 ID（镜头锁定单位），其攻击音效必播放（不受上限限制）
-var _priority_unit_id: String = ""
-## BGM 播放器（独立于 SFX 对象池，常驻单实例）
+var _priority_unit_id: String = ""## BGM 播放器（独立于 SFX 对象池，常驻单实例）
 var _music_player: AudioStreamPlayer = null
 ## BGM 资源缓存（name -> AudioStreamMP3）
 var _music_stream_cache: Dictionary = {}
@@ -160,18 +161,30 @@ func _create_click_stream() -> AudioStreamWAV:
 ## 最多同时播放 MAX_CONCURRENT_ATTACK_SFX 个攻击音效，超出则忽略
 ## 优先兵种（镜头锁定单位）的攻击音效不受上限限制，必播放
 ## unit_id: 兵种 ID（如 "G1"），用于加载对应的 attack.mp3
-func play_attack_sound(unit_id: String) -> void:  ## 播放攻击音效方法
+## override_path: 多段攻击音效（2026-09-20）—— 非空时改用该文件（某一段指定了独立音效）；
+##                路径解析失败时回退到该兵种的默认攻击音效，不会静音
+func play_attack_sound(unit_id: String, override_path: String = "") -> void:  ## 播放攻击音效方法
 	## 清理已播放完成的播放器
 	_cleanup_finished_players()
-	## 判断是否为优先兵种（镜头锁定单位），优先兵种不受上限限制
-	var is_priority: bool = (_priority_unit_id != "" and unit_id == _priority_unit_id)  ## 是否为优先兵种
+	## 判断是否为优先兵种（镜头锁定单位 / 英雄·异象·特殊兵种），优先兵种不受上限限制
+	var is_priority: bool = (_priority_unit_id != "" and unit_id == _priority_unit_id) \
+			or is_priority_sfx_unit(unit_id)  ## 是否为优先兵种
 	## #3 修正（2026-08-23）：节流（audio_throttle）只作用于「点击音效」与「出兵音效」，不作用于攻击音效。
 	## 攻击音效始终走并发池，最多同时播放 MAX_CONCURRENT_ATTACK_SFX 个，超出则忽略；
 	## 优先兵种（镜头锁定单位）不受上限限制，必播放。节流开关对攻击音效无任何影响。
 	if not is_priority and _active_attack_players.size() >= MAX_CONCURRENT_ATTACK_SFX:
 		return
 	## 加载音效资源（带缓存）
-	var stream: AudioStream = _get_attack_sound(unit_id)
+	## 多段攻击音效（2026-09-20）：指定了 override_path 时优先用该文件，未命中回退兵种默认音效
+	var stream: AudioStream = null
+	var attack_path: String = ""
+	if override_path != "":
+		attack_path = resolve_audio_path(override_path)
+		if attack_path != "":
+			stream = _get_attack_stream_for_path(attack_path)
+	if stream == null:
+		stream = _get_attack_sound(unit_id)
+		attack_path = _get_attack_sound_path(unit_id)
 	if stream == null:
 		return
 	## 从对象池取一个播放器
@@ -180,7 +193,6 @@ func play_attack_sound(unit_id: String) -> void:  ## 播放攻击音效方法
 	## 优先使用 SFX 总线，不存在则回退到 Master
 	player.bus = "SFX" if AudioServer.get_bus_index("SFX") >= 0 else "Master"
 	## #17：应用该音效文件的独立音量（未设置过 = 满音量）
-	var attack_path: String = _get_attack_sound_path(unit_id)
 	player.volume_db = linear_to_db(SettingsManager.get_sound_volume(attack_path))
 	_active_attack_players.append(player)
 	player.play()
@@ -190,6 +202,16 @@ func play_attack_sound(unit_id: String) -> void:  ## 播放攻击音效方法
 ## unit_id: 兵种 ID，传空字符串清除优先
 func set_priority_unit_id(unit_id: String) -> void:  ## 设置优先兵种方法
 	_priority_unit_id = unit_id  ## 保存优先兵种 ID
+
+## #2026-09-22 需求：英雄 / 异象 / 特殊兵种的「点击 / 出场 / 攻击」音效优先于普通兵种。
+## 口径与 Unit.is_priority_display_unit() 完全一致：Hero*（英雄）、S*（特殊）、Y*（异象）。
+## 优先含义：
+##   - 攻击音效：不受 MAX_CONCURRENT_ATTACK_SFX 并发上限约束，必定发声；
+##   - 出场（出兵）音效：不受「点击压制窗口」限制，也不被节流并发锁丢弃，而是抢占后立即播放；
+##   - 点击音效：同样走抢占路径（点击本来就抢占，此处统一走优先分支）。
+## 与「镜头锁定优先兵种」_priority_unit_id 相互独立，两者取并集。
+func is_priority_sfx_unit(unit_id: String) -> bool:
+	return unit_id.begins_with("Hero") or unit_id.begins_with("S") or unit_id.begins_with("Y")
 
 ## 获取兵种攻击音效（带缓存）
 ## 优先使用音效配置页配置的"攻击音效"，未配置时回退到默认 attack.mp3
@@ -202,6 +224,19 @@ func _get_attack_sound(unit_id: String) -> AudioStream:
 		return null
 	var stream = load(path)
 	_attack_sound_cache[unit_id] = stream
+	return stream
+
+## 按路径获取攻击音效流（带缓存，2026-09-20 多段攻击音效用）
+## 与 _get_attack_sound 的区别：音源由 .tres 里的段配置直接指定，不走 unit_id 的设置链
+## path: 已由 resolve_audio_path() 解析过的实际可用路径；返回 null = 文件不可用
+func _get_attack_stream_for_path(path: String) -> AudioStream:
+	if path == "":
+		return null
+	if _attack_path_stream_cache.has(path):
+		return _attack_path_stream_cache[path]
+	var stream: AudioStream = load(path) as AudioStream
+	if stream != null:
+		_attack_path_stream_cache[path] = stream
 	return stream
 
 ## 解析音频路径（#音效 2026-09-02）：原路径存在则原样返回；不存在时尝试同名的其它扩展名
@@ -248,13 +283,15 @@ func play_unit_click_sound(unit_id: String) -> void:
 	var click: Variant = config.get("click_sound", "")
 	## 多配置（Array）：随机播放其中一个；单配置（String）：直接播放
 	## is_click=true 标记这是"点击音效"，用于在播放期间压制出兵音效（#146）
+	## #2026-09-22：英雄 / 异象 / 特殊兵种的点击音效走优先分支（抢占后必定发声）
+	var prio: bool = is_priority_sfx_unit(unit_id)
 	if click is Array:
 		var arr: Array = click
 		if arr.is_empty():
 			return
-		_play_one_shot(str(arr[randi() % arr.size()]), true)
+		_play_one_shot(str(arr[randi() % arr.size()]), true, false, prio)
 	else:
-		_play_one_shot(str(click), true)
+		_play_one_shot(str(click), true, false, prio)
 
 ## 直接按路径播放一段一次性音效（用于调试界面预览、规则语音试听等场景）
 ## path: res:// 音频路径；空或文件不存在则直接返回，不做任何操作
@@ -270,9 +307,12 @@ func play_sound_path(path: String, force: bool = false) -> void:
 ## - 多个相同类型规则同时触发时，随机挑其中一条的语音播放（避免同音反复堆叠）
 ## unit_id: 兵种 ID（如 "G1"），从 SettingsManager 读取配置的音频路径与规则列表
 func play_unit_spawn_sound(unit_id: String) -> void:
+	## #2026-09-22：英雄 / 异象 / 特殊兵种的出场音效优先级高于普通兵种 ——
+	## 不受「点击压制窗口」限制、也不被节流并发锁丢弃（走 _play_one_shot 的 priority 分支抢占后播放）。
+	var prio: bool = is_priority_sfx_unit(unit_id)
 	## 点击优先（所有模式通用）：点击后的压制窗口内，出兵音一律不播放（只播点击）。
 	## 与节流开关无关——即便关闭节流，点击也永远压过「同时」触发的出兵。
-	if Time.get_ticks_msec() / 1000.0 < _click_supremacy_until:
+	if not prio and Time.get_ticks_msec() / 1000.0 < _click_supremacy_until:
 		return
 	var config: Dictionary = SettingsManager.get_unit_sound_config(unit_id)
 	var rules: Array = config.get("spawn_rules", [])
@@ -322,7 +362,7 @@ func play_unit_spawn_sound(unit_id: String) -> void:
 	var cands: Array[String] = cands_by_type[chosen_type]
 	## 多个相同规则同时触发 → 随机挑一个播放
 	var chosen_sound: String = cands[randi() % cands.size()]
-	_play_one_shot(chosen_sound)
+	_play_one_shot(chosen_sound, false, false, prio)
 
 ## 累计出N兵判定：计数+1，达到阈值即触发并重置计数
 ## 返回 true 表示本次出兵触发了播放条件
@@ -359,8 +399,17 @@ func _eval_simultaneous(state_key: String, rule_count: int) -> bool:
 ## - 关闭：force=true 或 audio_throttle=false → 触发即播、不做任何限制与防抖
 ##   （出多少兵播多少次、点多少次按钮播多少次）
 ## - 开启：单一并发锁 + 点击优先（见 _throttle_gate）；出兵在锁占用时被丢弃，点击抢占在播音效
-func _play_one_shot(path: String, is_click: bool = false, force: bool = false) -> void:
+## - priority=true（#2026-09-22，英雄 / 异象 / 特殊兵种）：无视上述一切限制，
+##   先抢占（打断在播音效）再立即播放，保证这些兵种的点击 / 出场音效一定被听到。
+func _play_one_shot(path: String, is_click: bool = false, force: bool = false,
+		priority: bool = false) -> void:
 	if path == "":
+		return
+	## 优先兵种：无条件抢占后播放（_throttle_gate(true) 内部只在锁被占用时才打断，
+	## 节流关闭时锁恒为空，等价于普通触发即播）
+	if priority:
+		_throttle_gate(true)
+		_play_oneshot_now(path, is_click)
 		return
 	## 试听（force）或节流关闭 → 直接触发即播，跳过一切节流与防抖
 	if force or not SettingsManager.audio_throttle:
@@ -372,6 +421,19 @@ func _play_one_shot(path: String, is_click: bool = false, force: bool = false) -
 	_play_oneshot_now(path, is_click)
 
 ## 实际播放一段一次性音效（不处理节流/防抖，由调用方决定）
+## #音效（2026-09-20）：单兵种音效目录增益 —— 目录前缀 → 线性增益（叠加在单文件音量之上）
+## 玩家反馈「萌黄的点击/出场音效偏小」→ S9 音效目录整体 ×1.6（点击与出场都走本函数）。
+const UNIT_AUDIO_DIR_GAIN: Dictionary = {
+	"res://assets/audio/units/S9/": 1.6,
+}
+
+## 返回某条音频路径应叠加的目录增益（无匹配 = 1.0）
+func _unit_audio_dir_gain(p: String) -> float:
+	for dir in UNIT_AUDIO_DIR_GAIN:
+		if p.begins_with(str(dir)):
+			return float(UNIT_AUDIO_DIR_GAIN[dir])
+	return 1.0
+
 func _play_oneshot_now(path: String, is_click: bool) -> void:
 	## #音效（2026-09-02）：先做扩展名兜底解析，历史存档里的 .wav 路径改指现存的 .ogg
 	var real_path: String = resolve_audio_path(path)
@@ -391,6 +453,8 @@ func _play_oneshot_now(path: String, is_click: bool) -> void:
 	var vol: float = SettingsManager.get_sound_volume(path)
 	if is_equal_approx(vol, 1.0) and real_path != "" and real_path != path:
 		vol = SettingsManager.get_sound_volume(real_path)
+	## #音效（2026-09-20）：叠加单兵种音效目录增益（萌黄 S9 点击/出场音效偏小 → ×1.6）
+	vol *= _unit_audio_dir_gain(real_path if real_path != "" else path)
 	player.volume_db = linear_to_db(vol)
 	## 节流开启时才占用并发锁（关闭时纯触发即播，不占锁）
 	if is_click:  ## 点击优先：记录压制窗口，期间出兵音不播放（所有模式通用）
@@ -472,6 +536,8 @@ func clear_unit_sound_cache(unit_id: String) -> void:
 	_unit_click_sound_cache.erase(unit_id)
 	_unit_spawn_sound_cache.erase(unit_id)
 	_attack_sound_cache.erase(unit_id)
+	## 多段攻击音效按路径缓存：配置变更后需重载（2026-09-20）
+	_attack_path_stream_cache.clear()
 	## 状态 key 格式为 "unit_id|rule_index"，需清除所有该兵种的状态
 	var prefix: String = "%s|" % unit_id
 	var keys_to_erase: Array = []
@@ -487,6 +553,7 @@ func clear_all_sound_cache() -> void:
 	_unit_click_sound_cache.clear()
 	_unit_spawn_sound_cache.clear()
 	_attack_sound_cache.clear()
+	_attack_path_stream_cache.clear()
 	_unit_spawn_state.clear()
 
 ## 从对象池获取一个可用的 AudioStreamPlayer

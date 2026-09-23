@@ -160,6 +160,10 @@ func show_loading(scene_path: String) -> void:
 	## 异步加载，并立即显示居中提示框（每次切换都弹框；MIN_SHOW_MS 保证至少停留 500ms 不闪而过）
 	ResourceLoader.load_threaded_request(scene_path, "PackedScene")
 	_show_overlay()
+	## Web 按需加载（2026-09-14）：目标场景依赖兵种图集时，先在遮罩下等资源包挂载
+	## （进度条照常伪进度反馈；桌面/Android 立即返回）。等待期间尚未开始轮询场景加载结果。
+	if _scene_needs_unit_pack(scene_path):
+		await WebPackLoader.ensure_units()
 	_await_scene_loaded()
 
 ## 若本次切换目标是战斗场景，则在加载框显示期间串行预热对象池
@@ -183,6 +187,15 @@ func _prewarm_pool_if_battle() -> void:
 ## 判断目标场景是否为需要预热对象池的战斗场景
 func _is_battle_scene(scene_path: String) -> bool:
 	return "battle_root" in scene_path or "battlefield_mode" in scene_path
+
+## 场景是否依赖兵种动画图集（Web 拆包后需先挂载 pack_units.pck 再进场景；
+## 主菜单/战役地图等纯 UI 场景不等待，不阻塞首屏。
+## "battlefield" 前缀同时覆盖 battlefield_mode 与水晶战场 battlefield）
+func _scene_needs_unit_pack(scene_path: String) -> bool:
+	for key in ["battle_root", "battlefield", "roguelike", "codex_screen", "debug_units"]:
+		if scene_path.contains(key):
+			return true
+	return false
 
 ## 显示居中提示框（随机提示词 + 兵种动画 + 进度条归零）
 func _show_overlay() -> void:
@@ -208,6 +221,10 @@ func _do_switch() -> void:
 func _play_random_unit_anim() -> void:
 	_anim_frames = null
 	_anim_tex.texture = null
+	## Web 按需加载（2026-09-14）：图集包未挂载时不尝试加载兵种动画（frames 存在但依赖
+	## 的图集缺失会加载失败刷错误日志），遮罩只显示随机提示词；桌面/Android 恒就绪，行为不变。
+	if not WebPackLoader.is_units_ready():
+		return
 	## 池子：常规兵种 + 隐藏事件/加载专用兵种（含 S6 小猫臭臭舞等过场动画）
 	var units: Array = UnitDatabase.unit_list + UnitDatabase.hidden_units
 	if units.is_empty():

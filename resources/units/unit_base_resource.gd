@@ -70,7 +70,9 @@ class_name UnitResource extends Resource  ## 声明类名为 UnitResource，继�
 ## 可在调试界面调整并永久保存到 .tres
 @export var attack_sound_timing: float = 0.95
 ## 攻击表现动画模式：""（默认播攻击动画）；"idle"（无攻击动画坦克，近敌播待机，S5 咕嘎工钢）；
-## "charge"（无攻击动画，保持奔跑撞击敌人，攻击周期内继续冲撞，S4 动力菲比）
+## "charge"（无攻击动画，保持奔跑撞击敌人，攻击周期内继续冲撞，S4 动力菲比）；
+## "none"（2026-09-22：**完全无攻击能力**——不索敌、不切攻击/攻基状态、不造成任何伤害，
+##         只推进到敌方基地前站定。当前仅 S5 咕嘎工钢使用）
 @export var attack_anim_mode: String = ""
 ## 攻击动画中的命中帧索引（0 开始），-1 表示不通过动画帧触发伤害
 ## 配置后，state_attack 会在动画播放到该帧时执行 perform_attack()
@@ -87,6 +89,13 @@ class_name UnitResource extends Resource  ## 声明类名为 UnitResource，继�
 ## 攻击音效播放帧（0 开始，-1 表示使用 attack_sound_timing 比例）
 ## 配置后，动画播放到该帧时播放音效（优先于 attack_sound_timing 生效）
 @export var attack_sound_frame: int = -1
+
+## 多段攻击的音效帧列表（与 attack_hit_frames 同口径：第 i 个元素是第 i 击的音效帧）。
+## 非空时优先于单帧 attack_sound_frame；帧图调整页可逐帧点选。
+@export var attack_sound_frames: Array[int] = []
+## 每段音效使用的音效文件（2026-09-21）：与 attack_sound_frames 同下标。
+## "" = 该段回退该兵种默认攻击音效；路径不可用时同样回退默认音，不会静音。
+@export var attack_sound_paths: Array[String] = []
 ## 备用攻击动画（attack_alt_frames）的独立音效帧：-1 = 未配置时沿用攻击一的音效帧
 @export var attack_sound_frame_alt: int = -1
 ## 多段连击的判定帧列表（与 attack_count 对应）
@@ -163,6 +172,18 @@ class_name UnitResource extends Resource  ## 声明类名为 UnitResource，继�
 ## 历史兼容字段：攻击动画是否拉伸到 attack_speed。当前不再使用，动画始终只按各自倍率播放。
 @export var attack_anim_sync_interval: bool = false
 
+## ── 瞬发命中 + 命中特效（2026-09-19 从直播版搬入，萌黄 S9）──────────────────
+## 开启后，该远程兵种的攻击**不生成飞行物**：攻击动画播到命中帧时直接在目标位置结算
+## 伤害与攻击词条，同时在目标身上播放命中特效。默认 false = 既有远程兵种行为不变。
+@export var attack_instant_hit: bool = false
+## 命中特效动画帧文件名（相对该兵种目录，如 "impact_frames.tres"）。
+## 空 = 使用内置圆形光点占位（白色径向渐变，按阵营红/蓝着色）。
+@export var impact_anim_frames: String = ""
+## 命中特效显示高度（像素），0 = 使用内置默认值 32
+@export var impact_display_height: float = 0.0
+## 命中特效显示宽度（像素），0 = 与高度相同
+@export var impact_display_width: float = 0.0
+
 ## 攻击后摇时长（秒）：攻击动画结束后的固定僵直锁定（不可移动/不可后撤，可转身）
 ## -1 = 跟随兵种类型默认（中远程 1.5s / 近战 1.0s）；显式设置 >=0 时优先用该值
 ## 可在调试界面「数值调整」中调校并永久保存到 .tres（中远程兵种默认 1.5 秒、近战默认 1.0 秒后摇）
@@ -198,6 +219,11 @@ var is_ranged: bool:
 		elif is_ranged_override == 0:
 			return false
 		return attack_range > Constants.RANGED_THRESHOLD  ## 自动判断：攻击距离大于远程阈值则视为远程单位
+## #2026-09-22：该兵种是否具备攻击能力。
+## attack_anim_mode == "none" 表示纯功能单位（S5 咕嘎工钢）：不索敌、不进入攻击/攻基状态、
+## 不造成任何伤害，只照常推进并在敌方基地前站定。伤害字段同时清零，形成双保险。
+func has_attack_ability() -> bool:
+	return attack_anim_mode != "none"
 ## #3：是否使用横/纵分开的椭圆/矩形攻击判定（attack_range_h 或 attack_range_v 任一 > 0 即为 true）
 var use_elliptical_range: bool:
 	get:

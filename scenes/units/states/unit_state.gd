@@ -9,6 +9,13 @@ extends RefCounted  ## 继承引用计数类
 ## 引用宿主单位节点，状态通过此引用操作单位
 var unit: Node2D  ## 宿主单位节点引用
 
+## 后撤「被挡住」判定阈值（2026-09-19 从直播版搬入，玩家反馈）：
+## 本帧实际位移 < 理论位移 × 该比例 → 视为后撤未生效。
+## 贴着自家水晶 / 战场边界 / 友军时后撤方向会被完全挡住，move_and_slide() 位移≈0，
+## 若不判定就会「动画切成奔跑、身体原地不动」= 玩家报的「后摇期间原地奔跑」。
+## 0.3 与 state_move._advance / state_attack._move_towards_target 的受阻判定口径一致。
+const RETREAT_BLOCKED_RATIO: float = 0.3
+
 ## 构造函数
 ## host: 宿主单位节点，状态将操作此单位
 func _init(host: Node2D) -> void:  ## 定义构造函数
@@ -111,7 +118,8 @@ func get_kite_distance_px(res: UnitResource) -> float:  ## 定义风筝距离计
 ## 后退方向 = 远离威胁 + 朝己方基地的水平分量，走碰撞系统（move_and_slide）
 ## 越界由 unit_base._clamp_to_field 在物理帧末兜底
 ## 返回值: true 表示本帧执行了后退，调用方应跳过本帧的攻击/推进逻辑
-func try_ranged_retreat(anim: String = "move") -> bool:  ## 定义远程后退方法（anim 默认 "move"，后摇传 "attack" 保持攻击姿态）
+## delta: 调用方的本帧时长（秒），用于判定后撤是否真的产生位移；<=0 时退回引擎物理帧时长
+func try_ranged_retreat(anim: String = "move", delta: float = -1.0) -> bool:  ## 定义远程后退方法（anim 默认 "move"，后摇传 "attack" 保持攻击姿态）
 	if unit == null or unit.is_dead:  ## 宿主无效或已死亡
 		return false  ## 不后退
 	var res: UnitResource = unit.unit_resource  ## 获取兵种资源
@@ -137,8 +145,18 @@ func try_ranged_retreat(anim: String = "move") -> bool:  ## 定义远程后退�
 	var away: Vector2 = threat_vec.normalized() if threat_vec.length() > 0.01 else Vector2(home_dir, 0.0)  ## 远离威胁方向
 	var retreat_dir: Vector2 = (away + Vector2(home_dir, 0.0)).normalized()  ## 合成后退方向
 	var speed_px: float = res.move_speed * Constants.UNIT_TO_PIXELS * Constants.RETREAT_SPEED_RATIO  ## 后退像素速度
+	## 实际位移检测（2026-09-19 从直播版搬入，玩家反馈）：贴着自己水晶 / 边界 / 友军时，
+	## 后撤方向会被完全挡住，move_and_slide() 位移≈0，但动画已经被切成奔跑 → 表现为「原地奔跑」。
+	## 位移不足理论值 RETREAT_BLOCKED_RATIO 即判定本次后撤未生效：清速度并返回 false，
+	## 交回调用方走站定分支（待机 > 行走 > 奔跑），维持「动画与位移必须匹配」的既有约束。
+	var before: Vector2 = unit.global_position  ## 后撤前位置
 	unit.velocity = retreat_dir * speed_px  ## 设置后退速度
 	unit.move_and_slide()  ## 走碰撞系统后退，避免穿模
+	var step: float = delta if delta > 0.0 else unit.get_physics_process_delta_time()  ## 本帧时长
+	var expected: float = speed_px * step  ## 本帧理论位移
+	if expected > 0.0 and unit.global_position.distance_to(before) < expected * RETREAT_BLOCKED_RATIO:
+		unit.velocity = Vector2.ZERO  ## 被挡住：清速度，避免下一帧继续顶着碰撞体
+		return false  ## 本次后撤未生效，交回调用方走站定分支
 	## #8：后退时翻转朝向到实际移动方向（面朝撤退方向、背对威胁）。
 	## 原实现面朝威胁，角色「脸朝敌人、身体倒退着走」，被用户判定为原地倒退表现；
 	## 改为朝向与位移一致（面朝己方基地转身后撤），视觉上就是正常的逃跑/后撤。

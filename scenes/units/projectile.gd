@@ -44,6 +44,25 @@ var spin_speed: float = 0.0  ## 自旋速度
 ## #15 贴图朝向补偿（度），在「朝向飞行方向」的基础上再叠加（G5 标枪需 180°）
 var rotation_offset_deg: float = 0.0  ## 朝向补偿角度
 
+## ── 弧线（鱼钩）飞行（2026-09-20，Hero5 糯糯九箭齐射的副目标箭）──────────
+## 开关：true 时改走三次贝塞尔曲线，且**关闭碰撞检测**，抵达终点时程序化命中锁定目标。
+## 之所以关闭碰撞：弧线会从其他单位头上掠过去，若沿用 body_entered，
+## 箭会在半路被路人甲拦下，锁定目标的 3 支箭全部打空（用户要求「同时锁定三个敌人」）。
+var arc_enabled: bool = false
+## 曲线凸起方向：-1 = 从上方来（钩向下），+1 = 从下方来（钩向上）
+var arc_perp: float = -1.0
+## 钩形凸起幅度（像素）：控制曲线鼓出多远，越大越像鱼钩
+var arc_bulge: float = 70.0
+## 整段曲线飞行时长（秒）
+var arc_time: float = 0.55
+## 曲线控制点（init_direction 时按「起点 → 目标」计算）
+var _arc_from: Vector2 = Vector2.ZERO
+var _arc_ctrl1: Vector2 = Vector2.ZERO
+var _arc_ctrl2: Vector2 = Vector2.ZERO
+var _arc_to: Vector2 = Vector2.ZERO
+## 曲线进度（0 → 1）
+var _arc_t: float = 0.0
+
 ## 共享的纯色方块贴图（白色，通过 modulate 着色为红/蓝）
 static var _crystal_texture: Texture2D = _create_crystal_texture()  ## 静态共享贴图
 ## 共享的白色径向渐变贴图（用于 F1 发光亮团）
@@ -95,6 +114,9 @@ func _ready() -> void:  ## 重写 _ready 方法
 	## 现在水晶挂在 MASK_CRYSTAL（第 7 层），弹道掩码含该层后 body_entered 能检测到水晶，
 	## 命中后走 projectile._hit_target → _damage_base_via_battlefield 正常结算。
 	collision_mask = Constants.MASK_PROJECTILE_HIT | Constants.MASK_CRYSTAL
+	## 弧线（鱼钩）箭不吃碰撞：终点由 _finish_arc 程序化命中锁定目标
+	if arc_enabled:
+		collision_mask = 0
 	## 连接碰撞信号：当投射物碰到物理体（CharacterBody2D 单位）时触发
 	if not body_entered.is_connected(_on_body_entered):  ## 如果信号未连接
 		body_entered.connect(_on_body_entered)  ## 连接碰撞信号
@@ -109,7 +131,41 @@ func init_direction() -> void:  ## 定义初始化方向的方法
 	else:  ## 目标无效
 		## 默认方向：红方向右，蓝方向左
 		fly_direction = Vector2(1.0 if team == 0 else -1.0, 0.0)  ## 默认方向
+	## 弧线弹道：以「当前发射点 → 目标点」为弦，向 arc_perp 方向鼓出成钩形
+	if arc_enabled:
+		_setup_arc_path(target.global_position if (target != null and is_instance_valid(target)) else global_position + fly_direction * 200.0)
 	_apply_rotation()  ## 根据飞行方向旋转贴图
+
+## 按三次贝塞尔构建鱼钩轨迹。
+## 控制点取法（local 坐标，forward 沿弦、perp 为 arc_perp 方向）：
+##   ctrl1 = 弦长 25% 处 + perp × bulge      —— 先沿垂直方向鼓出去
+##   ctrl2 = 终点前 18% 处 + perp × bulge    —— 末端保持同侧，于是收尾时**从侧面钩回目标**
+## 两点同侧即为「鱼钩」形状：先平行前进、再下潜、最后钩入。
+func _setup_arc_path(to: Vector2) -> void:
+	_arc_from = global_position
+	_arc_to = to
+	var offset: Vector2 = to - global_position
+	var length: float = offset.length()
+	var forward: Vector2 = offset / length if length > 1.0 else fly_direction
+	if forward.length() < 0.01:
+		forward = Vector2(1.0 if team == 0 else -1.0, 0.0)
+	var perp := Vector2(0.0, arc_perp)
+	_arc_ctrl1 = _arc_from + forward * (length * 0.25) + perp * arc_bulge
+	_arc_ctrl2 = _arc_to - forward * (length * 0.18) + perp * arc_bulge
+	_arc_t = 0.0
+
+## 三次贝塞尔求值
+static func _bezier(p0: Vector2, p1: Vector2, p2: Vector2, p3: Vector2, t: float) -> Vector2:
+	var u: float = 1.0 - t
+	return p0 * (u * u * u) + p1 * (3.0 * u * u * t) + p2 * (3.0 * u * t * t) + p3 * (t * t * t)
+
+## 曲线抵达终点：命中锁定目标（仍存活且为敌方），否则只播命中特效
+func _finish_arc() -> void:
+	var t: Unit = target if (target != null and is_instance_valid(target)) else null
+	if t != null and not t.is_dead and t.team != team:
+		_hit_target(t)
+		return
+	_play_hit_fx()
 
 func _apply_texture() -> void:  ## 定义应用贴图的方法
 	## 根据是否有自定义贴图选择贴图，并应用阵营颜色
@@ -171,6 +227,11 @@ func _physics_process(delta: float) -> void:  ## 重写物理帧方法
 		return  ## 直接返回
 
 	## 飞行逻辑：所有投射物均按发射时确定的方向（init_direction）直线飞行，不追踪目标
+	## 例外：arc_enabled 的鱼钩箭走贝塞尔曲线，抵达终点后程序化命中锁定目标
+	if arc_enabled:
+		_advance_arc(delta)
+		return
+
 	if fly_direction.length() > 0.01:  ## 如果方向有效
 		var move_vec: Vector2 = fly_direction * speed * delta  ## 本帧位移
 		global_position += move_vec  ## 移动
@@ -184,6 +245,23 @@ func _physics_process(delta: float) -> void:  ## 重写物理帧方法
 		if max_distance > 0.0 and traveled_distance >= max_distance:  ## 超过有效距离
 			queue_free()  ## 销毁投射物
 			return  ## 直接返回
+
+## 沿贝塞尔曲线推进（鱼钩箭）。
+## 贴图朝向跟随**切线**（prev → 当前点）而不是发射方向，钩尾才会自然转向目标；
+## 有效距离检查在曲线模式下不生效（曲线路长大于直线弦长，用弦长做上限会让箭半途消失）。
+func _advance_arc(delta: float) -> void:
+	_arc_t += delta / maxf(arc_time, 0.01)
+	var t: float = clampf(_arc_t, 0.0, 1.0)
+	var prev: Vector2 = global_position
+	var next: Vector2 = _bezier(_arc_from, _arc_ctrl1, _arc_ctrl2, _arc_to, t)
+	var step: Vector2 = next - prev
+	global_position = next
+	traveled_distance += step.length()
+	if step.length() > 0.01:
+		fly_direction = step.normalized()
+		_apply_rotation()
+	if _arc_t >= 1.0:
+		_finish_arc()
 
 ## 命中目标的处理方法（私有）
 func _hit_target(hit_unit: Unit) -> void:  ## 定义命中目标的方法

@@ -28,6 +28,10 @@ signal unit_damaged(unit: Unit, damage: int)  ## 定义单位受伤信号
 ## 信号：攻击动画播放到配置的命中帧时发出
 ## 由 state_attack 接收并在该时机执行实际伤害
 signal attack_animation_hit(hit_index: int)  ## 定义攻击动画命中帧信号（hit_index 用于二连击不同伤害类型）
+## 信号：一个完整的普通攻击周期结束（含后摇开始前的那一次结算）
+## #技能系统（2026-09-20）：攻击次数触发型技能的计数源，由 state_attack._finish_attack_cycle 发出。
+## 技能状态（state_skill）不经过该函数，因此技能动作本身不会被计入普通攻击次数。
+signal normal_attack_cycle_finished()  ## 普通攻击周期结束信号
 
 ## 兵种资源引用，包含该单位的所有属性数据
 var unit_resource: UnitResource  ## 存储兵种资源对象
@@ -116,6 +120,8 @@ var _prev_attack_frame: int = -1  ## 上一攻击动画帧索引
 var _attack_hit_emitted: bool = false  ## 本周期是否已触发命中标志
 ## 当前攻击动画周期内是否已经通过帧触发过音效（attack_sound_frame 配置时生效）
 var _attack_sound_frame_played: bool = false  ## 本周期是否已通过帧播放音效标志
+## 2026-09-20：多段音效帧的推进索引（与 _attack_hit_index 同构）
+var _attack_sound_frames_index: int = 0
 ## 当前攻击周期内已执行的命中次数（用于连击和不同命中的伤害类型）
 var _attack_hit_index: int = 0  ## 当前周期已执行命中次数
 ## 基准动画显示高度（基于 move 动画第一帧高度 × 基础 scale），用于统一各动画显示尺寸
@@ -175,6 +181,14 @@ const SEPARATION_STRENGTH: float = 80.0  ## 分离推力强度（像素/秒）
 const STUCK_THRESHOLD: float = 0.35  ## 连续前进受阻超过该秒数判定为卡住
 const DODGE_DURATION: float = 0.7  ## 单次绕步持续时间（秒）
 const DODGE_FORWARD_FACTOR: float = 0.7  ## 绕步时保留的前进速度比例
+
+## #2026-09-22 需求：英雄 / 异象 / 特殊单位的显示层级高于普通兵种。
+## 普通兵种 z_index = 0；英雄（Hero*）、异象（Y*）、特殊（S*）统一抬到 20，
+## 避免被大体型单位（水晶、S5 咕嘎工钢等）盖住。
+## 血条 / 数值 Label 等子节点的 z_as_relative 默认 true，会在该基线上继续叠加自身 z_index
+## （数值 Label 的 70 → 实际 90），不受影响。
+const Z_INDEX_NORMAL: int = 0
+const Z_INDEX_PRIORITY: int = 20
 
 ## 全局缓存：(unit_id + anim_name) → 帧纹理最大尺寸 Vector2(max_w, max_h)
 ## 避免每次切动画都重新扫描纹理尺寸，大幅提升性能
@@ -280,6 +294,162 @@ var skill_slow_timer: float = 0.0  ## 技能减速剩余秒（>0 表示生效中
 
 ## #技能系统：骑射类技能的「取消攻击后摇」计时（>0 期间攻击后摇为 0）
 var skill_no_recovery_timer: float = 0.0
+
+## #技能系统：技能霸体（2026-09-20，Hero4 回身七连）。
+## 技能期间置 true：免疫击退位移、不被击退打断、也不累计击退晕眩层数。
+## 由 state_skill.enter() / exit() 成对置位，不需要额外计时器。
+var skill_super_armor: bool = false
+
+## #技能系统：多目标齐射剩余普攻次数（>0 期间每次普攻改放九箭齐射，见 _fire_skill_volley）。
+## 由 SkillEffects._multi_lock_volley 置位，每收尾一次普攻周期减 1（state_attack._finish_attack_cycle）。
+var skill_volley_charges: int = 0
+## #技能系统：多目标齐射参数（技能定义 effect 的副本，释放时缓存）
+var skill_volley_params: Dictionary = {}
+## #技能系统：本次普攻周期是否已放过齐射（防重复）——
+## state_attack 在动画结束时有一段「补齐掉帧遗漏命中」的兜底会再次调用 perform_attack，
+## 不设闸门会让一次攻击射出 18 支箭。每个普攻周期收尾时复位。
+var _skill_volley_fired: bool = false
+
+## #技能系统：技能视觉体型倍率（>1 放大，2026-09-20 Doro 巨化重击用）。
+## 只改精灵显示大小，**不影响碰撞体、攻击范围与任何数值**。
+## 唯一写入点是 set_skill_size_mult()，_apply_anim_scale() 会把它乘进精灵缩放，
+## 因此切动画（待机/行走/攻击）时体型倍率不会丢失。
+var skill_size_mult: float = 1.0
+## #技能系统（2026-09-22）：技能期的**横向**攻击范围额外倍率（纵向不变）。
+## 用途：Doro 巨化重击「变大后攻击面要更宽」——体型倍率已经让横纵一起 ×2，
+## 这里再单独把横向放大一点（只影响椭圆判定 h 半轴与攻基进入距离）。
+## 同样只在读取侧相乘，默认 1.0 时是恒等变换，对其它兵种零影响。
+var skill_range_h_mult: float = 1.0
+## #技能系统：碰撞体基础半径（_setup_collision_body 算出的原始值）。
+## 技能体型倍率以它为基准换算，避免在现有半径上反复累乘。
+var _base_collision_radius: float = 0.0
+## #技能系统：本单位是否为「被召唤出来的援军」（爱弥斯技能召唤的四位英雄）。
+## 只作标记与防重复削弱用；真正的削弱结果落在 buff_max_hp / buff_damage_mult / current_armor 上。
+var is_summoned: bool = false
+
+## #技能系统：设置技能视觉体型倍率并**立即**重算当前动画的精灵缩放 + 碰撞体半径。
+## 技能流程逐帧调用本方法来播放大/缩小的平滑过渡（_compute_anim_scale 有缓存，逐帧调用开销可忽略）。
+func set_skill_size_mult(mult: float) -> void:
+	skill_size_mult = maxf(mult, 0.01)
+	_apply_collision_radius()
+	if unit_sprite == null or unit_sprite.sprite_frames == null:
+		return
+	## _apply_anim_scale 是唯一写 unit_sprite.scale 的入口，走它才能保住
+	## 基类单位 ×3、肉鸽 Boss visual_scale_mult 等既有倍率
+	_apply_anim_scale(unit_sprite.sprite_frames, String(unit_sprite.animation))
+
+## 按当前体型倍率重算碰撞体半径。
+## 以 _base_collision_radius 为基准**重算**而不是在现有半径上累乘 ——
+## 变大→变小的来回过程若用累乘，浮点误差会一轮轮把半径啃小。
+func _apply_collision_radius() -> void:
+	if _base_collision_radius <= 0.0:
+		return
+	var col = get_node_or_null("CollisionShape2D")
+	if col == null or not (col.shape is CircleShape2D):
+		return
+	(col.shape as CircleShape2D).radius = _base_collision_radius * skill_size_mult
+
+## #技能系统：攻击范围的有效半宽 / 半高（像素）= 资源基准值 × 技能体型倍率。
+## 倍率只在**读取侧**相乘：unit_resource 是所有同兵种单位共享的资源，
+## 直接改它会让场上每一只 Doro 一起变大，而且退出技能后回不去。
+## 默认倍率 1.0 时是恒等变换，对其它兵种零影响。
+func eff_attack_range_h_px() -> float:
+	if unit_resource == null:
+		return 0.0
+	return unit_resource.get_attack_range_h_px() * skill_size_mult * skill_range_h_mult
+
+func eff_attack_range_v_px() -> float:
+	if unit_resource == null:
+		return 0.0
+	return unit_resource.get_attack_range_v_px() * skill_size_mult
+
+## #技能系统（2026-09-22）：设置技能期的横向攻击范围额外倍率。
+## 只影响「攻击范围」的读取侧，不改碰撞体、不改精灵缩放（那是 set_skill_size_mult 的职责）。
+## 技能结束时必须由调用方复位成 1.0，否则对象池复用会让下一只单位带着加宽的攻击面出场。
+func set_skill_range_h_mult(mult: float) -> void:
+	skill_range_h_mult = maxf(mult, 0.01)
+
+## #2026-09-22：本单位是否属于「显示 / 音效优先」兵种 —— 英雄（Hero*）、异象（Y*）、特殊（S*）。
+## 与 AudioManager.is_priority_sfx_unit() 采用同一套前缀口径，保证画面层级与音效优先级一致。
+func is_priority_display_unit() -> bool:
+	if unit_resource == null:
+		return false
+	var uid: String = unit_resource.unit_id
+	return uid.begins_with("Hero") or uid.begins_with("S") or uid.begins_with("Y")
+
+## 按兵种分类写入 z_index（唯一写入点，setup 完成后调用一次）
+func _apply_display_priority_z() -> void:
+	z_index = Z_INDEX_PRIORITY if is_priority_display_unit() else Z_INDEX_NORMAL
+
+## #2026-09-22：本单位是否具备攻击能力（S5 咕嘎工钢这类纯功能单位为 false）。
+## 状态机在「索敌 / 切攻击状态 / 切攻基状态」之前统一查这一个入口，
+## 保证无攻击能力的单位只推进、不挥击、不掉水晶血。
+func has_attack_ability() -> bool:
+	return unit_resource != null and unit_resource.has_attack_ability()
+
+## #技能系统（2026-09-20）：把本单位标记为「被召唤出来的援军」并按援军规则削弱。
+## 爱弥斯技能召唤的四位英雄全部走这里（用户拍板：没有护盾、不能放技能、血量与伤害减半）。
+## 全部落在**实例级字段**上，绝不改 `unit_resource`（那是同兵种共享资源）。
+func apply_summoned_penalty() -> void:
+	if is_summoned:
+		return  ## 防重复：重复调用会把血量再砍一半
+	is_summoned = true
+	## ① 生命上限减半：get_max_hp() 是全局唯一出口，血条 / 百分比结算都跟着走
+	buff_max_hp = maxi(int(round(float(get_max_hp()) * 0.5)), 1)
+	current_hp = buff_max_hp
+	if health_bar != null:
+		health_bar.max_value = float(buff_max_hp)
+		health_bar.value = float(current_hp)
+	_update_hp_bar_value_label()
+	## ② 伤害减半：_compute_damage_entries 里统一乘 buff_damage_mult，近战远程都覆盖
+	buff_damage_mult *= 0.5
+	## ③ 没有护盾：清空且不给恢复途径（护盾只能靠军令/文物加，调用方不碰这里）
+	current_armor = 0
+	if armor_bar != null:
+		armor_bar.value = 0.0
+	## ④ 不能放技能：直接摘掉技能组件。
+	## 用 remove_child + queue_free 而不是只 queue_free —— 后者是延迟的，
+	## 同帧内组件的 _physics_process 仍会跑一轮。
+	var comp: Node = get_node_or_null("UnitSkillComponent")
+	if comp != null:
+		remove_child(comp)
+		comp.queue_free()
+
+## 技能名标牌尺寸与位置（本地坐标，px）
+const SKILL_NAME_LABEL_W: float = 260.0
+const SKILL_NAME_LABEL_H: float = 30.0
+const SKILL_NAME_LABEL_Y: float = 96.0  ## 标牌下沿距单位原点的上方距离（越高越靠上）
+## 技能名渐显 / 持续 / 渐隐时长（秒）：0.5 + 1.0 + 0.5 = 整段 2.0 秒
+const SKILL_NAME_FADE_TIME: float = 0.5
+const SKILL_NAME_HOLD_TIME: float = 1.0
+
+## #技能系统（2026-09-20）：在单位头顶弹出一条技能名（渐显 → 停留 → 渐隐）。
+## 时间轴（用户拍板：整段 2 秒，其中出现+消失占 1 秒、持续显示 1 秒）：
+##   0.0 ~ 0.5s 渐显（alpha 0 → 1）
+##   0.5 ~ 1.5s 持续显示
+##   1.5 ~ 2.0s 渐隐（alpha 1 → 0）后自毁
+## 挂在**单位自己身上**（而不是战场），于是自动跟随移动；单位死亡被回收时跟着一起销毁。
+func show_skill_name(skill_name: String) -> void:
+	if skill_name.is_empty():
+		return
+	var lbl := Label.new()
+	lbl.name = "SkillNameLabel"
+	lbl.text = skill_name
+	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	lbl.size = Vector2(SKILL_NAME_LABEL_W, SKILL_NAME_LABEL_H)
+	## 头顶正上方居中：本地坐标 = (标牌中心 - 宽度/2, 头顶之上)
+	lbl.position = Vector2(-SKILL_NAME_LABEL_W * 0.5, -SKILL_NAME_LABEL_Y)
+	lbl.modulate = Color(1.0, 0.92, 0.55, 0.0)  ## 起手全透明
+	lbl.z_index = 70
+	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(lbl)
+
+	var tw := lbl.create_tween()
+	tw.tween_property(lbl, "modulate:a", 1.0, SKILL_NAME_FADE_TIME)
+	tw.tween_interval(SKILL_NAME_HOLD_TIME)
+	tw.tween_property(lbl, "modulate:a", 0.0, SKILL_NAME_FADE_TIME)
+	tw.tween_callback(lbl.queue_free)
 
 ## #技能系统：待释放的技能定义（由 UnitSkillComponent 写入，state_skill 读取后清空）
 var pending_skill_def: Dictionary = {}
@@ -967,6 +1137,9 @@ func _apply_anim_scale(frames: SpriteFrames, anim_name: String) -> void:  ## 定
 	## 肉鸽 Boss 节点敌军额外放大（visual_scale_mult 默认 1.0，不影响其他模式）
 	if visual_scale_mult != 1.0:
 		unit_sprite.scale *= visual_scale_mult
+	## #技能系统：技能视觉体型倍率（Doro 巨化重击，默认 1.0 时无副作用）
+	if skill_size_mult != 1.0:
+		unit_sprite.scale *= skill_size_mult
 
 ## 计算指定动画的缩放系数，与控制台预览完全一致
 ## 取首帧纹理尺寸，按「目标宽/高」双向约束取较小值，保证画面不超出配置框
@@ -1431,6 +1604,8 @@ func _finalize_setup() -> void:  ## 定义完成初始化的方法
 	## 这样每个兵种最多各自 1/3 的身体重叠，避免全部挤在一起
 	if not is_base_unit:
 		_setup_collision_body()
+	## #2026-09-22 需求：英雄 / 异象（Y）/ 特殊（S）的 z_index 高于普通兵种
+	_apply_display_priority_z()
 	## 守卫模式：为本单位抽定一个固定的驻守前压距离，避免所有近战叠在同一个点（#210）
 	if is_guard_mode():
 		guard_front_offset = randf_range(Constants.GUARD_MELEE_FRONT_MIN, Constants.GUARD_MELEE_FRONT_MAX)
@@ -1465,6 +1640,17 @@ func _setup_skill_component() -> void:
 	comp.set_script(SKILL_COMPONENT_SCRIPT)
 	add_child(comp)
 
+## #技能系统（2026-09-20）：攻击次数触发型技能的「抢占本次攻击周期」入口。
+## 由 state_attack 在「即将开始新的普通攻击周期」时调用：
+##   返回 true  → 本次攻击已切换为技能动作，调用方必须立即 return，不要再进普通攻击动画；
+##   返回 false → 无技能组件 / 触发方式不是攻击次数 / 计数未满，照常走普通攻击。
+## 本方法只做转发，触发条件的判定全部留在 UnitSkillComponent 内（单一职责）。
+func try_consume_attack_triggered_skill() -> bool:
+	var comp: Node = get_node_or_null("UnitSkillComponent")
+	if comp == null or not comp.has_method("try_trigger_on_attack"):
+		return false
+	return bool(comp.try_trigger_on_attack())
+
 ## 设置碰撞体为精灵图显示尺寸的 1/3，居中放置
 ## 精灵图显示尺寸 = 纹理帧尺寸 × scale，碰撞体直径 = 显示尺寸 / 3
 ## 碰撞体放在精灵图正中心（即 Unit 节点原点）
@@ -1493,6 +1679,8 @@ func _setup_collision_body() -> void:
 		var new_shape = (col.shape as CircleShape2D).duplicate()
 		new_shape.radius = collision_radius
 		col.shape = new_shape
+		## 记下基础半径：技能体型倍率（Doro 巨化）以它为基准重算，不用累乘
+		_base_collision_radius = collision_radius
 	## 碰撞体居中（Unit 节点原点即为精灵图中心，无需额外偏移）
 	col.position = Vector2.ZERO
 
@@ -1809,8 +1997,8 @@ func _draw() -> void:  ## 重写 _draw 方法
 	if not show_attack_ranges:
 		return
 	var red_color: Color = Color(1.0, 0.15, 0.15, 0.45)  ## 红色半透明
-	var h_px: float = unit_resource.get_attack_range_h_px()
-	var v_px: float = unit_resource.get_attack_range_v_px()
+	var h_px: float = eff_attack_range_h_px()
+	var v_px: float = eff_attack_range_v_px()
 	var use_special: bool = h_px > 0.0 or v_px > 0.0
 	if use_special:
 		var dir: float = float(facing_dir)
@@ -1879,7 +2067,9 @@ func _check_attack_hit_frame() -> void:  ## 定义检查命中帧的方法
 	var using_alt: bool = anim_attack_frames_alt != null and unit_sprite.sprite_frames == anim_attack_frames_alt  ## 当前播放的是否备用攻击动画
 	var has_multi_hit: bool = not unit_resource.attack_hit_frames.is_empty()
 	var has_frame_hit: bool = unit_resource.attack_hit_frame_start >= 0 or (using_alt and unit_resource.attack_hit_frame_start_alt >= 0)
-	var has_frame_sound: bool = unit_resource.attack_sound_frame >= 0 or (using_alt and unit_resource.attack_sound_frame_alt >= 0)
+	var has_frame_sound: bool = unit_resource.attack_sound_frame >= 0 \
+			or (using_alt and unit_resource.attack_sound_frame_alt >= 0) \
+			or not unit_resource.attack_sound_frames.is_empty()
 	if not has_multi_hit and not has_frame_hit and not has_frame_sound:
 		return
 	var frame: int = unit_sprite.frame  ## 获取当前动画帧
@@ -1893,6 +2083,7 @@ func _check_attack_hit_frame() -> void:  ## 定义检查命中帧的方法
 	## 的既有行为（#181 G6/N5 不受影响）。
 	if frame < _prev_attack_frame:  ## 如果帧号回退（动画循环 / 被打断重播）
 		_attack_hit_index = 0  ## 重置连击命中索引（多段兵种保留循环重触发）
+		_attack_sound_frames_index = 0  ## 多段音效帧同样重新武装
 		## 攻击音效标志 _attack_sound_frame_played 不在回退时重置：它只在「攻击周期边界」
 		## （reset_attack_frame_flags）清，确保一个攻击周期只播一次音效，避免动画循环 /
 		## 重播导致音效连播两遍（#3 修复）
@@ -1934,10 +2125,28 @@ func _check_attack_hit_frame() -> void:  ## 定义检查命中帧的方法
 	## 当攻击动画比攻击周期长、周期结束后动画仍停在音效帧上时，标志被复位 → 立刻又触发 → 连播两遍。
 	## 现改为自管理：frame 到达音效帧且未播 → 播放并置位；frame 回绕到音效帧之前（或回到第 0 帧）→ 重新武装，下一轮再播一次。
 	if has_frame_sound:
+		## 2026-09-20：多段音效帧优先 —— 与 attack_hit_frames 完全同构，
+		## 每段各响一次（第 i 击的动画帧响第 i 声），配上多段攻击时音画才同步。
+		## 与单帧模式的 _attack_sound_frame_played 不同，这里用独立索引推进，
+		## 且只在「帧号回退」或技能起播前归零（见 _check_attack_hit_frame 开头与 reset_attack_anim_progress）。
+		if not unit_resource.attack_sound_frames.is_empty():
+			var sf_list: Array = unit_resource.attack_sound_frames
+			## 2026-09-21（玩家需求）：每段可用 attack_sound_paths[si] 指定不同音效文件，
+			## 留空 / 路径失效时 AudioManager 回退该兵种默认攻击音效
+			var sp_list: Array = unit_resource.attack_sound_paths
+			for si in range(sf_list.size()):
+				var sf_no: int = int(sf_list[si])
+				if frame >= sf_no and _attack_sound_frames_index <= si:
+					_attack_sound_frames_index = si + 1
+					var seg_path: String = str(sp_list[si]) if si < sp_list.size() else ""
+					AudioManager.play_attack_sound(unit_resource.unit_id, seg_path)
+			return
 		## #18-4（2026-08-15）：备用攻击动画音效帧独立（attack_sound_frame_alt），
 		## 与命中帧同理——两套动画帧数不同，音效帧各自配置。
 		var _sf: int = unit_resource.attack_sound_frame_alt if (using_alt and unit_resource.attack_sound_frame_alt >= 0) else unit_resource.attack_sound_frame
-		if frame >= _sf and not _attack_sound_frame_played:
+		## 需求（2026-09-21 玩家拍板）：三连红光期间由三连机制自己播攻击音效，
+		## 帧音效让位（否则第一道红光会连响两次）。
+		if frame >= _sf and not _attack_sound_frame_played and not _attack_sfx_suppressed:
 			_attack_sound_frame_played = true  ## 标记已播放
 			AudioManager.play_attack_sound(unit_resource.unit_id)  ## 播放攻击音效
 		elif frame < _sf or frame == 0:
@@ -1946,9 +2155,24 @@ func _check_attack_hit_frame() -> void:  ## 定义检查命中帧的方法
 ## 重置攻击动画的帧判定与帧音效标志（供 state_attack 在攻击周期结束时调用）
 func reset_attack_frame_flags() -> void:  ## 重置帧判定标志
 	_attack_hit_emitted = false  ## 重置命中标志
+	_attack_sfx_suppressed = false  ## 新攻击周期解除「三连红光接管音效」，帧音效恢复
 	_attack_dash_triggered = false  ## #18-2：新攻击周期重新预触发突进
 	## #1（2026-08-14）：不再复位 _attack_sound_frame_played。帧音效改由 _check_attack_hit_frame
 	## 按「frame 回绕到音效帧之前/回到第 0 帧」自行重新武装，避免攻击周期边界误触发连播两遍。
+
+## #技能系统（2026-09-20）：把「攻击动画帧判定」的**整体进度**归零。
+## reset_attack_frame_flags() 刻意不重置 _attack_hit_index（它靠「离开攻击动画」或
+## 「帧号回绕」自然归零），但技能流程会自己接管攻击动画 —— 例如菲比技能要消费
+## attack_hit_frames 的 4 个判定帧。若上一周期残留索引（如 4），
+## `frame >= hit_frame and _attack_hit_index <= i` 永远不成立，
+## attack_animation_hit 一次都不发 → 光球四段动作全部失灵。
+## 因此凡是技能自己起播攻击动画，起播前必须先调本函数。
+func reset_attack_anim_progress() -> void:
+	_prev_attack_frame = -1  ## 帧号回绕基准归零，避免首帧被误判为回绕
+	_attack_hit_index = 0  ## 连击索引归零（多段连击兵种的关键）
+	_attack_hit_emitted = false  ## 单帧命中标志归零
+	_attack_sound_frame_played = false  ## 允许本段重新播放帧音效
+	_attack_sound_frames_index = 0  ## 多段音效帧索引归零
 
 ## 物理帧处理，每帧调用当前状态的 update 方法
 ## delta: 上一帧到当前帧的时间间隔（秒）
@@ -2044,6 +2268,9 @@ func _physics_process(delta: float) -> void:  ## 重写 _physics_process 方法
 	if _attack_dash_time < 0.0:
 		## 状态更新后统一钳制到战场范围内，兜底所有位移来源（碰撞挤压/追击/后退/击退）
 		_clamp_to_field()  ## 限制在战场活动范围内
+	## 需求2（2026-09-19 玩家拍板，2026-09-20 从直播版同步，去直播门控）：萌黄三连红光推进 ——
+	## 放在状态机之后，确保攻击周期收尾（state_attack 收尾后）仍逐帧打出剩余红光。
+	_process_tri_volley(delta)
 
 ## 纯逻辑：水晶间 X 钳制（#BugA 核心算法，static 供单元测试复用）
 ## x: 待钳制 X；home_x: 己方水晶 X；enemy_x: 敌方水晶 X；hw: 精灵半宽；team: 0=红 1=蓝
@@ -2082,13 +2309,17 @@ func _clamp_to_field() -> void:  ## 定义战场边界钳制方法
 	if is_base_unit:  ## 基地单位（水晶）位置固定，不参与钳制
 		return  ## 直接返回
 	## 基础兜底：FIELD 边界（防止极端异常位移直接飞出战场）
+	## 2026-09-20：标准 / 战役 / 双人 / 肉鸽用下移后的战斗带（Constants.FIELD_Y_*），
+	## 竞技场是自由布兵沙盒，沿用原范围（Constants.ARENA_Y_*），手感不变。
+	var y_min: float = Constants.ARENA_Y_MIN if GameManager.is_battlefield_mode else Constants.FIELD_Y_MIN
+	var y_max: float = Constants.ARENA_Y_MAX if GameManager.is_battlefield_mode else Constants.FIELD_Y_MAX
 	## 肉鸽：敌军刚从屏幕外（|x| > FIELD_X_MAX）走入战场期间不做钳制，
 	## 否则出生点会被立刻拉回边界内，「屏幕外进场」失效且左侧出生者会被推到水晶脸上。
 	if RoguelikeManager.is_active and team == 1 and absf(global_position.x) > Constants.FIELD_X_MAX:
-		global_position.y = clampf(global_position.y, Constants.FIELD_Y_MIN, Constants.FIELD_Y_MAX)
+		global_position.y = clampf(global_position.y, y_min, y_max)
 		return
 	global_position.x = clampf(global_position.x, Constants.FIELD_X_MIN, Constants.FIELD_X_MAX)  ## 钳制 X
-	global_position.y = clampf(global_position.y, Constants.FIELD_Y_MIN, Constants.FIELD_Y_MAX)  ## 钳制 Y
+	global_position.y = clampf(global_position.y, y_min, y_max)  ## 钳制 Y
 	## #BugA：水晶间钳制 + 扣精灵半宽（仅敌方有基地时生效）。
 	## 旧实现只封「不越过敌方水晶」，己方水晶背后留了 24px 漏网（FIELD ±600 vs 水晶 ±576），
 	## 单位被敌方近战顶推 / 远程后撤时会滑到己方水晶后方，视觉上像被挤出地图。
@@ -2288,12 +2519,12 @@ func is_target_in_attack_range(target_pos: Vector2, tolerance_px: float = 0.0) -
 	var dx: float = target_pos.x - global_position.x
 	var dy: float = target_pos.y - global_position.y
 	if unit_resource.use_elliptical_range:
-		var h: float = unit_resource.get_attack_range_h_px() + tolerance_px
-		var v: float = unit_resource.get_attack_range_v_px() + tolerance_px
+		var h: float = eff_attack_range_h_px() + tolerance_px
+		var v: float = eff_attack_range_v_px() + tolerance_px
 		if h <= 0.0 or v <= 0.0:
 			return false
 		return (dx * dx) / (h * h) + (dy * dy) / (v * v) <= 1.0
-	var r: float = unit_resource.attack_range * Constants.UNIT_TO_PIXELS + tolerance_px
+	var r: float = unit_resource.attack_range * Constants.UNIT_TO_PIXELS * skill_size_mult + tolerance_px
 	return dx * dx + dy * dy <= r * r
 
 ## 判定目标位置是否**超出**攻击范围（is_target_in_attack_range 的取反）
@@ -2630,12 +2861,224 @@ func find_rear_ally() -> Unit:  ## 定义查找身后友方的方法
 ## 执行攻击的方法
 ## 对当前目标造成伤害，或在没有目标时攻击基地
 ## hit_index: 当前攻击周期内的命中索引（0=第一次命中，1=第二次命中...），用于支持二连击不同伤害类型
-func perform_attack(hit_index: int = 0) -> void:  ## 定义执行攻击的方法
+## ---- 需求2（2026-09-19 拍板，2026-09-20 从直播版同步，去直播门控）：萌黄 S9「三连红光」（所有模式生效）----
+## 口径：命中帧起 1.5 秒内每 0.5 秒一道红光（共 3 道）。目标分配 ——
+## 先给射程内最近的敌人各分一道，剩余道数全部追加给**最后一个**目标：
+##   3 个敌人 → 各 1 道；2 个敌人 → 第 1 个 1 道、第 2 个 2 道；1 个敌人 → 吃满 3 道。
+## 三道红光**全部播完**后才进入攻击后摇（state_attack 读 is_tri_volley_running() 挂起周期收尾）。
+## 作用域：所有模式生效（标准 / 战役 / 竞技场 / 肉鸽 / 直播）；原版无 live_fading，下面三处判断已去掉 live_fading。
+## `uses_tri_volley()` 仅 S9 返回 true，其它兵种仍走原单发瞬发命中。
+## ⚠️ 2026-09-19 修正：const 里不能写构造函数调用（`PackedStringArray(["S9"])` 会被 Godot 4.7 判为
+## 「不是常量表达式」，`reload_err=43`，并连带 battle_manager / game_manager 报 Failed to compile
+## depended scripts）。直接用数组字面量，引擎在编译期转成 PackedStringArray。
+const TRI_VOLLEY_UNIT_IDS: PackedStringArray = ["S9"]  ## 启用三连红光的兵种（可扩展）
+const TRI_VOLLEY_SHOTS: int = 3          ## 每波红光道数
+const TRI_VOLLEY_INTERVAL: float = 0.25  ## 两道红光之间的间隔（秒；2026-09-21 玩家要求再加快 0.1s：0.35 → 0.25）
+const TRI_VOLLEY_MAX_TARGETS: int = 3    ## 单波最多同时打几个不同敌人
+
+## 本波是否仍在进行（含最后一道红光的播放尾巴）—— state_attack 据此挂起攻击周期收尾
+var _tri_volley_active: bool = false
+## 本波剩余未发射的红光数
+var _tri_volley_left: int = 0
+## 本波已累计时间（秒）
+var _tri_volley_elapsed: float = 0.0
+## 下一道红光的发射时刻（秒，相对本波起点）
+var _tri_volley_next_at: float = 0.0
+## 本波结束时刻（秒）：最后一道红光的特效播完
+var _tri_volley_end_at: float = 0.0
+## 本波每道红光的目标（按发射顺序；元素可能重复 = 同一目标吃多道）
+var _tri_volley_plan: Array = []
+## 本波打的是不是敌方水晶（2026-09-21 玩家拍板，从直播版同步）：true = 三道红光全部砸水晶，
+## 伤害走 battlefield.damage_base；false = 打敌方单位（原逻辑）。
+var _tri_volley_against_base: bool = false
+## 本攻击周期内攻击音效已由「三连红光」接管（2026-09-21，从直播版同步）：true 期间
+## 攻击动画帧音效不触发；与三连「进行中」不同，本标志持续到**攻击周期结束**
+##（`reset_attack_frame_flags()`），否则三连收波后动画继续循环到音效帧会再响一声（「第四声」）。
+var _attack_sfx_suppressed: bool = false
+
+## 本兵种是否启用三连红光
+func uses_tri_volley() -> bool:
+	return unit_resource != null and TRI_VOLLEY_UNIT_IDS.has(unit_resource.unit_id)
+
+## 三连红光是否仍在进行（三道红光未全部播完）
+func is_tri_volley_running() -> bool:
+	return _tri_volley_active
+
+## 取消三连红光：中断攻击周期 / 被击退 / 离开攻击状态 / 对象池回收时调用
+func cancel_tri_volley() -> void:
+	_tri_volley_active = false
+	_tri_volley_left = 0
+	_tri_volley_elapsed = 0.0
+	_tri_volley_next_at = 0.0
+	_tri_volley_end_at = 0.0
+	_tri_volley_plan.clear()
+	_tri_volley_against_base = false
+
+## 命中特效单次完整播放时长（秒）：帧动画按「总帧数 / 帧率」，未配置帧动画退回内置光点淡出时长
+func _impact_effect_duration() -> float:
+	var frames: SpriteFrames = _load_impact_frames()
+	if frames == null or frames.get_animation_names().is_empty():
+		return ImpactEffect.GLOW_FADE_TIME
+	var anim_name: String = frames.get_animation_names()[0]
+	return float(frames.get_frame_count(anim_name)) / maxf(frames.get_animation_speed(anim_name), 0.001)
+
+## 生成三连红光的射击计划：射程内最近的敌人（最多 3 个），先各分一道，余数追加给最后一个目标。
+## 返回值: 长度 = TRI_VOLLEY_SHOTS 的目标数组；射程内无敌人时返回空数组（调用方退回单发逻辑）。
+func _build_tri_volley_plan() -> Array:
+	var in_range: Array = []
+	var battlefield = get_parent().get_parent()
+	if battlefield != null and battlefield.has_method("get_units_in_radius"):
+		var candidates := battlefield.get_units_in_radius(
+				global_position, get_attack_query_radius_px(10.0), -1) as Array[Unit]
+		for candidate in candidates:
+			if candidate == self or not is_instance_valid(candidate) or candidate.is_dead \
+					or candidate.is_base_unit or candidate.team == team:
+				continue
+			if not is_target_in_attack_range(candidate.global_position, 10.0):
+				continue
+			in_range.append(candidate)
+	## 近到远排序：优先打最近的敌人
+	var origin: Vector2 = global_position
+	in_range.sort_custom(func(a, b): return origin.distance_squared_to(a.global_position) \
+			< origin.distance_squared_to(b.global_position))
+	var picks: Array = in_range.slice(0, mini(in_range.size(), TRI_VOLLEY_MAX_TARGETS))
+	if picks.is_empty():
+		return []
+	var plan: Array = []
+	for target in picks:
+		plan.append(target)
+	## 余数全部追加给最后一个目标（2 敌 → 1+2；1 敌 → 3 道吃满）
+	while plan.size() < TRI_VOLLEY_SHOTS:
+		plan.append(picks[picks.size() - 1])
+	return plan
+
+## 启动三连红光（由 perform_attack 在命中帧调用）。
+## 返回值: true = 已接管本次攻击（调用方不得再走单发瞬发命中）；false = 射程内无敌人，走原逻辑。
+func start_tri_volley() -> bool:
+	cancel_tri_volley()
+	var plan: Array = _build_tri_volley_plan()
+	if plan.is_empty():
+		return false
+	_tri_volley_plan = plan
+	_tri_volley_left = plan.size()
+	_tri_volley_active = true
+	_tri_volley_elapsed = 0.0
+	_tri_volley_next_at = 0.0
+	_tri_volley_end_at = float(TRI_VOLLEY_SHOTS - 1) * TRI_VOLLEY_INTERVAL + _impact_effect_duration()
+	_attack_sfx_suppressed = true  ## 本攻击周期音效由三连接管（直到周期结束才解除）
+	return true
+
+## 启动「打水晶」三连红光（2026-09-21 玩家拍板，从直播版同步，由 attack_base 在首次命中帧调用）。
+## 三道红光全部砸同一个敌方水晶；敌方水晶缺失/已死时返回 false（调用方退回单发投射物逻辑）。
+## 伤害口径与单发打水晶一致：每道红光各自结算一次 `_compute_base_damage_entries`（含中远程减半）。
+func start_tri_volley_base(battlefield: Node, enemy_team: int) -> bool:
+	if battlefield == null or unit_resource == null:
+		return false
+	var base_unit: Unit = battlefield.get("red_base_unit") if enemy_team == 0 else battlefield.get("blue_base_unit")
+	if base_unit == null or not is_instance_valid(base_unit) or base_unit.is_dead:
+		return false
+	cancel_tri_volley()
+	_tri_volley_plan = [base_unit, base_unit, base_unit]
+	_tri_volley_left = _tri_volley_plan.size()
+	_tri_volley_active = true
+	_tri_volley_against_base = true
+	_tri_volley_elapsed = 0.0
+	_tri_volley_next_at = 0.0
+	_tri_volley_end_at = float(TRI_VOLLEY_SHOTS - 1) * TRI_VOLLEY_INTERVAL + _impact_effect_duration()
+	_attack_sfx_suppressed = true  ## 本攻击周期音效由三连接管（直到周期结束才解除）
+	return true
+
+## 三连红光逐帧推进：到点发射下一道红光；三道全部发完后再等最后一道特效播完才收波。
+func _process_tri_volley(delta: float) -> void:
+	if not _tri_volley_active:
+		return
+	if is_dead:
+		cancel_tri_volley()
+		return
+	_tri_volley_elapsed += delta
+	while _tri_volley_left > 0 and _tri_volley_elapsed >= _tri_volley_next_at:
+		_fire_tri_volley_shot(_tri_volley_plan[_tri_volley_plan.size() - _tri_volley_left])
+		_tri_volley_left -= 1
+		_tri_volley_next_at += TRI_VOLLEY_INTERVAL
+	if _tri_volley_left <= 0 and _tri_volley_elapsed >= _tri_volley_end_at:
+		cancel_tri_volley()
+
+## 发射一道红光：在目标身上生成命中特效，并按「特效中间帧」延迟结算伤害（与单发瞬发命中同口径）。
+## 等待期间目标阵亡时改打射程内最近的敌人；射程内已无敌人则本道红光落空（不结算、不出特效）。
+func _fire_tri_volley_shot(target: Unit) -> void:
+	if is_dead or unit_resource == null:
+		return
+	## 打水晶模式（2026-09-21 玩家拍板，从直播版同步）：红光落点与伤害结算走水晶专用路径
+	if _tri_volley_against_base:
+		_fire_tri_volley_base_shot(target)
+		return
+	if not is_instance_valid(target) or target.is_dead or target.team == team:
+		target = find_nearest_enemy_in_attack_range(10.0)
+	if target == null or not is_instance_valid(target) or target.is_dead:
+		return
+	var target_id: String = target.unit_resource.unit_id if target.unit_resource != null else ""
+	var entries: Array = _compute_damage_entries(target_id, 0)
+	var hit_pos: Vector2 = target.global_position
+	var effect: ImpactEffect = _spawn_impact_effect(hit_pos)
+	## 需求（2026-09-21 玩家拍板）：三道红光各自播一次攻击音效。
+	## 此前只有第一道响（后两道不经攻击动画帧，帧音效机制不会触发）。落空时不响。
+	AudioManager.play_attack_sound(unit_resource.unit_id)
+	var hit_delay: float = effect.impact_moment if effect != null else 0.0
+	if hit_delay > 0.0:
+		get_tree().create_timer(hit_delay).timeout.connect(
+			_deliver_instant_hit.bind(target, entries, hit_pos, unit_resource.unit_id))
+	else:
+		_deliver_instant_hit(target, entries, hit_pos, unit_resource.unit_id)
+
+## 打水晶模式的一道红光（2026-09-21 玩家拍板，从直播版同步）：在水晶位置生成红光特效，
+## 并按「特效中间帧」延迟结算一次对水晶伤害（与单发打水晶同口径）。
+func _fire_tri_volley_base_shot(base_unit: Unit) -> void:
+	if unit_resource == null or not is_instance_valid(base_unit) or base_unit.is_dead:
+		return
+	var entries: Array = _compute_base_damage_entries(0)
+	var hit_pos: Vector2 = base_unit.global_position
+	var effect: ImpactEffect = _spawn_impact_effect(hit_pos)
+	AudioManager.play_attack_sound(unit_resource.unit_id)
+	var hit_delay: float = effect.impact_moment if effect != null else 0.0
+	if hit_delay > 0.0:
+		get_tree().create_timer(hit_delay).timeout.connect(
+			_deliver_instant_base_hit.bind(entries, 1 - team, unit_resource.unit_id))
+	else:
+		_deliver_instant_base_hit(entries, 1 - team, unit_resource.unit_id)
+
+## 打水晶三连红光的伤害结算入口（延迟期间自身可能已阵亡/被回收，必须重新校验）。
+func _deliver_instant_base_hit(entries: Array, enemy_team: int, expected_unit_id: String) -> void:
+	if not is_instance_valid(self) or is_dead:
+		return
+	if unit_resource == null or unit_resource.unit_id != expected_unit_id:
+		return
+	var container = get_parent()
+	if container == null:
+		return
+	var battlefield = container.get_parent()
+	if battlefield == null or not battlefield.has_method("damage_base"):
+		return
+	battlefield.damage_base(enemy_team, _sum_damage_entries(entries), self)
+
+## 执行攻击的方法：对当前目标造成伤害，或在没有目标时攻击基地
+## hit_index: 当前攻击周期内的命中索引（0=第一次命中，1=第二次命中...），用于支持二连击不同伤害类型
+## damage_override: 非空时**替代**按资源表算出的伤害列表（技能强化一击用，如 Doro 巨化重击的
+##   [{type:0,value:300},{type:2,value:300}]）。仍复用整条近战命中管线
+##   （射程复核 / 攻击面 footprint / aoe_radius / 词条），只换伤害数值。
+func perform_attack(hit_index: int = 0, damage_override: Array = []) -> void:  ## 定义执行攻击的方法
 	## 如果单位已死亡，停止攻击
 	if is_dead:  ## 如果单位已死亡
 		return  ## 直接返回
 	## #13：一次攻击周期开始，重置本次攻击击杀计数（供「大力出奇迹」统计）
 	_attack_kill_count = 0
+
+	## #技能系统（2026-09-20）：多目标齐射状态（Hero5 糯糯九箭齐射）接管本次命中。
+	## 位置在「目标失效兜底」之前：齐射自行索敌，不依赖 target 是否还活着。
+	if unit_resource != null and unit_resource.is_ranged and skill_volley_charges > 0 \
+			and not _skill_volley_fired:
+		_skill_volley_fired = true
+		_fire_skill_volley()
+		return
 
 	## 目标已失效（死亡/释放/为空）时的兜底：多段连击远程单位（attack_hit_frames 非空）
 	## 朝默认方向空发一枚白球，保证连击段数发满（目标中途死亡不吞后续段）。
@@ -2648,10 +3091,30 @@ func perform_attack(hit_index: int = 0) -> void:  ## 定义执行攻击的方法
 	if target != null and is_instance_valid(target) and not target.is_dead:  ## 如果目标有效且存活
 		## 计算伤害列表：根据 damage_types 和 damage_by_type 生成 [(type, value), ...]
 		## 支持二连击不同类型：若 attack_hit_types 配置了，第 hit_index 次命中只使用对应类型
-		var damage_entries: Array = _compute_damage_entries(target.unit_resource.unit_id, hit_index)
+		var damage_entries: Array = damage_override if not damage_override.is_empty() \
+				else _compute_damage_entries(target.unit_resource.unit_id, hit_index)
 
 		## 远程单位生成投射物（携带伤害列表）
 		if unit_resource.is_ranged:  ## 如果是远程单位
+			## 瞬发命中（2026-09-19 从直播版搬入）：萌黄 S9 这类兵种攻击不产生弹道，
+			## 命中帧直接在目标身上生成特效并结算伤害，伤害不再经投射物延迟。
+			## 伤害判定对齐特效中间帧：特效是「光点→展开→冲击」的动画，
+			## 中间帧才是视觉上真正打到目标的时刻，据此延迟结算，避免「血先掉、特效后到」。
+			if unit_resource.attack_instant_hit:
+				## 需求2（2026-09-19 拍板，2026-09-20 从直播版同步，去直播门控）：萌黄 S9 改走「三连红光」（所有模式生效）——
+				## 命中帧不再单发结算，改为 1.5 秒内每 0.5 秒一道红光（共 3 道），三道红光全部播完后才由 state_attack 收尾进入后摇。
+				## 射程内无敌人时 start_tri_volley 返回 false，退回下方原单发逻辑。
+				if uses_tri_volley() and start_tri_volley():
+					return
+				var hit_pos: Vector2 = target.global_position
+				var effect: ImpactEffect = _spawn_impact_effect(hit_pos)
+				var hit_delay: float = effect.impact_moment if effect != null else 0.0
+				if hit_delay > 0.0:
+					get_tree().create_timer(hit_delay).timeout.connect(
+						_deliver_instant_hit.bind(target, damage_entries, hit_pos, unit_resource.unit_id))
+				else:
+					_deliver_instant_hit(target, damage_entries, hit_pos, unit_resource.unit_id)
+				return
 			_spawn_projectile_with_entries(damage_entries, target)  ## 生成投射物
 			## 远程伤害/范围/词条全部由投射物在 _hit_target 命中时结算（carried_* 已带齐）。
 			## 此处必须 return：否则本帧会再走一遍下方的 take_damage_typed/_apply_aoe/apply_affix，
@@ -2682,6 +3145,106 @@ func perform_attack(hit_index: int = 0) -> void:  ## 定义执行攻击的方法
 		## 把伤害错误结算到敌方水晶（#104）。基地攻击统一由 state_attack_base 状态机处理。
 		return
 
+## ── #技能系统 九箭齐射（Hero5 糯糯，2026-09-20）──────────────────────────
+## 同一次命中里同时锁定最多 max_targets 名射程内敌人，共射出 total_arrows 支箭。
+## 分配规则（用户拍板「按锁定顺序分，前者多 1 支」）：
+##   3 敌 → 3 / 3 / 3；2 敌 → 5 / 4；1 敌 → 9
+## 弹道规则（用户拍板「按目标分」）：
+##   主目标（第 1 近）→ 直线箭；第 2 近 → 自上方鱼钩状；第 3 近 → 自下方鱼钩状
+## 同一目标身上叠放的箭做小幅垂直错位，否则 3 支箭完全重合、看起来只有 1 支。
+const ARROW_STACK_STEP: float = 7.0  ## 同目标多箭的垂直错位间距（像素）
+
+func _fire_skill_volley() -> void:
+	var params: Dictionary = skill_volley_params
+	var max_targets: int = maxi(int(params.get("max_targets", 3)), 1)
+	var total_arrows: int = maxi(int(params.get("total_arrows", 9)), 1)
+	var targets: Array = _pick_volley_targets(max_targets)
+	if targets.is_empty():
+		return  ## 射程内已无敌人：本次齐射落空，**不消耗次数**，下次攻击再试
+	var counts: Array = _split_arrow_counts(total_arrows, targets.size())
+	var entries: Array = [{
+		"type": int(params.get("arrow_damage_type", 0)),
+		"value": int(params.get("arrow_damage", 0)),
+	}]
+	for i in range(targets.size()):
+		var enemy: Unit = targets[i]
+		if enemy == null or not is_instance_valid(enemy) or enemy.is_dead:
+			continue
+		## 弹道：主目标直线；第 2 / 3 目标分别自上方（perp = -1）/ 下方（perp = +1）钩入
+		var perp: float = 0.0
+		if i == 1:
+			perp = -1.0
+		elif i >= 2:
+			perp = 1.0
+		var arrow_count: int = int(counts[i])
+		for k in range(arrow_count):
+			var opts: Dictionary = {}
+			if perp != 0.0:
+				opts["perp"] = perp
+				opts["offset_y"] = perp * float(params.get("hook_offset_y", 96.0))
+				opts["bulge"] = float(params.get("hook_bulge", 70.0))
+				opts["time"] = float(params.get("hook_fly_time", 0.55))
+			## 同目标叠放的箭做垂直错位，避免完全重合
+			var stagger: float = (float(k) - float(arrow_count - 1) * 0.5) * ARROW_STACK_STEP
+			opts["offset_y"] = float(opts.get("offset_y", 0.0)) + stagger
+			_spawn_projectile_with_entries(entries, enemy, opts)
+
+	## 消耗一次齐射次数 —— 只在**真的把箭射出去之后**扣。
+	## ⚠️ 刻意不挂在普攻周期收尾：目标中途阵亡时周期会被 _abort_attack_cycle 中断，
+	## 收尾根本不执行 → 次数永远扣不掉 → 技能可以连着无限触发
+	##（用户实测「连续四次射出九箭」）。
+	skill_volley_charges = maxi(skill_volley_charges - 1, 0)
+	if skill_volley_charges <= 0:
+		skill_volley_params = {}
+		## 齐射次数用尽 → 解除这次技能带来的霸体（开关在 SkillEffects._multi_lock_volley）
+		skill_super_armor = false
+
+## 齐射索敌：射程内敌方单位，**当前目标优先**，其余按距离升序，最多取 max_count 个。
+## 与普攻口径一致，只锁射程内（attack_range × 32 + 10px 容差）的敌人。
+func _pick_volley_targets(max_count: int) -> Array:
+	var result: Array = []
+	if max_count <= 0:
+		return result
+	var container: Node = get_parent()
+	var battlefield: Node = container.get_parent() if container != null else null
+	if battlefield == null or not battlefield.has_method("get_units_in_radius"):
+		return result
+	var range_px: float = unit_resource.attack_range * Constants.UNIT_TO_PIXELS + 10.0
+	var candidates: Array = battlefield.get_units_in_radius(global_position, range_px, 1 - team)
+	var sorted: Array = []
+	for u in candidates:
+		if u == null or not is_instance_valid(u) or u.is_dead:
+			continue
+		sorted.append({"unit": u, "dist": global_position.distance_squared_to(u.global_position)})
+	sorted.sort_custom(_sort_by_distance)
+	var has_current: bool = target != null and is_instance_valid(target) \
+			and not target.is_dead and target.team != team
+	if has_current:
+		result.append(target)  ## 当前目标 = 锁定顺序第一 = 多分 1 支箭的主目标
+	for item in sorted:
+		if result.size() >= max_count:
+			break
+		var u: Unit = item["unit"]
+		if has_current and u == target:
+			continue
+		result.append(u)
+	return result
+
+## sort_custom 的回调：按距离平方升序
+static func _sort_by_distance(a: Dictionary, b: Dictionary) -> bool:
+	return float(a["dist"]) < float(b["dist"])
+
+## 把 total 支箭分给 n 个目标：整除的部分均分，余数按「前者多 1 支」依次补给
+static func _split_arrow_counts(total: int, n: int) -> Array:
+	var out: Array = []
+	if n <= 0:
+		return out
+	var base: int = total / n
+	var rem: int = total % n
+	for i in range(n):
+		out.append(base + (1 if i < rem else 0))
+	return out
+
 ## 对一个实际命中目标统一结算伤害与攻击方 ON_ATTACK 词条。
 ## 击退是否发生只取决于攻击方是否装备 KNOCKBACK 词条，不依赖兵种 ID 或范围字段。
 func _apply_attack_hit(hit_unit: Unit, damage_entries: Array) -> void:
@@ -2705,7 +3268,7 @@ func _apply_melee_attack_footprint(damage_entries: Array, hit_units: Dictionary)
 	var battlefield = get_parent().get_parent()
 	if battlefield == null or not battlefield.has_method("get_units_in_radius"):
 		return
-	var query_radius: float = maxf(unit_resource.get_attack_range_h_px(), unit_resource.get_attack_range_v_px())
+	var query_radius: float = maxf(eff_attack_range_h_px(), eff_attack_range_v_px())
 	var candidates := battlefield.get_units_in_radius(global_position, query_radius, -1) as Array[Unit]
 	for candidate in candidates:
 		if not is_instance_valid(candidate):
@@ -2723,8 +3286,8 @@ func get_attack_query_radius_px(tolerance_px: float = 0.0) -> float:
 	if unit_resource == null:
 		return 0.0
 	if unit_resource.use_elliptical_range:
-		return maxf(unit_resource.get_attack_range_h_px(), unit_resource.get_attack_range_v_px()) + tolerance_px
-	return unit_resource.attack_range * Constants.UNIT_TO_PIXELS + tolerance_px
+		return maxf(eff_attack_range_h_px(), eff_attack_range_v_px()) + tolerance_px
+	return unit_resource.attack_range * Constants.UNIT_TO_PIXELS * skill_size_mult + tolerance_px
 
 ## 在当前精确圆/椭圆攻击范围内查找最近敌人。
 ## 用于所有“射程内索敌”入口，避免仅用外包圆误选椭圆之外的目标。
@@ -2768,6 +3331,58 @@ func _apply_aoe(center: Vector2, damage_entries: Array, hit_units: Dictionary = 
 		hit_units[e.get_instance_id()] = true
 		_apply_attack_hit(e, damage_entries)
 
+## 加载该兵种的命中特效帧动画（attack_instant_hit 兵种专用，2026-09-19 从直播版搬入）
+## 文件名取 unit_resource.impact_anim_frames，路径规则与其它动画一致：
+## res://resources/units/<兵种ID>/<文件名>。未配置或文件缺失返回 null（特效退回内置圆形光点）。
+func _load_impact_frames() -> SpriteFrames:
+	if unit_resource == null or unit_resource.impact_anim_frames.is_empty():
+		return null
+	var cache_key: String = unit_resource.unit_id + "_impact"
+	if _sprite_frames_cache.has(cache_key):
+		return _sprite_frames_cache[cache_key]
+	var path := "%s/%s/%s" % [ANIM_ROOT_DIR, unit_resource.unit_id, unit_resource.impact_anim_frames]
+	var frames: SpriteFrames = null
+	if ResourceLoader.exists(path):
+		frames = load(path)
+	_sprite_frames_cache[cache_key] = frames
+	return frames
+
+## 在命中位置生成一段独立命中特效（瞬发命中兵种专用，2026-09-19 从直播版搬入）
+## pos: 命中位置（世界坐标，通常是目标单位当前位置）
+## 返回生成的特效节点（未生成时返回 null）。调用方据此读取 impact_moment 对齐伤害结算时刻。
+func _spawn_impact_effect(pos: Vector2) -> ImpactEffect:
+	if not is_instance_valid(self) or unit_resource == null:
+		return null
+	var effect := ImpactEffect.new()
+	effect.frames = _load_impact_frames()
+	effect.display_height = unit_resource.impact_display_height
+	effect.display_width = unit_resource.impact_display_width
+	effect.team = team
+	## 与投射物同层：挂在单位容器（Battlefield 下的 UnitContainer）上，随战场一起清场
+	var container = get_parent()
+	if container == null:
+		return null
+	container.add_child(effect)
+	effect.global_position = pos
+	## add_child 已同步跑完 _ready → _setup_animation，此处 impact_moment 必定就绪
+	return effect
+
+## 瞬发命中的伤害结算入口（2026-09-19 从直播版搬入）
+## perform_attack 在命中帧生成特效后，按「特效中间帧时刻」延迟调用本方法。
+## 延迟期间目标与自身都可能失效，因此必须重新校验，不能直接沿用调用时的引用。
+## hit_pos 取生成特效那一刻的位置（特效原地不动），伤害范围以它为准。
+## expected_unit_id：调用时的兵种 ID，用于挡住对象池复用（单位被回收后重新 setup 成别的兵种）后误结算。
+func _deliver_instant_hit(target: Unit, damage_entries: Array, hit_pos: Vector2, expected_unit_id: String) -> void:
+	if not is_instance_valid(self) or is_dead:
+		return
+	if unit_resource == null or unit_resource.unit_id != expected_unit_id:
+		return
+	var hit_units: Dictionary = {}
+	if is_instance_valid(target) and not target.is_dead:
+		_apply_attack_hit(target, damage_entries)
+		hit_units[target.get_instance_id()] = true
+	_apply_aoe(hit_pos, damage_entries, hit_units)
+
 ## 生成远程投射物的方法（私有）
 ## damage: 投射物造成的伤害值
 ## target_unit: 投射物的目标单位
@@ -2779,11 +3394,16 @@ func _spawn_projectile(damage: int, target_unit: Unit) -> void:  ## 定义生成
 ## 生成携带伤害列表的投射物
 ## damage_entries: 伤害列表 [{"type": int, "value": int}, ...]
 ## target_unit: 目标单位
+## spawn_opts: 发射参数（可选，供九箭齐射用）——
+##   perp     非 0 时启用鱼钩弧线：-1 = 自上方钩入，+1 = 自下方钩入
+##   offset_y 发射点垂直偏移（像素，负值上移）；直线箭用它做「同目标多箭错位」
+##   bulge    钩形凸起幅度；time 整段曲线飞行时长
 ## 返回生成的投射物实例（供调用方微调 max_distance 等参数），失败时返回 null
 ## #性能（2026-08-27）：投射物 PackedScene 改静态缓存，替代每次开火 load()。
 ## load() 命中资源缓存时仍要走路径解析与引用计数，300 兵混战每秒上千次开火时是白付成本。
 static var _projectile_scene_cache: PackedScene = null
-func _spawn_projectile_with_entries(damage_entries: Array, target_unit: Unit) -> Node:
+func _spawn_projectile_with_entries(damage_entries: Array, target_unit: Unit,
+		spawn_opts: Dictionary = {}) -> Node:
 	if not is_instance_valid(self):  ## 单位可能已被释放，直接返回避免 Nil 访问
 		return null
 	## 加载投射物场景（首次 load，之后复用缓存）
@@ -2816,6 +3436,14 @@ func _spawn_projectile_with_entries(damage_entries: Array, target_unit: Unit) ->
 	## #15：传递飞行物自旋速度（D5 飞斧翻滚）与贴图朝向补偿（G5 标枪 180°）
 	projectile.spin_speed = unit_resource.projectile_spin_speed
 	projectile.rotation_offset_deg = unit_resource.projectile_rotation_offset
+	## #技能系统（2026-09-20）：九箭齐射的鱼钩弹道参数必须在 add_child 之前写入 ——
+	## Projectile._ready() 会按 arc_enabled 决定是否关闭碰撞掩码。
+	var arc_perp: float = float(spawn_opts.get("perp", 0.0))
+	if arc_perp != 0.0:
+		projectile.arc_enabled = true
+		projectile.arc_perp = arc_perp
+		projectile.arc_bulge = float(spawn_opts.get("bulge", 70.0))
+		projectile.arc_time = float(spawn_opts.get("time", 0.55))
 
 	## 将投射物添加到战场中
 	var battlefield = get_parent()
@@ -2824,6 +3452,8 @@ func _spawn_projectile_with_entries(damage_entries: Array, target_unit: Unit) ->
 		projectile.global_position = global_position
 		## 应用投射物发射位置 Y 轴偏移（如糯糯Hero 骑射从上身弓弦发射，负值上移）
 		projectile.global_position.y += unit_resource.projectile_spawn_offset_y
+		## 叠加九箭齐射的逐箭偏移（鱼钩箭的上下起点 / 同目标叠箭错位）
+		projectile.global_position.y += float(spawn_opts.get("offset_y", 0.0))
 		projectile.init_direction()
 		return projectile
 	return null
@@ -2895,6 +3525,22 @@ func _low_hp_mult() -> float:
 		return 1.0
 	return RunModifiers.low_hp_damage_mult(float(current_hp) / float(get_max_hp()))
 
+## 计算对敌方水晶的伤害条目（2026-09-21 从直播版同步：单发打水晶与三连红光共用同一口径）。
+## 含 #13（2026-08-11 用户要求）口径：中远程兵种对水晶伤害减半。
+func _compute_base_damage_entries(hit_index: int) -> Array:
+	var entries: Array = _compute_damage_entries("base", hit_index)
+	if unit_resource != null and unit_resource.is_ranged:
+		for i in range(entries.size()):
+			entries[i]["value"] = maxi(1, int(round(int(entries[i]["value"]) * 0.5)))
+	return entries
+
+## 把伤害条目汇总成单次伤害值（最低 1）
+func _sum_damage_entries(entries: Array) -> int:
+	var damage: int = 0
+	for e in entries:
+		damage += maxi(int(e["value"]), 0)
+	return maxi(damage, 1)
+
 ## 攻击敌方基地的方法
 ## 当单位到达敌方基地时调用
 func attack_base(hit_index: int = 0) -> void:  ## 定义攻击基地的方法
@@ -2908,18 +3554,17 @@ func attack_base(hit_index: int = 0) -> void:  ## 定义攻击基地的方法
 	if battlefield and battlefield.has_method("damage_base"):  ## 如果战场有 damage_base 方法
 		## 计算敌方阵营编号（0 的敌方是 1，1 的敌方是 0）
 		var enemy_team = 1 - team  ## 计算敌方阵营
+		## 需求3（2026-09-21 玩家拍板，从直播版同步）：萌黄 S9 打水晶也走「三连红光」——
+		## 旧实现落到下方远程投射物分支，表现为「发射红色方块」，与打兵时的红光特效不一致。
+		## 只在本攻击周期的第一次命中帧启动（hit_index == 0），三道红光各结算一次对水晶伤害；
+		## 敌方水晶缺失/已死时返回 false → 退回下方原有单发逻辑（其它兵种完全不受影响）。
+		if uses_tri_volley() and hit_index == 0 and start_tri_volley_base(battlefield, enemy_team):
+			return
 		## #14（2026-08-11 修复）：对基地伤害用「本次攻击实际总伤害」而非 unit_resource.damage。
 		## 旧逻辑取 damage 字段（英雄 Hero1/Hero2 只有 30），导致英雄打水晶固定 30 点，
 		## 实际输出（damage_by_type/damage_by_hit 150~200）完全没生效。
-		var entries: Array = _compute_damage_entries("base", hit_index)
-		## #13（2026-08-11 用户要求）：中远程兵种对水晶伤害减半（entries 与总值统一减半）
-		if unit_resource != null and unit_resource.is_ranged:
-			for i in range(entries.size()):
-				entries[i]["value"] = maxi(1, int(round(int(entries[i]["value"]) * 0.5)))
-		var damage: int = 0
-		for e in entries:
-			damage += maxi(int(e["value"]), 0)
-		damage = maxi(damage, 1)
+		var entries: Array = _compute_base_damage_entries(hit_index)
+		var damage: int = _sum_damage_entries(entries)
 		## #7：远程兵种打基地/水晶时也必须走飞行物，命中瞬间才扣血。
 		## 旧逻辑在命中帧直接 damage_base，表现为「箭还在半路，水晶血已经掉了」。
 		if unit_resource.is_ranged:
@@ -3277,6 +3922,11 @@ func apply_affix(affix: AffixResource, source: Unit = null) -> void:
 	if affix.affix_type == AffixResource.AffixType.KNOCKBACK:
 		if stun_timer > 0.0:
 			return  ## 晕眩中：不位移、不累计
+		## #技能霸体（2026-09-20）：技能期间被击退不位移，也不累计晕眩层数。
+		## 只挡位移会让第 3 次击退把技能者直接推入 state_stun，
+		## 与「技能不会被击退打断」的诉求相悖，故此处一并挡掉累计。
+		if skill_super_armor:
+			return
 		var origin: Vector2 = source.global_position if (source != null and is_instance_valid(source)) else global_position
 		apply_knockback(origin, affix.knockback_distance * Constants.UNIT_TO_PIXELS)
 		if stun_immune_timer <= 0.0:
@@ -3338,11 +3988,23 @@ func clear_all_affixes() -> void:
 	skill_slow_percent = 0.0
 	skill_slow_timer = 0.0
 	skill_no_recovery_timer = 0.0
+	skill_super_armor = false
+	skill_volley_charges = 0
+	skill_volley_params = {}
+	_skill_volley_fired = false
+	skill_size_mult = 1.0
+	skill_range_h_mult = 1.0  ## 横向攻击范围额外倍率一并归位（对象池复用安全）
+	_apply_collision_radius()  ## 体型归位时碰撞体同步归位，避免尸体/复用实例留着 3 倍判定圈
+	is_summoned = false
 	pending_skill_def = {}
 
 ## 对象池复用前的残留清理（2026-08-18）：清掉死亡/战斗遗留的 tween、词条、
 ## 远程技能定时器、击退/突进位移，恢复血条护盾条与精灵可见性。新实例调此函数为幂等空操作。
 func _clear_pool_residue() -> void:
+	## 需求2（2026-09-19 玩家拍板，2026-09-20 从直播版同步，去直播门控）：萌黄三连红光状态必须复位 ——
+	## 复用出来的单位若带着上一世的红光队列，会凭空对敌人连放 3 道红光。
+	cancel_tri_volley()
+	_attack_sfx_suppressed = false  ## 同时解除上一世的「三连接管音效」标志
 	clear_all_affixes()
 	## 注：死亡 tween 由 state_die 创建，回池时机（死亡动画播完/2s 兜底）保证其已自然结束，
 	## 无需在此枚举清理（Tween 是 RefCounted 非 Node，无法从 get_children 获取）。
@@ -3423,6 +4085,10 @@ func play_skill_anim(speed: float = 1.0) -> void:
 ## distance_px: 击退距离（像素）
 func apply_knockback(from_position: Vector2, distance_px: float) -> void:
 	if is_dead or is_base_unit or distance_px <= 0.0:  ## 死亡 / 基地 / 无效距离不生效
+		return
+	## #技能霸体（2026-09-20）：技能期间免疫击退 —— 不位移、不打断、不累计晕眩。
+	## 直接 return 保证 _knockback_velocity 保持 0，且下方的 on_knockback_interrupt 不会被触发。
+	if skill_super_armor:
 		return
 	## #14 用户拍板：突进不可被阻挡——命中突进一旦触发必须往前走完，击退不打断 dash
 	##（原 _attack_dash_time = -1.0 会让攻击中的单位被击退时突进中断）

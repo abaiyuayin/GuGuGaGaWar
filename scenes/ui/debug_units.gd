@@ -21,6 +21,7 @@ const UNIT_ORDER: Array[String] = [
 	"S5",  ## 咕嘎工钢：特殊阵营（红方友军事件，无攻击动画，接近敌转待机）
 	"S7",  ## 大肥鱼：特殊阵营（奔跑/待机/攻击/行走四套动画）
 	"S8",  ## 丽贝卡：特殊阵营（奔跑/待机/攻击三套动画，行走待补）
+	"S9",  ## 萌黄：特殊阵营远程（奔跑/待机/攻击/行走四套动画，攻击无弹道）
 	"Y1",  ## 死亡使者：异象阵营，归入第 7 阵营「异象」
 	"Y2",  ## 凑企鹅：异象阵营（回合触发敌兵，双攻击轮流）
 	"Y3",  ## 香蕉猫：异象阵营（占位，素材待补）
@@ -63,6 +64,8 @@ var _sound_filter: String = "all"
 var _prev_preview_sound_frame: int = -1
 ## 音效配置页在 TabContainer 中的索引（文件拖入时判断当前是否在该页）
 var _sound_tab_index: int = -1
+## 「帧图调整」页在 TabContainer 中的索引（切页时重新读盘刷新判定帧/连击次数，需求21）
+const FRAME_TAB_INDEX: int = 2
 ## 拖放排序时被拖动条目的路径（空串表示当前无拖动）
 var _dragging_sound_path: String = ""
 ## 音效配置页左侧各阵营分组的展开状态（key: 阵营前缀 G/D/F/N，value: bool，缺省视为展开）（#3）
@@ -101,6 +104,9 @@ func _ready() -> void:
 	tabs.set_tab_title(1, "数值调整")
 	tabs.set_tab_title(2, "帧图调整")
 	tabs.set_tab_title(3, "对战模拟")
+	## 需求21（自直播版照搬）：切到「帧图调整」页时重新读盘刷新判定帧 / 音效帧 / 连击次数，
+	## 否则在数值调整页改完连击次数再切回来，这边仍显示旧值，点「应用」会用旧值覆盖磁盘。
+	tabs.tab_changed.connect(_on_debug_tab_changed)
 	## 连接按钮
 	$VBox/TopBar/BtnBack.pressed.connect(_on_back_pressed)
 	$VBox/TopBar/BtnReset.pressed.connect(_on_reset_pressed)
@@ -1078,6 +1084,8 @@ func _create_stats_card(unit_id: String, res: UnitResource) -> Control:
 	count_spin.custom_minimum_size = Vector2(80, 0)
 	count_spin.tooltip_text = "连击次数（1~5），改变后下方行数会重建"
 	count_row.add_child(count_spin)
+	## 需求21（自直播版照搬）：帧图页的「连击次数」要与本控件双向同步
+	_value_count_spin = count_spin
 
 	## 连击伤害配置容器（每次 attack_count 变化时重建）
 	var combo_config_container := VBoxContainer.new()
@@ -1136,6 +1144,10 @@ func _create_stats_card(unit_id: String, res: UnitResource) -> Control:
 		res.attack_count = int(count_spin.value)
 		_save_resource(unit_id, res)
 		_build_combo_rows.call()
+		## 需求21（自直播版照搬）：同步帧图页的「连击次数」——两者读写同一个 attack_count，
+		## 必须改一个另一个跟着变（set_value_no_signal 避免回环触发）。
+		if _combo_count_spin != null and is_instance_valid(_combo_count_spin):
+			_combo_count_spin.set_value_no_signal(float(maxi(int(count_spin.value), 1)))
 	)
 
 	## #5：远程技能配置（仅当 ranged_skill_cooldown > 0 时显示，如 Y1 死亡使者）
@@ -1397,6 +1409,17 @@ func _save_resource(unit_id: String, res: UnitResource) -> void:
 		for s in speeds:
 			if not is_equal_approx(v.get_anim_speed(s), res.get_anim_speed(s)):
 				push_warning("落盘校验失败: %s %s 速度 %.2f != %.2f" % [unit_id, s, v.get_anim_speed(s), res.get_anim_speed(s)])
+		## 需求21（自直播版照搬）：连击配置一并校验 ——
+		## 数值页与帧图页是两份独立控件、各自持有一份 res 实例，
+		## 任一方拿旧实例整份回写都会把另一页刚保存的连击配置覆盖掉。
+		## 这里在落盘后重新读盘核对，出现覆盖会立刻在控制台报出来（而不是等玩家发现打不出多段）。
+		if v.attack_count != res.attack_count or v.attack_hit_frames != res.attack_hit_frames:
+			push_warning("落盘校验失败: %s 连击配置 count=%d/%d frames=%s/%s" % [
+				unit_id, v.attack_count, res.attack_count,
+				str(v.attack_hit_frames), str(res.attack_hit_frames)])
+		if v.attack_sound_frames != res.attack_sound_frames:
+			push_warning("落盘校验失败: %s 音效帧 frames=%s/%s" % [
+				unit_id, str(v.attack_sound_frames), str(res.attack_sound_frames)])
 
 ## ============================================================
 ## 配置 导出 / 导入 / 重置配置（UnitConfigIO 驱动）
@@ -3724,8 +3747,24 @@ var _btn_clear_sound: Button = null  ## 清除音效帧按钮
 var _hit_sound_mode: String = "hit"  ## 当前选择模式："hit"=判定帧, "sound"=音效帧
 var _cur_hit_frame: int = -1  ## 当前编辑中的判定帧（-1=未设置）
 var _cur_hit_frames: Array[int] = []  ## 多段连击判定帧（按点击顺序对应第1击、第2击...）
+## 2026-09-20：音效帧也支持多段 —— 与 attack_hit_frames 同口径，
+## 帧图调整页在「音效帧」模式下点帧即加入本列表，应用时写入 attack_sound_frames。
+var _cur_sound_frames: Array[int] = []  ## 多段音效帧（与 attack_sound_frames 对应）
+## 每段音效文件（2026-09-21，与 attack_sound_paths 对应）：下标与 _cur_sound_frames 对齐，
+## "" = 该段用兵种默认攻击音效
+var _cur_sound_paths: Array[String] = []  ## 每段音效文件
+var _seg_rows_vbox: VBoxContainer = null  ## 每段音效文件行容器
 var _cur_sound_frame: int = -1  ## 当前编辑中的音效帧（-1=未设置）
 var _hs_hint_label: Label = null  ## 配置栏提示标签（显示当前模式 + 已选帧）
+## 需求1（自直播版 GuGuGaGaWarBilBil 照搬，2026-09-20）：帧图页直接可调「连击次数」。
+## 旧版只能在「数值调整」页改 attack_count，而帧图页点帧时又用 attack_count > 1 判断
+## 是否进多段分支 → 玩家永远配不出多段攻击帧。
+var _combo_count_spin: SpinBox = null
+## 需求21（自直播版照搬）：数值调整页的「连击次数」SpinBox。
+## 它与帧图页的 _combo_count_spin 读写的是同一个 attack_count 字段，但**是两份独立控件**：
+## 旧实现在帧图页只在加载时刷新、切页不刷新 → 在数值页改成 3 后切到帧图页仍显示 1，
+## 再点「应用」就用旧值 1 覆盖磁盘。现在两边双向互写 + 切页重新读盘。
+var _value_count_spin: SpinBox = null
 ## 帧条布局常量
 const FRAME_BAR_PAD: float = 8.0  ## 帧条内边距
 const FRAME_BAR_CELL_W: float = 80.0  ## 每帧单元格宽度
@@ -3861,10 +3900,29 @@ func _build_frame_tab() -> void:
 
 	## 多段连击判定帧说明
 	var hs_combo_hint := Label.new()
-	hs_combo_hint.text = "连击兵种可点击多个帧设置多段判定（按点击顺序对应第1击、第2击...），双击帧可清空多段判定"
+	hs_combo_hint.text = "先把「连击次数」改成 >1，再点击多个帧设置多段判定（按点击顺序对应第1击、第2击...），双击帧可清空多段判定"
 	hs_combo_hint.add_theme_color_override("font_color", Color(0.6, 0.75, 1, 1))
 	hs_combo_hint.add_theme_font_size_override("font_size", 12)
 	_hit_sound_bar.add_child(hs_combo_hint)
+
+	## 连击次数（需求1，自直播版照搬）：帧图页直接可调并落盘，
+	## 不再要求先跑到「数值调整」页改。
+	var combo_row := HBoxContainer.new()
+	combo_row.add_theme_constant_override("separation", 8)
+	_hit_sound_bar.add_child(combo_row)
+	var combo_label := Label.new()
+	combo_label.text = "连击次数:"
+	combo_label.add_theme_color_override("font_color", Color(0.9, 0.8, 0.4, 1))
+	combo_label.add_theme_font_size_override("font_size", 13)
+	combo_row.add_child(combo_label)
+	_combo_count_spin = SpinBox.new()
+	_combo_count_spin.min_value = 1
+	_combo_count_spin.max_value = 5
+	_combo_count_spin.step = 1
+	_combo_count_spin.custom_minimum_size = Vector2(80, 0)
+	_combo_count_spin.tooltip_text = "单次攻击动画内的攻击段数（1~5）；改动立即写入 .tres，>1 时点帧即可配多段判定"
+	_combo_count_spin.value_changed.connect(_on_frame_combo_count_changed)
+	combo_row.add_child(_combo_count_spin)
 
 	## 第三行：帧条（包裹在 ScrollContainer 中，支持左右滚动）
 	var frame_bar_scroll := ScrollContainer.new()
@@ -3880,6 +3938,12 @@ func _build_frame_tab() -> void:
 	_frame_bar.resized.connect(_frame_bar.queue_redraw)
 	_frame_bar.mouse_filter = Control.MOUSE_FILTER_STOP
 	frame_bar_scroll.add_child(_frame_bar)
+
+	## 每段音效文件列表（2026-09-21）：帧条下方，一段一行 = 段号 / 播放帧 / 音效文件
+	## 段由帧条「音效帧」模式点帧增删，这里只负责给每段指定音效文件
+	_seg_rows_vbox = VBoxContainer.new()
+	_seg_rows_vbox.add_theme_constant_override("separation", 2)
+	_hit_sound_bar.add_child(_seg_rows_vbox)
 
 	## 主区域：用 ScrollContainer 包裹，防止内容超出窗口（顶栏/提示/配置栏固定，主区域可滚动）
 	var main_scroll := ScrollContainer.new()
@@ -4070,6 +4134,8 @@ func _update_hit_sound_bar() -> void:
 		_cur_hit_frame = -1
 		_cur_hit_frames.clear()
 		_cur_sound_frame = -1
+		_cur_sound_frames.clear()
+		_cur_sound_paths.clear()
 	else:
 		## #18-5（2026-08-15）：attack2（备用攻击动画）用独立的判定/音效帧字段。
 		## 此前无条件读 attack_hit_frame_start / attack_sound_frame——在 attack2 下编辑时
@@ -4080,9 +4146,17 @@ func _update_hit_sound_bar() -> void:
 		## 加载多段连击判定帧（字段为 Array[int]，用 assign 显式拷贝，避免泛型 Array 赋给 Array[int] 报错）
 		_cur_hit_frames.assign(res.attack_hit_frames)
 		_cur_sound_frame = res.attack_sound_frame_alt if is_alt else res.attack_sound_frame
+		## 2026-09-20：加载多段音效帧（apply 显式拷贝，避免泛型 Array 赋给 Array[int] 报错）
+		_cur_sound_frames.assign(res.attack_sound_frames)
+		## 2026-09-21：加载每段音效文件（与帧列表同下标）
+		_cur_sound_paths.assign(res.attack_sound_paths)
+		## 需求1：同步显示当前连击次数（set_value_no_signal 避免触发落盘回调）
+		if _combo_count_spin != null:
+			_combo_count_spin.set_value_no_signal(float(maxi(res.attack_count, 1)))
 	## 默认进入"判定帧"模式
 	_hit_sound_mode = "hit"
 	_refresh_mode_buttons()
+	_rebuild_sound_seg_rows()
 	_refresh_hs_hint()
 	_frame_bar.queue_redraw()
 
@@ -4111,6 +4185,33 @@ func _on_hit_sound_apply() -> void:
 	var hit_dst: Array[int] = []
 	hit_dst.assign(_cur_hit_frames)
 	res.attack_hit_frames = hit_dst
+	## 2026-09-20（照搬直播版修复）：帧图页配了几段判定，连击次数就自动补齐到几段 ——
+	## 否则界面显示 1 段、实际资源里挂着 N 个判定帧，战斗中只结算第 1 击。
+	## 同时把帧图页的「连击次数」控件值一并落盘（需求1）。
+	if _combo_count_spin != null:
+		res.attack_count = maxi(int(_combo_count_spin.value), 1)
+	if _cur_hit_frames.size() > res.attack_count:
+		res.attack_count = _cur_hit_frames.size()
+	elif res.attack_count > 1 and _cur_hit_frames.is_empty():
+		push_warning("%s 连击次数=%d 但未配置多段判定帧，战斗中只会结算第 1 击" % [
+			_frame_unit_id, res.attack_count])
+	## 保存多段音效帧（非空时清空单帧配置，避免两套并存互相打架）
+	var snd_dst: Array[int] = []
+	snd_dst.assign(_cur_sound_frames)
+	res.attack_sound_frames = snd_dst
+	## 2026-09-21：保存每段音效文件（与帧列表对齐长度后落盘：少补空、多截断）
+	var path_dst: Array[String] = []
+	path_dst.assign(_cur_sound_paths)
+	while path_dst.size() < snd_dst.size():
+		path_dst.append("")
+	if path_dst.size() > snd_dst.size():
+		path_dst.resize(snd_dst.size())
+	res.attack_sound_paths = path_dst
+	if not _cur_sound_frames.is_empty():
+		if is_alt:
+			res.attack_sound_frame_alt = -1
+		else:
+			res.attack_sound_frame = -1
 	## 如果多段判定帧非空，清空旧的单帧配置（避免冲突）
 	if not _cur_hit_frames.is_empty():
 		if is_alt:
@@ -4159,11 +4260,84 @@ func _on_clear_hit_pressed() -> void:
 	_refresh_hs_hint()
 	_frame_bar.queue_redraw()
 
-## 清除音效帧
+## 清除音效帧 / 清空多段音效帧与各段文件
 func _on_clear_sound_pressed() -> void:
 	_cur_sound_frame = -1
+	_cur_sound_frames.clear()
+	_cur_sound_paths.clear()
+	_rebuild_sound_seg_rows()
 	_refresh_hs_hint()
 	_frame_bar.queue_redraw()
+
+## ============================================================
+## 多段音效：每段音效文件（2026-09-21 玩家需求）
+## ============================================================
+
+## 重建「每段音效」行列表：一段一行 = [第N段] [播放帧] [音效文件下拉]
+## 段（帧号）由帧条「音效帧」模式点帧增删，这里只负责给每段指定音效文件
+func _rebuild_sound_seg_rows() -> void:
+	if _seg_rows_vbox == null:
+		return
+	for child in _seg_rows_vbox.get_children():
+		child.queue_free()
+	## 文件数量与帧数量对齐（少补空、多截断）
+	while _cur_sound_paths.size() < _cur_sound_frames.size():
+		_cur_sound_paths.append("")
+	if _cur_sound_paths.size() > _cur_sound_frames.size():
+		_cur_sound_paths.resize(_cur_sound_frames.size())
+	if _cur_sound_frames.is_empty():
+		_refresh_hs_hint()
+		if _frame_bar != null:
+			_frame_bar.queue_redraw()
+		return
+	## 音效库候选（与音效配置页同一口径：本兵种目录 + 本阵营专属 + 共享）
+	if _cached_sound_paths.is_empty():
+		_refresh_cached_sound_paths()
+	var paths: Array[String] = _filter_sounds_for_unit(_frame_unit_id)
+	for i in range(_cur_sound_frames.size()):
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 6)
+		_seg_rows_vbox.add_child(row)
+		var lbl := Label.new()
+		lbl.text = "第 %d 段" % (i + 1)
+		lbl.custom_minimum_size = Vector2(58, 0)
+		lbl.add_theme_font_size_override("font_size", 13)
+		lbl.add_theme_color_override("font_color", Color(0.55, 0.8, 1, 1))
+		row.add_child(lbl)
+		## 播放帧（只读显示，由帧条「音效帧」模式点帧决定）
+		var fl := Label.new()
+		fl.text = "播放帧: %d" % _cur_sound_frames[i]
+		fl.custom_minimum_size = Vector2(86, 0)
+		fl.add_theme_font_size_override("font_size", 13)
+		fl.add_theme_color_override("font_color", Color(0.8, 0.8, 0.8, 1))
+		fl.tooltip_text = "该段播放帧由帧条决定：在「音效帧」模式下点帧加入本段，再点移除"
+		row.add_child(fl)
+		## 音效文件（第 0 项 = 用兵种默认攻击音效）
+		var opt := OptionButton.new()
+		opt.custom_minimum_size = Vector2(380, 0)
+		opt.tooltip_text = "本段使用的音效文件。「（默认攻击音效）」= 沿用该兵种自己的攻击音效"
+		opt.add_item("（默认攻击音效）")
+		var cur_path: String = _cur_sound_paths[i]
+		var sel: int = 0
+		for pi in range(paths.size()):
+			opt.add_item(paths[pi].get_file())
+			if paths[pi] == cur_path:
+				sel = pi + 1
+		opt.select(sel)
+		opt.item_selected.connect(_on_sound_seg_path_selected.bind(i, paths))
+		row.add_child(opt)
+	_refresh_hs_hint()
+	if _frame_bar != null:
+		_frame_bar.queue_redraw()
+
+## 某段音效文件被下拉选中（index 0 = 该段用兵种默认攻击音效）
+func _on_sound_seg_path_selected(idx: int, seg_index: int, paths: Array[String]) -> void:
+	if seg_index < 0 or seg_index >= _cur_sound_paths.size():
+		return
+	_cur_sound_paths[seg_index] = "" if idx <= 0 or idx - 1 >= paths.size() else paths[idx - 1]
+	_refresh_hs_hint()
+	if _frame_bar != null:
+		_frame_bar.queue_redraw()
 
 ## 刷新两个模式按钮的按下状态与配色
 func _refresh_mode_buttons() -> void:
@@ -4187,6 +4361,38 @@ func _refresh_mode_buttons() -> void:
 			_btn_mode_sound.remove_theme_color_override("font_hover_color")
 
 ## 刷新提示标签：显示当前模式 + 已选帧
+## 需求1（2026-09-14 / 自直播版照搬）：帧图页改连击次数 → 立即落盘 .tres。
+## 旧版只有「数值调整」页会保存 attack_count，帧图页既没有入口也不落盘，
+## 所以配好的三段连击关掉窗口再开就变回一段。段数调小时同时截断超出的判定帧，
+## 避免「判定帧列表比段数长」在战斗里凭空多打一段。
+func _on_frame_combo_count_changed(value: float) -> void:
+	if _frame_unit_id.is_empty():
+		return
+	var res := _load_unit_resource(_frame_unit_id)
+	if res == null:
+		return
+	var count: int = maxi(int(value), 1)
+	res.attack_count = count
+	if _cur_hit_frames.size() > count:
+		_cur_hit_frames.resize(count)
+		res.attack_hit_frames.assign(_cur_hit_frames)
+	_save_resource(_frame_unit_id, res)
+	## 需求21：同步数值调整页的「连击次数」（同一 attack_count 的两个控件）
+	if _value_count_spin != null and is_instance_valid(_value_count_spin):
+		_value_count_spin.set_value_no_signal(float(count))
+	_refresh_hs_hint()
+	if _frame_bar != null:
+		_frame_bar.queue_redraw()
+
+## 需求21（自直播版照搬）：切到「帧图调整」页时重新读盘刷新判定帧 / 音效帧 / 连击次数。
+## 否则在数值调整页改完连击次数再切回来，这边仍显示旧值，点「应用」会用旧值覆盖磁盘。
+func _on_debug_tab_changed(tab_idx: int) -> void:
+	if tab_idx != FRAME_TAB_INDEX:
+		return
+	_update_hit_sound_bar()
+	if _frame_bar != null:
+		_frame_bar.queue_redraw()
+
 func _refresh_hs_hint() -> void:
 	if _hs_hint_label == null:
 		return
@@ -4199,8 +4405,25 @@ func _refresh_hs_hint() -> void:
 		hit_text = "未设置（用时间比例自动）"
 	else:
 		hit_text = "第 %d 帧" % _cur_hit_frame
-	var sound_text: String = "未设置（用 attack_sound_timing）" if _cur_sound_frame < 0 else "第 %d 帧" % _cur_sound_frame
-	_hs_hint_label.text = "当前模式: %s    |    判定帧: %s    |    音效帧: %s" % [mode_text, hit_text, sound_text]
+	var sound_text: String
+	if not _cur_sound_frames.is_empty():
+		## 2026-09-21：逐段列出「帧(音效名)」
+		var parts: Array[String] = []
+		for i in range(_cur_sound_frames.size()):
+			var sname: String = _cur_sound_paths[i].get_file() if i < _cur_sound_paths.size() else ""
+			if sname == "":
+				sname = "默认音"
+			parts.append("%d(%s)" % [_cur_sound_frames[i], sname])
+		sound_text = " ".join(parts)
+	elif _cur_sound_frame < 0:
+		sound_text = "未设置（用 attack_sound_timing）"
+	else:
+		sound_text = "第 %d 帧" % _cur_sound_frame
+	var combo_text: String = "?"
+	if _combo_count_spin != null:
+		combo_text = str(int(_combo_count_spin.value))
+	_hs_hint_label.text = "连击 %s 段    |    当前模式: %s    |    判定帧: %s    |    音效帧: %s" % [
+		combo_text, mode_text, hit_text, sound_text]
 
 ## 计算第 idx 帧在帧条上的矩形区域（单元格）
 func _frame_bar_cell_rect(idx: int) -> Rect2:
@@ -4295,7 +4518,28 @@ func _on_frame_bar_draw() -> void:
 					Color(1, 0.6, 0.3, 1)
 				)
 		## 音效帧标记（蓝色三角 + 蓝色边框）
-		if _cur_sound_frame == i:
+		## 2026-09-20：多段音效帧 —— 每段一个标记 + 段号
+		for si in range(_cur_sound_frames.size()):
+			if _cur_sound_frames[si] != i:
+				continue
+			_frame_bar.draw_rect(cell, Color(0.3, 0.7, 1, 1), false, 2.0)
+			var tri_s := PackedVector2Array([
+				Vector2(cell.position.x + FRAME_BAR_CELL_W - 14, cell.position.y - 2),
+				Vector2(cell.position.x + FRAME_BAR_CELL_W - 4, cell.position.y - 2),
+				Vector2(cell.position.x + FRAME_BAR_CELL_W - 9, cell.position.y + 8),
+			])
+			_frame_bar.draw_colored_polygon(tri_s, Color(0.3, 0.7, 1, 1))
+			_frame_bar.draw_string(
+				UIButtonHelper.get_ui_font(),
+				Vector2(cell.position.x + FRAME_BAR_CELL_W - 26, cell.position.y + 22),
+				str(si + 1),
+				HORIZONTAL_ALIGNMENT_LEFT,
+				-1,
+				11,
+				Color(0.3, 0.7, 1, 1)
+			)
+		## 单帧音效标记：仅在未配置多段音效时使用（两套机制互斥）
+		if _cur_sound_frames.is_empty() and _cur_sound_frame == i:
 			_frame_bar.draw_rect(cell, Color(0.3, 0.7, 1, 1), false, 2.0)
 			var tri2 := PackedVector2Array([
 				Vector2(cell.position.x + FRAME_BAR_CELL_W - 14, cell.position.y - 2),
@@ -4316,30 +4560,43 @@ func _on_frame_bar_input(event: InputEvent) -> void:
 	## 双击或右键可清除该帧的标记（便捷操作）
 	if event.double_click:
 		if _hit_sound_mode == "hit":
-			## 多段连击兵种：双击清空所有多段判定帧；单段兵种：清除单帧
-			var res_hit := _load_unit_resource(_frame_unit_id)
-			if res_hit != null and res_hit.attack_count > 1:
-				_cur_hit_frames.clear()
-			elif _cur_hit_frame == idx:
+			## 双击清空所有多段判定帧（清空后回落到单帧语义）
+			_cur_hit_frames.clear()
+			if _cur_hit_frame == idx:
 				_cur_hit_frame = -1
-		elif _hit_sound_mode == "sound" and _cur_sound_frame == idx:
-			_cur_sound_frame = -1
+		elif _hit_sound_mode == "sound":
+			## 音效帧同样支持多段：双击清空列表并回落到单帧
+			_cur_sound_frames.clear()
+			_cur_sound_paths.clear()
+			if _cur_sound_frame == idx:
+				_cur_sound_frame = -1
+			_rebuild_sound_seg_rows()
 	else:
 		match _hit_sound_mode:
 			"hit":
-				## 多段连击兵种（attack_count > 1）：点击添加到 _cur_hit_frames（已存在则取消）
-				## 单段兵种：替换 _cur_hit_frame
-				var res_click := _load_unit_resource(_frame_unit_id)
-				if res_click != null and res_click.attack_count > 1:
-					var existing_idx := _cur_hit_frames.find(idx)
-					if existing_idx >= 0:
-						_cur_hit_frames.remove_at(existing_idx)
-					else:
-						_cur_hit_frames.append(idx)
+				## 2026-09-20（照搬直播版修复）：判定帧**一律**按多段列表累积，
+				## 不再用 attack_count > 1 当开关 —— 旧逻辑下 attack_count 还是 1 时
+				## 点第 2 帧只会覆盖单帧，玩家永远配不出多段攻击帧
+				##（用户实测「设成三段攻击，帧图调整里判定还是只有一段」）。
+				## attack_count 会在「应用」时按帧数自动补齐。
+				var existing_idx := _cur_hit_frames.find(idx)
+				if existing_idx >= 0:
+					_cur_hit_frames.remove_at(existing_idx)
 				else:
-					_cur_hit_frame = idx
+					_cur_hit_frames.append(idx)
 			"sound":
-				_cur_sound_frame = idx
+				## 音效帧同样支持多段：点帧即累积/取消（多段模式与判定帧完全同构）
+				## 2026-09-21：每段音效文件随之增删（新增段默认空 = 兵种默认攻击音效）
+				var s_idx := _cur_sound_frames.find(idx)
+				if s_idx >= 0:
+					_cur_sound_frames.remove_at(s_idx)
+					if s_idx < _cur_sound_paths.size():
+						_cur_sound_paths.remove_at(s_idx)
+				else:
+					_cur_sound_frames.append(idx)
+					_cur_sound_paths.append("")
+				_cur_sound_frame = _cur_sound_frames[0] if _cur_sound_frames.size() == 1 else -1
+				_rebuild_sound_seg_rows()
 	_refresh_hs_hint()
 	_frame_bar.queue_redraw()
 

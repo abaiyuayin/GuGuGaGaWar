@@ -36,6 +36,15 @@ func update(delta: float) -> void:  ## 重写每帧更新方法
 		unit.velocity = Vector2.ZERO
 		unit.play_arena_stand()
 		return
+	## #2026-09-22：无攻击能力单位（S5 咕嘎工钢）——不索敌、不切攻击 / 攻基状态。
+	## 闸门位置刻意放在「移动令之后、一切索敌/攻击锁定之前」：
+	##   - order_pos 移动令仍然生效（玩家可以指挥它走位）；
+	##   - 但攻击锁定、竞技场索敌、站定还击、推进攻基全部跳过。
+	## 它只照常推进，到敌方基地前按自身射程站定（不造成任何伤害）。
+	if not unit.has_attack_ability():
+		_advance_without_attack(delta, _forward_direction(), speed_px)
+		return
+
 	## #框选攻击锁定（2026-09-04）：玩家指定的目标优先于一切自动索敌 ——
 	## 进射程就打，没进射程就全向追（不锁水平方向、不做阵线回归），直到目标阵亡或玩家改令
 	var forced: Unit = unit.sync_forced_target()
@@ -67,10 +76,8 @@ func update(delta: float) -> void:  ## 重写每帧更新方法
 			## #性能（2026-08-27）：索敌半径由 INF 收窄到自身攻击范围（含 10px 滞回容差）。
 			## 下一行的闸门就是 is_target_in_attack_range(±10)，攻击范围外的最近敌人一律
 			## 通不过 —— 收窄后行为逐条等价。椭圆射程取 h/v 较大者以覆盖整个椭圆。
-			var reach_px: float = unit.unit_resource.attack_range * Constants.UNIT_TO_PIXELS + 10.0
-			if unit.unit_resource.use_elliptical_range:
-				reach_px = maxf(unit.unit_resource.get_attack_range_h_px(),
-						unit.unit_resource.get_attack_range_v_px()) + 10.0
+			## #2026-09-22：改用 get_attack_query_radius_px()，一并带上技能体型/横向范围倍率。
+			var reach_px: float = unit.get_attack_query_radius_px() + 10.0
 			var near: Unit = unit.find_nearest_enemy_in_range(reach_px)
 			if near != null and unit.is_target_in_attack_range(near.global_position, 10.0):
 				unit.target = near
@@ -83,14 +90,8 @@ func update(delta: float) -> void:  ## 重写每帧更新方法
 	## 中远程单位的后撤已收拢到攻击状态的「恢复期」（#17），移动状态不再主动后撤，
 	## 避免与推进逻辑抢控制权；发现敌人进入射程即转入攻击状态，由攻击后摇触发后撤。
 
-	## 设置移动方向：红方（team=0）向右，蓝方（team=1）向左
-	var direction: float = 1.0 if unit.team == 0 else -1.0  ## 根据阵营设置方向
-	## 肉鸽：水晶在地图正中央（x=0），敌军从左右两侧刷新 —— 推进方向必须朝水晶实时计算，
-	## 沿用「蓝方一律向左」会让左侧出生的敌人朝反方向走到空气墙前站死，永远打不到水晶。
-	if RoguelikeManager.is_active and unit.team == 1:
-		var dx: float = get_enemy_base_position().x - unit.global_position.x
-		if absf(dx) > 1.0:
-			direction = signf(dx)
+	## 推进方向（红方向右 / 蓝方向左；肉鸽敌军按水晶实时计算，见 _forward_direction）
+	var direction: float = _forward_direction()
 
 	## 安全校验：单位引用失效时停止处理
 	if unit == null or not is_instance_valid(unit):
@@ -157,7 +158,17 @@ func update(delta: float) -> void:  ## 重写每帧更新方法
 	## #需求22 修复：与兵对兵攻击一致，进入判定加 +10.0 滞回容差——
 	## 旧逻辑精确射程进、精确射程退，单位被友军分离/碰撞推挤到射程边缘时
 	## move↔attack_base 高频抖动 → 一直播奔跑动画、偶尔闪一帧攻击（用户反馈「奔跑不攻击」）。
-	var effective_base_range: float = res.attack_range * Constants.UNIT_TO_PIXELS + 10.0  ## 有效攻击水晶范围 = 自身射程 + 滞回容差
+	##
+	## #2026-09-22 修复（水晶前原地抽搐 / dorohero 被卡住）：进入阈值必须与
+	## state_attack_base 的退出阈值同源。旧实现用 res.attack_range ×32 + 10，
+	## 而 attack_base 用 get_attack_query_radius_px() + 30 —— 对「声明 attack_range 远大于
+	## 实际横/纵椭圆半轴」的兵种（Hero1 / Hero2 / Hero4 / D2 / F4 / N1 / N5 / S1 / Y1 / Y2），
+	## 进入阈值 > 退出阈值（如 Hero2：进入 106px、退出 68.4px），两状态在 (68.4, 106] 区间
+	## 每物理帧互相切换：move 判定「已在射程内」直接 return 不推进、attack_base 判定「超出射程」
+	## 立刻退回 move → 单位在水晶前原地抽搐、永远走不到能打的位置。
+	## 统一取「攻击判定查询半径 + 10」后：进入 48.4px < 退出 68.4px，20px 滞回带稳定。
+	## 对没有椭圆配置的兵种（查询半径 = attack_range×32）本式与旧式完全等价。
+	var effective_base_range: float = unit.get_attack_query_radius_px() + 10.0  ## 有效攻击水晶范围 = 自身射程 + 滞回容差
 	if dist_to_base <= effective_base_range:  ## 如果进入有效攻击范围
 		unit.target = null  ## 清空目标（基地不是 Unit 类型）
 		unit.change_state("attack_base")  ## 切换到攻击基地状态（遵循攻击周期）
@@ -238,6 +249,31 @@ func _advance(delta: float, direction: float, speed_px: float) -> void:
 	## 强制更新 visual 位置（如果 Control 节点滞后）
 	unit.request_debug_redraw()  ## 请求重绘
 
+## 推进方向（唯一计算点）：红方（team=0）向右、蓝方（team=1）向左。
+## 肉鸽例外：水晶在地图正中央（x=0），敌军从左右两侧刷新 —— 方向必须朝水晶实时计算，
+## 沿用「蓝方一律向左」会让左侧出生的敌人朝反方向走到空气墙前站死，永远打不到水晶。
+func _forward_direction() -> float:
+	var direction: float = 1.0 if unit.team == 0 else -1.0
+	if RoguelikeManager.is_active and unit.team == 1:
+		var dx: float = get_enemy_base_position().x - unit.global_position.x
+		if absf(dx) > 1.0:
+			direction = signf(dx)
+	return direction
+
+## #2026-09-22：无攻击能力单位（attack_anim_mode == "none"，S5 咕嘎工钢）的推进分支。
+## 与正常推进的唯一差别：不做索敌、不切 attack / attack_base；到敌方基地前按自身射程站定，
+## 之后只播待机动画（原地不动，不造成任何伤害）。敌方无基地时（肉鸽蓝方）保持纯推进。
+func _advance_without_attack(delta: float, direction: float, speed_px: float) -> void:
+	if enemy_has_base():
+		var base_pos: Vector2 = get_enemy_base_position()
+		if unit.global_position.distance_to(base_pos) <= unit.get_attack_query_radius_px() + 10.0:
+			unit.target = null
+			unit.velocity = Vector2.ZERO
+			unit.move_and_slide()
+			unit.play_anim("idle")
+			return
+	_advance(delta, direction, speed_px)
+
 ## 朝玩家下达的 order_pos 移动（框选指挥共用：竞技场 + 肉鸽）
 ## 复用速度/分离/朝向逻辑；到达目标点（阈值内）后交给 _finish_order 收尾。
 ## delta: 帧间隔（秒）；speed_px: 像素移速
@@ -310,9 +346,8 @@ func _pick_post_order_target() -> Unit:
 	## ① 自身攻击范围内（+10px 滞回容差，与进入攻击状态的判定同口径）
 	var res: UnitResource = unit.unit_resource
 	if res != null:
-		var reach: float = res.attack_range * Constants.UNIT_TO_PIXELS + 10.0
-		if res.use_elliptical_range:
-			reach = maxf(res.get_attack_range_h_px(), res.get_attack_range_v_px()) + 10.0
+		## #2026-09-22：统一走 get_attack_query_radius_px()（含椭圆 + 技能体型/横向倍率）
+		var reach: float = unit.get_attack_query_radius_px() + 10.0
 		var near: Unit = _find_enemy_near(unit.global_position, reach)
 		if near != null and unit.is_target_in_attack_range(near.global_position, 10.0):
 			return near

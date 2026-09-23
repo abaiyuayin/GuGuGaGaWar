@@ -15,6 +15,20 @@ extends Control
 ## 返回主菜单按钮
 @onready var btn_menu: Button = $VBoxContainer/BtnMenu
 
+## 标题外壳（普通 Control，**不是容器**）：容器会强制子节点铺满并居中，
+## 只有非容器父级才能让标题靠 anchors + offset 做「墨迹居中」补偿，
+## 见 _apply_title_ink_centering()
+var _title_holder: Control = null
+
+## 全角「！」(U+FF01) 在项目主字体（猫啃忘形圆）里占满 1em 字宽（font_size 72 时 = 58px），
+## 但墨迹只有约 0.14em 且紧贴字框左侧，右侧残留约 0.51em 空白
+## （font_size 72 实测：左留白 4px、右留白 37px）。
+## Label 的 CENTER 对齐只保证「字串字宽 advance 居中」，于是整块墨迹视觉左偏半格。
+## 本常量 = (右留白 - 左留白) / 2 / 字号 = 16.5 / 72，用于把标题右移回正中。
+## 换主字体后需按同法重测：渲染「你赢了！」后量墨迹左右边距。
+const FULLWIDTH_BANG: String = "！"
+const TITLE_INK_SHIFT_RATIO: float = 0.2292
+
 func _ready() -> void:
 	## 设置为始终处理，确保暂停状态下按钮仍可响应
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -55,16 +69,38 @@ func _setup_parchment_frame() -> void:
 	## ⚠️ Godot 4 的 add_child() 不会自动从旧父级摘除节点（会报 "already has a parent" 且后续语句照跑），
 	## 把 .tscn 里已有的节点收进面板必须用 reparent()。此前用 add_child 导致面板一个子节点都挂不上，
 	## 只剩「最小宽 560 + 内边距 56」的空壳渲染在屏幕正中。
-	result_label.reparent(vbox)
-	vbox.move_child(result_label, 0)
+	## 标题先装进一个普通 Control 外壳（非容器）：容器会把子节点强制铺满 / 居中，
+	## 只有非容器父级才能靠 anchors + offset 做墨迹居中补偿（_apply_title_ink_centering）。
+	_title_holder = Control.new()
+	_title_holder.name = "TitleHolder"
+	_title_holder.custom_minimum_size = Vector2(0, 96)
+	_title_holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	result_label.reparent(_title_holder)
+	result_label.set_anchors_preset(Control.PRESET_FULL_RECT)
+	result_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	result_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	vbox.add_child(_title_holder)
+	vbox.move_child(_title_holder, 0)
 	vbox.reparent(panel)
 	center.add_child(panel)
 	add_child(center)
 	move_child(center, 1)
 
-	result_label.custom_minimum_size = Vector2(480, 96)
-	result_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	result_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+
+## 让标题按「墨迹」而不是「字宽」居中
+## 中文标题（你赢了！/ 你输了！）以全角「！」结尾，该字形右侧自带约半格空白，
+## 只靠 Label 的 CENTER 对齐会让整块字视觉左偏；这里把标题框右移半个空白差补偿。
+## 其它语言（You Win! / You Lose! 等）用半角「!」，左右留白本来就对称，不做补偿。
+## 注：必须在字号确定之后调用 —— _setup_parchment_frame() 执行时字号还是主题默认值。
+func _apply_title_ink_centering() -> void:
+	if _title_holder == null or not is_instance_valid(_title_holder):
+		return
+	var shift: float = 0.0
+	if result_label.text.ends_with(FULLWIDTH_BANG):
+		shift = TITLE_INK_SHIFT_RATIO * float(result_label.get_theme_font_size("font_size"))
+	## anchors 为 FULL_RECT 时，左右 offset 同量平移即可把整块字右移 shift
+	result_label.offset_left = shift
+	result_label.offset_right = shift
 
 
 func _setup_button_style(btn: Button) -> void:
@@ -133,6 +169,9 @@ func set_winner(winner_team: int, stats: Dictionary = {}) -> void:
 		## #18：失败文本保持大字号；标题色与羊皮卷纸风格统一
 		result_label.add_theme_color_override("font_color", Color(0.45, 0.12, 0.08))
 		result_label.add_theme_font_size_override("font_size", 72)
+
+	## 文本与字号都定下来之后再补偿墨迹居中（见 _apply_title_ink_centering）
+	_apply_title_ink_centering()
 
 ## 首通关卡时显示解锁兵种通知（延迟弹出，在结算界面显示后再出现）
 func _show_unlock_notification(level: int) -> void:

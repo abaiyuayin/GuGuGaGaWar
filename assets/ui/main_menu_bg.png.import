@@ -3,21 +3,19 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://b4p32chjyxre"
-path.bptc="res://.godot/imported/main_menu_bg.png-59bbb07c119e9d6cb9f1531a340441b6.bptc.ctex"
-path.astc="res://.godot/imported/main_menu_bg.png-59bbb07c119e9d6cb9f1531a340441b6.astc.ctex"
+path="res://.godot/imported/main_menu_bg.png-59bbb07c119e9d6cb9f1531a340441b6.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc", "etc2_astc"],
-"vram_texture": true
+"vram_texture": false
 }
 
 [deps]
 
 source_file="res://assets/ui/main_menu_bg.png"
-dest_files=["res://.godot/imported/main_menu_bg.png-59bbb07c119e9d6cb9f1531a340441b6.bptc.ctex", "res://.godot/imported/main_menu_bg.png-59bbb07c119e9d6cb9f1531a340441b6.astc.ctex"]
+dest_files=["res://.godot/imported/main_menu_bg.png-59bbb07c119e9d6cb9f1531a340441b6.ctex"]
 
 [params]
 
-compress/mode=2
+compress/mode=1
 compress/high_quality=true
 compress/lossy_quality=0.9
 compress/uastc_level=0

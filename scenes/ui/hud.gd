@@ -399,11 +399,21 @@ func apply_battlefield_layout() -> void:
 		red_hp.visible = false
 	if blue_hp != null:
 		blue_hp.visible = false
-	## 隐藏顶部计时/回合标签（沙盒无回合）与难度标签
+	## 隐藏顶部计时/回合标签（沙盒无回合）
 	if timer_label != null:
 		timer_label.visible = false
+	## 竞技场（2026-09-19 用户要求）：保留顶部「模式」按钮 —— 沙盒无难度，按钮改显示
+	## 「竞技场模式」，悬停给出沙盒模式说明（非 DevMode 点击 = toast 说明，DevMode 点击 = 编辑说明）
 	if diff_btn != null:
-		diff_btn.visible = false
+		diff_btn.visible = true
+		_apply_mode_btn_text(diff_btn)
+		diff_btn.tooltip_text = _get_hud_diff_tip()
+	## 竞技场（2026-09-19 用户要求）：顶部「设置」「开发工具」常驻 ——
+	## 竞技场本身就是开发者沙盒，不随 DevMode 关闭而消失（否则导出/Web 环境这一排只剩帮助/退出）
+	if settings_btn != null:
+		settings_btn.visible = true
+	if dev_btn != null:
+		dev_btn.visible = true
 	## #竞技场（2026-09-02 用户要求）：删除竞技场的「调整」按钮（沙盒无局内经济，调整面板无意义）
 	if adjust_btn != null:
 		adjust_btn.visible = false
@@ -802,6 +812,35 @@ func _remove_center_anim_sprite() -> void:
 		_center_anim_sprite.queue_free()
 	_center_anim_sprite = null
 
+## ── 竞技场顶部「模式」按钮（2026-09-19 用户要求：竞技场顶部要有模式/设置/开发者工具）──
+## 文案走 localization（ARENA_MODE / ARENA_MODE_TIP）；翻译表尚未重新导入时回落内置文案，
+## 避免按钮/提示直接显示裸翻译键名。
+const ARENA_MODE_KEY: String = "ARENA_MODE"
+const ARENA_MODE_FALLBACK: String = "竞技场模式"
+const ARENA_MODE_TIP_KEY: String = "ARENA_MODE_TIP"
+const ARENA_MODE_TIP_FALLBACK: String = "竞技场模式（RTS 沙盒）：左键点地面出 1 兵，长按 1 秒连出；左键拖框＝框选己方单位（框内无己方单位则按格铺兵）；右键点地面＝移动令，右键点敌人＝全体集火；右键拖动＝平移镜头，滚轮＝缩放；「和平模式/战争模式」按钮决定是否交战；G＝网格显隐，F3＝判定框，F5＝全屏。无 AI、无回合、无胜负。"
+
+## 翻译兜底：键缺失时返回内置文案而非裸键名
+func _tr_or(key: String, fallback: String) -> String:
+	var txt: String = tr(key)
+	return txt if txt != key else fallback
+
+## 顶部「模式/难度」按钮文案：竞技场＝竞技场模式；双人＝双人模式；其余按难度档位
+func _apply_mode_btn_text(btn: Button) -> void:
+	if btn == null or not is_instance_valid(btn):
+		return
+	if GameManager.is_battlefield_mode:
+		btn.text = _tr_or(ARENA_MODE_KEY, ARENA_MODE_FALLBACK)
+		return
+	if BattleManager.is_two_player:
+		btn.text = tr("TWO_PLAYER_MODE")
+		return
+	match GameManager.current_difficulty:
+		0: btn.text = tr("DIFFICULTY_EASY")
+		1: btn.text = tr("DIFFICULTY_NORMAL")
+		2: btn.text = tr("DIFFICULTY_HARD")
+		_: btn.text = tr("DIFFICULTY_NORMAL")
+
 func _setup_difficulty_label() -> void:
 	## #15：肉鸽模式不显示战役难度按钮（�?按钮服务于战�?双人难度切换，肉鸽无难度概念�?
 	if RoguelikeManager.is_active:
@@ -813,15 +852,8 @@ func _setup_difficulty_label() -> void:
 	diff_btn = btn
 	## 与顶部按钮一致的尺寸（按「按钮2」原图比例，不压扁）
 	btn.custom_minimum_size = Vector2(114, 31)
-	## 根据当前难度设置文本
-	match GameManager.current_difficulty:
-		0: btn.text = tr("DIFFICULTY_EASY")
-		1: btn.text = tr("DIFFICULTY_NORMAL")
-		2: btn.text = tr("DIFFICULTY_HARD")
-		_: btn.text = tr("DIFFICULTY_NORMAL")
-	## 双人模式显示双人模式文本
-	if BattleManager.is_two_player:
-		btn.text = tr("TWO_PLAYER_MODE")
+	## 根据当前难度/模式设置文本（竞技场显示「竞技场模式」，见 _apply_mode_btn_text）
+	_apply_mode_btn_text(btn)
 	## #2：悬停提�?= �?��义优先，回落内置默�?（文案与战役地图 campaign_map 保持丢�致）
 	btn.tooltip_text = _get_hud_diff_tip()
 	btn.pressed.connect(_on_diff_btn_pressed)
@@ -838,6 +870,9 @@ const HUD_DIFF_TIPS_PATH: String = "user://hud_diff_tips.cfg"
 
 ## 当前屢�难度/模式的提示存储键�?2）：双人模式�?���?��其余按难�?0/1/2
 func _hud_diff_tip_key() -> String:
+	## 竞技场：模式说明独立存储键，不与战役各难度提示互相覆盖（2026-09-19）
+	if GameManager.is_battlefield_mode:
+		return "arena"
 	return "2p" if BattleManager.is_two_player else "diff_%d" % GameManager.current_difficulty
 
 ## 读取难度/模式�?��提示：自定义优先，回落内�?��认（#2�?
@@ -848,6 +883,9 @@ func _get_hud_diff_tip() -> String:
 		var custom: String = String(cfg.get_value("tips", key, ""))
 		if custom != "":
 			return custom
+	## 竞技场：模式说明（悬停「竞技场模式」按钮 / 非 DevMode 点击时显示，2026-09-19）
+	if GameManager.is_battlefield_mode:
+		return _tr_or(ARENA_MODE_TIP_KEY, ARENA_MODE_TIP_FALLBACK)
 	if BattleManager.is_two_player:
 		return "双人模式：左右两侧由两名玩家分别操控，不参与 AI 难度"
 	match GameManager.current_difficulty:
@@ -1055,17 +1093,11 @@ func _apply_localization() -> void:
 	adjust_btn.text = "调整"
 	exit_btn.text = tr("EXIT")
 
-	## 更新难度/模式显示按钮文本
+	## 更新难度/模式显示按钮文本与悬停说明（含竞技场「竞技场模式」分支）
 	var diff_btn = $TopCenterButtons.get_node_or_null("DifficultyBtn")
 	if diff_btn != null:
-		if BattleManager.is_two_player:
-			diff_btn.text = tr("TWO_PLAYER_MODE")
-		else:
-			match GameManager.current_difficulty:
-				0: diff_btn.text = tr("DIFFICULTY_EASY")
-				1: diff_btn.text = tr("DIFFICULTY_NORMAL")
-				2: diff_btn.text = tr("DIFFICULTY_HARD")
-				_: diff_btn.text = tr("DIFFICULTY_NORMAL")
+		_apply_mode_btn_text(diff_btn as Button)
+		diff_btn.tooltip_text = _get_hud_diff_tip()
 
 	## 更新扢�有兵种按�?tooltip（文字信�?��过鼠标�?��显示�?
 	for i in range(unit_buttons.size()):
@@ -1155,7 +1187,7 @@ func _create_unit_buttons() -> void:
 		## #自由事件（2026-08-15）：DevMode 下把有实际素材的隐藏事件兵种 S2（仓鼠士兵）/Y2（凑企鹅）
 		## 追加进按钮集。S3 仍为占位兵种（素材待补）不放；战役模式仍走固定编成不受影响。
 		if DevMode.enabled:
-			for hid in ["S2", "Y2", "S4", "S5", "Y3", "Y4", "S7", "S8"]:
+			for hid in ["S2", "Y2", "S4", "S5", "Y3", "Y4", "S7", "S8", "S9"]:
 				if hid in player_ids:
 					continue
 				player_ids.append(hid)
@@ -2451,7 +2483,8 @@ func _on_selection_changed(player_id: int, _unit_res: Resource) -> void:
 ## #新需求：开发者专属入口仅 DevMode 可见（局内「开发工具」「调整」两个按钮）
 ## 非开发者模式隐藏按钮；帮助按钮保留（hover 查看帮助，属玩家功能）
 func _apply_dev_gating(_on: bool = false) -> void:
-	dev_btn.visible = DevMode.enabled
+	## #竞技场（2026-09-19 用户要求）：竞技场顶部「开发工具」常驻（沙盒即开发者入口）
+	dev_btn.visible = DevMode.enabled or GameManager.is_battlefield_mode
 	## #竞技场（2026-09-02 用户要求）：竞技场模式不显示「调整」按钮（沙盒无局内经济，调整面板无意义）
 	## 肉鸽同理：局内无经济系统，调整面板无意义
 	adjust_btn.visible = DevMode.enabled and not GameManager.is_battlefield_mode and not RoguelikeManager.is_active
@@ -2874,6 +2907,8 @@ func _on_dev_tool_pressed() -> void:
 	menu.add_item("召唤动力菲比（红方友军）", 43)
 	menu.add_item("召唤大肥鱼（红方友军）", 44)
 	menu.add_item("召唤丽贝卡（红方友军）", 45)
+	## 2026-09-19（从直播版搬入）：萌黄 S9。id 47 —— 原版 46 已被「随机出兵」占用
+	menu.add_item("召唤萌黄（红方友军）", 47)
 	## 敌方兵�?阵营二级菜单（咕�?Doro/菲比/�?��），默�?全部勾��；
 	## 仅在全面战争（非双人、非战役）中生效，过�?AI �?��兵�?
 	var faction_sub := PopupMenu.new()
@@ -3030,6 +3065,9 @@ func _on_dev_tool_pressed() -> void:
 		elif id == 45:
 			## 特殊事件：召唤丽贝卡（S8）加入红方友军
 			BattleManager.dev_trigger_rebecca_event()
+		elif id == 47:
+			## 特殊事件：召唤萌黄（S9）加入红方友军 —— 2026-09-19 从直播版搬入
+			BattleManager.dev_trigger_moe_event()
 		elif id == 21:
 			## #霢?1：切换水晶是否可攻击
 			var bf: Node = _get_battlefield_node()

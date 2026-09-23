@@ -31,6 +31,13 @@ const LOADING_OVERLAY_SCRIPT := preload("res://scenes/ui/loading_overlay.gd")
 var loading_overlay: CanvasLayer = null
 
 func _ready() -> void:
+	## 窗口模式（2026-09-17 修复浏览器战斗界面拉伸）：
+	## 项目默认由 mode=3(Fullscreen) 改为 mode=0(Windowed)。原因：浏览器里引擎启动即调
+	## requestFullscreen，但无用户手势会被浏览器拒绝，引擎就此停留在「自认全屏」状态，
+	## 按显示器尺寸而非实际 canvas 尺寸推导画面缩放 → 非 16:9 窗口下战斗 UI 被非等比拉伸，
+	## 手动进全屏后才恢复正常。改为窗口化后引擎尺寸与浏览器一致；桌面/Android 仍由代码设全屏。
+	if not OS.has_feature("web") and not OS.has_feature("mobile"):
+		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
 	## Web 没有稳定的系统字体回退，启动时配置随包字体 fallback，避免 CJK/泰文变方框。
 	UIButtonHelper.configure_global_font_fallbacks()
 	## 挂载加载遮罩（autoload 场景之外，保证任何场景切换都存在）
@@ -40,6 +47,12 @@ func _ready() -> void:
 ## 带加载遮罩的场景切换：显示随机提示词+兵种动画，异步加载完成后切换
 ## 2026-08-18 新增（用户拍板：需要长时间加载的地方都用）
 func change_scene_with_loading(scene_path: String) -> void:
+	## Web 按需加载（2026-09-14）：兵种动画图集拆分在独立资源包（autoload/web_pack_loader.gd）。
+	## 竞技场走「直切不弹框」路径（loading_overlay.show_loading 内部），不经过遮罩的等待逻辑，
+	## 故在此先确保挂载；其余依赖场景（战斗/图鉴/肉鸽/调试台）由遮罩弹框期间等待，自带进度反馈。
+	## 桌面/Android 立即返回无感知。
+	if "battlefield_mode" in scene_path:
+		await WebPackLoader.ensure_units()
 	if loading_overlay != null and loading_overlay.has_method("show_loading"):
 		loading_overlay.show_loading(scene_path)
 	else:

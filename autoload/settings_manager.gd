@@ -294,6 +294,12 @@ func _apply_settings() -> void:  ## 应用所有设置（私有方法）
 	_apply_audio_settings()  ## 应用音频设置
 
 func _apply_window_mode() -> void:  ## 应用窗口模式（私有方法）
+	## Web 平台（2026-09-17 修复浏览器战斗界面拉伸）：
+	## 浏览器要求全屏必须由用户手势同步触发，启动时自动进全屏必然被拒（控制台 requestFullscreen 报错），
+	## 引擎会停在「自认全屏、实际窗口化」状态，画面按项目基准尺寸渲染后被非等比拉伸，
+	## 手动进全屏后才恢复正常。故 Web 上不主动切全屏，保持窗口模式与浏览器实际尺寸一致。
+	if OS.has_feature("web") and window_mode == WINDOW_MODE_FULLSCREEN:
+		return
 	## 使用 Window API（推荐）：直接操作游戏主窗口，比裸 DisplayServer 调用更稳定可靠
 	var win := get_window()  ## 获取游戏主窗口
 	if win == null:  ## 极少数情况下窗口尚未就绪，下个 idle 再试一次

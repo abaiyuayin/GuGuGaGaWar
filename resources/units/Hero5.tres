@@ -23,13 +23,15 @@ damage_by_type = {
 attack_range = 8.0
 is_ranged_override = 1
 attack_speed = 2.0
+attack_count = 3
 attack_hit_types = Array[int]([0])
 damage_by_hit = [{
 1: 200
 }]
-attack_hit_frame_start = 17
 attack_hit_frame_end = 17
-attack_sound_frame = 17
+attack_sound_frames = Array[int]([18, 19, 20])
+attack_sound_paths = Array[String](["res://assets/audio/shared/弓箭攻击音效.ogg", "res://assets/audio/shared/弓箭攻击音效.ogg", "res://assets/audio/shared/弓箭攻击音效.ogg"])
+attack_hit_frames = Array[int]([18, 19, 20])
 display_height = 85.0
 display_width = 147.0
 move_display_height = 74.0

@@ -43,6 +43,7 @@ HeroSkillManager="*res://autoload/hero_skill_manager.gd"
 DevMode="*res://autoload/dev_mode.gd"
 MCPRuntimeProbe="*uid://bsg12huaf1u5i"
 McpInteractionServer="*res://autoload/mcp_interaction_server.gd"
+WebPackLoader="*res://autoload/web_pack_loader.gd"
 
 [display]
 
@@ -51,6 +52,7 @@ window/size/viewport_height=720
 window/size/mode=3
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
+window/size/mode.web=0
 
 [editor_plugins]
 

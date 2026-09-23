@@ -319,6 +319,12 @@
 			}
 		]
 	},
+	"Hero3": {
+		"click_sound": [],
+		"spawn_sound": "",
+		"attack_sound": "res://assets/audio/shared/魔法攻击音效.ogg",
+		"spawn_rules": []
+	},
 	"S2": {
 		"click_sound": [],
 		"spawn_sound": "",
@@ -330,5 +336,43 @@
 		"spawn_sound": "res://assets/audio/shared/hey？.ogg",
 		"attack_sound": "res://assets/audio/shared/凑企鹅攻击音效1.ogg",
 		"spawn_rules": []
+	},
+	"S7": {
+		"click_sound": [],
+		"spawn_sound": "res://assets/audio/units/S7/哦鲸鲸.ogg",
+		"attack_sound": "res://assets/audio/shared/大肥鱼攻击.wav",
+		"spawn_rules": []
+	},
+	"Y3": {
+		"click_sound": [],
+		"spawn_sound": "res://assets/audio/units/Y3/香蕉猫.ogg",
+		"attack_sound": "",
+		"spawn_rules": []
+	},
+	"Y4": {
+		"click_sound": [],
+		"spawn_sound": "res://assets/audio/units/Y4/我的刀盾.ogg",
+		"attack_sound": "res://assets/audio/shared/我的刀盾攻击动画.wav",
+		"spawn_rules": []
+	},
+	"S9": {
+		"click_sound": [
+			"res://assets/audio/units/S9/哼哼献上你的恐惧吧.ogg",
+			"res://assets/audio/units/S9/萌黄姐姐Ciallo(∠・ω)⌒☆.ogg"
+		],
+		"spawn_sound": "res://assets/audio/units/S9/哼哼献上你的恐惧吧.ogg",
+		"attack_sound": "",
+		"spawn_rules": [
+			{
+				"type": 0,
+				"count": 1,
+				"sound": "res://assets/audio/units/S9/哼哼献上你的恐惧吧.ogg"
+			},
+			{
+				"type": 0,
+				"count": 1,
+				"sound": "res://assets/audio/units/S9/萌黄姐姐Ciallo(∠・ω)⌒☆.ogg"
+			}
+		]
 	}
 }

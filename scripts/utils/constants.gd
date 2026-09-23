@@ -83,20 +83,31 @@ const NORMAL_MULTIPLIER: float = 1.0
 const RANGED_THRESHOLD: float = 2.0
 
 ## 单位生成 Y 坐标范围：限定在战场区域内
-## 中心 y=30，生成范围 ±40，即 y∈-10~70（向下偏移，靠近战场中央）
-const SPAWN_Y_CENTER: float = 30.0  ## 刷兵区域中心 Y（向下偏移）
-const SPAWN_Y_RANGE: float = 40.0  ## 生成 Y 范围半径
+## 2026-09-20（与直播版战斗位置对齐）：原「中心 30 / 半径 40 = -10~70」整体下移 5px，
+## 新带 = 37 ~ 90（中心 63.5 / 半径 26.5），与直播版「两条红线区间内缩半个身体高」的出兵带完全一致。
+## 标准战斗 / 战役 / 双人 / 肉鸽敌人出生都走本常量；竞技场不走默认出生（玩家拖放落点）。
+const SPAWN_Y_CENTER: float = 63.5  ## 刷兵区域中心 Y（向下偏移）
+const SPAWN_Y_RANGE: float = 26.5  ## 生成 Y 范围半径
 
 ## 单位活动边界（像素，battlefield 全局坐标）
 ## 单位互相碰撞挤压 + 直接位移（追击/后退）会累积偏移，无边界时会漂出屏幕
 ## X 略超基地中心（±576）让单位能贴到水晶；Y 给出生阵线上下各留约 100px 缓冲
 const FIELD_X_MIN: float = -600.0  ## 单位可到达的最左 X
 const FIELD_X_MAX: float = 600.0  ## 单位可到达的最右 X
-## #13：空气墙 —— Y 收紧到出兵区域（SPAWN_Y_CENTER ± SPAWN_Y_RANGE = -10~70），
-## 单位只能在「地图中心直线出兵区域」内移动，上下被空气墙挡住，不再漂到屏幕边缘。
+## #13：空气墙 —— Y 收紧到出兵区域，单位只能在「地图中心直线出兵区域」内移动，
+## 上下被空气墙挡住，不再漂到屏幕边缘。
 ## #7（2026-08-08）：战场整体上下活动范围扩大（用户拍板），-10~70 → -30~90
-const FIELD_Y_MIN: float = -30.0  ## 单位可到达的最上 Y（出兵区域上界）
+## 2026-09-20：标准 / 肉鸽的战斗区域整体下移，空气墙同步收进新出兵带 37 ~ 90
+##（= 直播版红线区间 5~122 内缩半个身体高 32）。**竞技场仍用下面 ARENA_* 的原范围**，
+## 由 `scenes/units/unit_base.gd::_clamp_to_field()` 按 `GameManager.is_battlefield_mode` 分流。
+const FIELD_Y_MIN: float = 37.0  ## 单位可到达的最上 Y（出兵区域上界）
 const FIELD_Y_MAX: float = 90.0  ## 单位可到达的最下 Y（出兵区域下界）
+## 竞技场（自由布兵沙盒）沿用下移前的空气墙范围，手感不变
+const ARENA_Y_MIN: float = -30.0
+const ARENA_Y_MAX: float = 90.0
+## 2026-09-20：标准战斗双方水晶整体下移，与直播版 `CRYSTAL_Y_OFFSET = 50` 对齐
+##（肉鸽那座位居地图正中的水晶不参与，仍用 `ROGUELIKE_CRYSTAL_POS`）
+const BATTLE_CRYSTAL_Y: float = 50.0
 ## 被挤出出生阵线后每秒拉回的像素速度（仅在移动状态生效，避免与追击抢控制权）
 const LANE_RETURN_SPEED: float = 24.0  ## 阵线回归速度（像素/秒）
 ## 远程单位被近战贴脸时的后退触发距离（像素）

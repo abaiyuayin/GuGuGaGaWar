@@ -132,9 +132,10 @@ func _forward_base_damaged(team: int, damage: int, attacker: Node) -> void:
 ## 水晶原地不动、不参与碰撞，可发射小型方块投射物攻击射程内敌人（见 state_base_defense）
 func _spawn_base_units() -> void:
 	## 红方水晶：红色方块，位于左侧道路尽头
-	red_base_unit = _create_crystal_unit(0, Vector2(-576, 0), Color(0.9, 0.16, 0.16, 1.0))
+	## 2026-09-20：y 0 → Constants.BATTLE_CRYSTAL_Y(45)，与直播版水晶体位置对齐
+	red_base_unit = _create_crystal_unit(0, Vector2(-576, Constants.BATTLE_CRYSTAL_Y), Color(0.9, 0.16, 0.16, 1.0))
 	## 蓝方水晶：蓝色方块，位于右侧道路尽头
-	blue_base_unit = _create_crystal_unit(1, Vector2(576, 0), Color(0.16, 0.4, 0.9, 1.0))
+	blue_base_unit = _create_crystal_unit(1, Vector2(576, Constants.BATTLE_CRYSTAL_Y), Color(0.16, 0.4, 0.9, 1.0))
 
 ## 创建方块水晶实体（#23，战役/双人模式）
 ## 代码构造 UnitResource：不继承兵种护甲/攻击/动画。
@@ -184,8 +185,8 @@ func get_base_position(team: int) -> Vector2:
 	if base_unit != null and is_instance_valid(base_unit) and not base_unit.is_dead:
 		return base_unit.global_position
 	if team == 0:
-		return Constants.ROGUELIKE_CRYSTAL_POS if is_crystal_mode else Vector2(-576.0, 0.0)
-	return Vector2(576.0, 0.0)
+		return Constants.ROGUELIKE_CRYSTAL_POS if is_crystal_mode else Vector2(-576.0, Constants.BATTLE_CRYSTAL_Y)
+	return Vector2(576.0, Constants.BATTLE_CRYSTAL_Y)
 
 ## 指定阵营是否拥有可被攻击的基地/水晶
 ## 肉鸽水晶模式下敌方（team=1）没有基地，玩家单位不应推进去攻击空气。

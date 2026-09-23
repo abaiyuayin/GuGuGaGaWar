@@ -16,99 +16,196 @@ extends RefCounted
 ##   unit_id       所属兵种（与 UnitResource.unit_id 对应）
 ##   name          显示名
 ##   desc          描述文本
-##   cd            冷却时间（秒）
+##   trigger       触发方式（#2026-09-20 抽象，肉鸽 / 标准用不同触发方式）：
+##                   {"kind": "cooldown"}               冷却时间触发（标准模式默认）
+##                       —— 参数取顶层 cd（冷却秒数）与 trigger_range（触发半径像素）
+##                   {"kind": "attack_count", "count": N} 攻击次数触发
+##                       —— 累计完成 N 次普通攻击周期后，第 N+1 次攻击改为释放技能；
+##                          由 state_attack 在「即将开始新攻击周期」时抢占，见 UnitSkillComponent
+##                 后续肉鸽侧触发方式（波次 CD / 手动指令等）在此新增 kind 即可，
+##                 触发判定全部收敛在 UnitSkillComponent，效果侧无需感知。
+##   cd            冷却时间（秒）—— trigger.kind == "cooldown" 时生效
 ##   cast_time     前摇时长（秒）：蓄力 / 吟唱阶段，期间锁定移动与普攻
 ##   recover_time  后摇时长（秒）：结算后的僵直
-##   trigger_range 触发半径（像素）：该范围内有敌人才释放
+##   trigger_range 触发半径（像素）：该范围内有敌人才释放 —— trigger.kind == "cooldown" 时生效
 ##   anim          前摇播放的动画名（"attack" = 复用现有攻击动画降速播放；
 ##                 "skill" = 使用 resources/units/<unit_id>/skill_frames.tres）
 ##   anim_speed    前摇动画播放速度倍率（<1 = 放慢，营造蓄力感）
 ##   effect        效果参数字典，由 SkillEffects 按 id 解读
 
 ## 技能定义表
-## Hero1（爱弥斯）：标准模式暂不配技能（用户拍板；其肉鸽技能见 HeroSkillManager）。
-## Hero4（咕咕嘎嘎）/ Hero5（糯糯）：单位尚未建资源与动画，先留数据位，
-##   等 .tres 与动画就位后把 enabled 改为 true 即自动生效，无需改代码。
+## 五位英雄的标准模式技能全部按「攻击次数触发」统一（每打满 3 次普攻，第 4 次攻击触发）：
+##   Hero1（爱弥斯）：标准模式暂不配技能（用户拍板；其肉鸽技能见 HeroSkillManager）。
+##   Hero2（Doro勇士）：巨化重击（giant_strike，state_skill 专属流程）。
+##   Hero3（菲比Hero）：充能光球（orb_charge_launch，state_skill 专属流程 + SkillOrb）。
+##   Hero4（咕咕嘎嘎）：回身七连（frame_hold_backburst，state_skill 帧定格流程）。
+##   Hero5（糯糯）：九箭齐射（multi_lock_volley，inline 效果，不切状态）。
+## 全部技能期间自动获得霸体（state_skill.enter()/exit() 统一置位 skill_super_armor）。
 const SKILL_DEFS: Array[Dictionary] = [
 	{
-		"id": "hero2_greatsword_slam",
-		"unit_id": "Hero2",
-		"name": "巨剑下砸",
-		"desc": "短暂蓄力后大剑下砸，对周围造成一片圆形钝击伤害，并将敌人击退、减速 5 秒",
+		"id": "hero1_summon_heroes",
+		"unit_id": "Hero1",
+		"name": "四方英灵",
+		"desc": "每 3 次普攻后的第 4 次攻击改为技能：召唤糯糯Hero、菲比Hero、咕咕嘎嘎Hero与Doro勇士各一名前来助战。召回的是缩水版援军——没有护盾、不能释放技能，生命上限与造成的伤害都只有本体的一半。",
 		"enabled": true,
-		"cd": 12.0,
-		"cast_time": 0.6,
+		"trigger": {"kind": "attack_count", "count": 3},
+		"cd": 0.0,
+		## 常规流程 A：吟唱 cast_time 秒（复用攻击动画降速播放），结束时结算召唤
+		"cast_time": 0.8,
 		"recover_time": 0.4,
-		"trigger_range": 110.0,
+		"trigger_range": 0.0,
 		"anim": "attack",
-		"anim_speed": 0.5,
+		"anim_speed": 0.6,
 		"effect": {
-			"kind": "slam",
-			"radius": 120.0,
-			"damage": 180,
-			"damage_type": 2,
-			"knockback_px": 55.0,
-			"slow_percent": 0.4,
-			"slow_duration": 5.0,
+			"kind": "summon_heroes",
+			## 召唤对象（顺序即环形落点顺序：正上方起顺时针）
+			"hero_ids": ["Hero5", "Hero3", "Hero4", "Hero2"],
+			## 环形分布半径（像素）：四个英雄在施法者周围均分一圈，避免叠在一格
+			"spawn_radius": 70.0,
 		},
 	},
 	{
-		"id": "hero3_light_pillar",
-		"unit_id": "Hero3",
-		"name": "圣光降临",
-		"desc": "短暂吟唱后在目标位置降下一道光柱，造成大量魔法伤害",
+		"id": "hero2_giant_strike",
+		"unit_id": "Hero2",
+		"name": "巨化重击",
+		"desc": "每 3 次普攻后的第 4 次攻击改为技能：先用 1 秒平滑膨胀到 2 倍体型（过程播后摇动画，不出攻击动作），随后挥出强化一击造成 300 挥砍 + 300 钝击伤害，命中后再用 1 秒平滑缩回正常体型。巨化期间攻击面随体型放大（横向额外 ×1.3）。技能期间霸体。",
 		"enabled": true,
-		"cd": 14.0,
-		"cast_time": 0.8,
-		"recover_time": 0.5,
-		"trigger_range": 260.0,
-		"anim": "skill",
+		## 攻击次数触发：打满 3 次普通攻击后，第 4 次攻击由本技能接管
+		"trigger": {"kind": "attack_count", "count": 3},
+		"cd": 0.0,
+		"cast_time": 0.0,
+		"recover_time": 0.0,
+		"trigger_range": 0.0,
+		"anim": "attack",
 		"anim_speed": 1.0,
 		"effect": {
-			"kind": "pillar",
-			"radius": 70.0,
-			"damage": 260,
-			"damage_type": 3,
-			"cast_range": 260.0,
+			"kind": "giant_strike",
+			## 膨胀 / 缩回的时长（秒）与体型倍率；两段过程都播后摇动画，不播攻击动画
+			"grow_time": 1.0,
+			"grow_mult": 2.0,
+			"shrink_time": 1.0,
+			## 2026-09-22 需求：巨化期间**横向**攻击范围在「体型 ×2」之上再 ×1.3。
+			## 即横向 = 1.2 格 ×32 ×2 ×1.3 ≈ 100px，纵向维持 ×2 = 38.4px。
+			"grow_range_h_mult": 1.3,
+			## 强化一击的伤害：伤害类型 → 数值（0=挥砍, 1=穿刺, 2=钝击, 3=魔法），同伤系统全部同时生效
+			"hit_damage": {0: 300, 2: 300},
 		},
 	},
 	{
-		"id": "hero4_dash_strike",
-		"unit_id": "Hero4",
-		"name": "破阵突袭",
-		"desc": "举剑蓄力后向前方位移 500px，位移结束后对身后 500px 范围造成 5 段伤害",
-		"enabled": false,
-		"cd": 15.0,
-		"cast_time": 1.0,
-		"recover_time": 0.5,
-		"trigger_range": 300.0,
+		"id": "hero3_orb_charge",
+		"unit_id": "Hero3",
+		"name": "充能星屑",
+		"desc": "每 3 次普攻后的第 4 次攻击改为技能：光球在头顶浮现并悬停，随攻击动画前三段依次「出现 → 变大两次」，第四段沿面朝方向发射；光球一路推进到自身攻击范围之外后爆炸（80px 内 100 魔法伤害）。推进途中每 0.5 秒判定一次：范围内敌人被吸附并受 20 魔法伤害，范围内友方恢复 20 生命（只回血量，不动护盾）。技能期间霸体。",
+		"enabled": true,
+		"trigger": {"kind": "attack_count", "count": 3},
+		"cd": 0.0,
+		"cast_time": 0.0,
+		"recover_time": 0.0,
+		"trigger_range": 0.0,
 		"anim": "attack",
-		"anim_speed": 0.5,
+		"anim_speed": 1.0,
 		"effect": {
-			"kind": "dash_strike",
-			"dash_px": 500.0,
-			"dash_time": 0.35,
-			"trail_width": 90.0,
-			"hit_count": 5,
+			"kind": "orb_charge_launch",
+			## 光球悬停点：施法者头顶偏移（负值向上）
+			"orb_offset_y": -70.0,
+			## 三次尺寸（直径像素）：第 1 段出现=60、第 2 段变大=90、第 3 段变大=130。
+			## 判定半径恒等于光球当前半径（用户拍板「光球多大，判定范围就多大」）。
+			"orb_diameters": [60.0, 90.0, 130.0],
+			## 星云光套的缓慢旋转速度（度/秒）
+			"spin_speed": 40.0,
+			## 发射后的推进速度（像素/秒）与行程。
+			## fly_distance = 0 表示「用自身 attack_range × 32」（菲比 8.0 → 256px），
+			## 即用户拍板的「推到自身攻击范围之外时爆炸」。
+			"fly_speed": 200.0,
+			"fly_distance": 0.0,
+			## 推进途中的周期判定：每 tick_interval 秒一次
+			"tick_interval": 0.5,
+			"pull_px": 30.0,
+			"tick_damage": 20,
+			"tick_damage_type": 3,
+			"heal_amount": 20,
+			## 行程终点的爆炸
+			## 2026-09-22 需求：最后一段爆炸的范围与伤害各减半（160→80px、200→100）。
+			"explode_radius": 80.0,
+			"explode_damage": 100,
+			"explode_damage_type": 3,
+		},
+	},
+	{
+		"id": "hero4_back_burst",
+		"unit_id": "Hero4",
+		"name": "一瞬千击",
+		"desc": "每 3 次普攻后的第 4 次攻击改为技能：攻击动画在判定帧前两帧定格 1 秒蓄力，随后 0.2 秒冲刺 150px 并回身，10 道萌黄冲击特效在 1 秒的第二次停顿里用 0.6 秒自位移起点向终点一道道铺开，铺完后 0.4 秒内连续打出 7 段伤害；剩余攻击动画播完后整批特效 1 秒渐隐。技能期间霸体，不被击退打断",
+		"enabled": true,
+		## 攻击次数触发：打满 3 次普通攻击后，第 4 次攻击由本技能接管
+		"trigger": {"kind": "attack_count", "count": 3},
+		"cd": 0.0,
+		"cast_time": 0.0,
+		"recover_time": 0.0,
+		"trigger_range": 0.0,
+		"anim": "attack",
+		"anim_speed": 1.0,
+		"effect": {
+			"kind": "frame_hold_backburst",
+			## 定格帧 / 判定帧：Hero4 攻击动画共 23 帧，attack_hit_frame_start = 11，
+			## hold_frame = 9 即「判定帧往前两帧」（2026-09-20 用户要求再往前移一帧，原为 10）
+			"hold_frame": 9,
+			"hold_time": 1.0,
+			"hit_frame": 11,
+			"hit_hold_time": 1.0,
+			## 判定帧朝当前朝向冲刺的像素距离（0.2s 平滑冲刺，不是瞬移）
+			"dash_px": 150.0,
+			"dash_time": 0.2,
+			## 判定走廊：沿身后方向 0 ~ back_length、横向 ±back_half_width
+			## back_length 必须 >= dash_px，才能覆盖「位移起点 → 位移终点」整条路径
+			"back_length": 150.0,
+			"back_half_width": 50.0,
+			## 判定时序（用户拍板）：第二次停顿共 hit_hold_time = 1.0 秒，
+			## 先用 fx_spread_time = 0.6 秒把红光铺完，铺完后才在 damage_window = 0.4 秒内排队打完 hit_count 段。
+			## 两者由同一条协程串行保证先后（见 SkillEffects.apply_hold_backburst），不额外配延迟参数。
+			"hit_count": 7,
 			"damage": 60,
 			"damage_type": 0,
+			"damage_window": 0.4,
+			## 视觉：fx_count 道萌黄（S9）特效沿走廊均匀分布（0 = 位移起点，最后一道 = 位移终点），
+			## 在 fx_spread_time 内自起点向终点一道道铺开；攻击动画播完后统一 fx_fade_time 渐隐
+			"fx_count": 10,
+			"fx_frames": "res://resources/units/S9/impact_frames.tres",
+			"fx_height": 68.667,
+			"fx_width": 86.667,
+			"fx_spread_time": 0.6,
+			"fx_fade_time": 1.0,
 		},
 	},
 	{
-		"id": "hero5_horse_archery",
+		"id": "hero5_nine_arrow_volley",
 		"unit_id": "Hero5",
-		"name": "骑射",
-		"desc": "进入 5 秒骑射状态，期间取消攻击后摇",
-		"enabled": false,
-		"cd": 18.0,
-		"cast_time": 0.3,
+		"name": "九箭齐射",
+		"desc": "每 3 次普攻后的第 4 次攻击起进入九箭状态：同时锁定最多 3 名射程内敌人，共射出 9 支箭（每箭 100 伤害）；主目标走直线箭，第 2 / 3 目标的箭分别自上方、下方呈鱼钩状飞射而来。状态持续 2 次攻击。",
+		"enabled": true,
+		## 攻击次数触发：打满 3 次普通攻击后触发；本次普攻即为第一次九箭，之后还有 1 次
+		"trigger": {"kind": "attack_count", "count": 3},
+		"cd": 0.0,
+		"cast_time": 0.0,
 		"recover_time": 0.0,
-		"trigger_range": 320.0,
+		"trigger_range": 0.0,
 		"anim": "attack",
 		"anim_speed": 1.0,
 		"effect": {
-			"kind": "no_recovery_buff",
-			"duration": 5.0,
+			## 本效果不改变动作流程，只叠加到普攻上（unit_skill_component 的 inline 分支处理）
+			"kind": "multi_lock_volley",
+			## 同时锁定的最大敌人数
+			"max_targets": 3,
+			## 状态持续的普攻次数（含触发的这一次）
+			"charges": 3,
+			## 总箭数与单箭伤害（总箭数按「近者多 1 支」分配：3 敌=3/3/3、2 敌=5/4、1 敌=9）
+			"total_arrows": 9,
+			"arrow_damage": 100,
+			"arrow_damage_type": 0,
+			## 鱼钩箭：起点上下偏移、钩形凸起幅度、整段飞行时长
+			"hook_offset_y": 96.0,
+			"hook_bulge": 70.0,
+			"hook_fly_time": 0.55,
 		},
 	},
 ]
@@ -118,8 +215,12 @@ static var _by_unit: Dictionary = {}
 static var _built: bool = false
 
 ## ============================================================
-## 标准模式兵种技能系统总开关（2026-08-21 用户要求「先停用」）
+## 标准模式兵种技能系统总开关
 ## ============================================================
+## 2026-08-21 用户要求「先停用」→ 曾置 false；
+## 2026-09-20 用户要求「总开关打开，但只启用 Hero4 这一条」→ 置 true，
+## 同时把 Hero2 / Hero3 的 enabled 改回 false，二者配合后实际生效的只有 Hero4 回身七连。
+##
 ## false = 停用：has_skill() 恒返回 false、get_skill_for_unit() 恒返回空字典。
 ## 于是 unit_base._setup_skill_component() 直接不挂组件，
 ## 已挂载的 UnitSkillComponent 也会在 _ready 查表拿到空字典后自我 queue_free。
@@ -133,7 +234,7 @@ static var _built: bool = false
 ## 注意：本开关**只管标准模式**（战役 / 全面战争 / 双人）。
 ## 肉鸽模式的英雄技能走 autoload/hero_skill_manager.gd，与本表完全无关，不受影响。
 ## 另外 _built 是 static var，缓存只构建一次，改动本开关需重启才生效。
-const SYSTEM_ENABLED: bool = false
+const SYSTEM_ENABLED: bool = true
 
 ## 构建查找表：只收录 enabled == true 的技能
 static func _build() -> void:

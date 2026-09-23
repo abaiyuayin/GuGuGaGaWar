@@ -27,6 +27,10 @@ func enter() -> void:  ## 重写进入状态方法
 func exit() -> void:  ## 重写退出状态方法
 	if unit != null and unit.attack_animation_hit.is_connected(_on_frame_hit):
 		unit.attack_animation_hit.disconnect(_on_frame_hit)
+	## 需求（2026-09-21 玩家拍板，从直播版同步）：离开攻击水晶状态时取消未播完的三连红光
+	##（与 state_attack 同款）
+	if unit != null:
+		unit.cancel_tri_volley()
 
 ## 判断是否由攻击动画帧驱动命中。
 func _uses_frame_hit(res: UnitResource) -> bool:
@@ -46,6 +50,11 @@ func update(delta: float) -> void:  ## 重写每帧更新方法
 		return
 	var res: UnitResource = unit.unit_resource
 	if res == null:
+		return
+	## #2026-09-22 防御闸门：无攻击能力单位（S5 咕嘎工钢，attack_anim_mode == "none"）
+	## 正常路径已由 state_move 拦下不会进到这里；此处兜底，确保它永远不会对水晶造成伤害。
+	if not unit.has_attack_ability():
+		unit.change_state("move")
 		return
 
 	## 攻击动画结束后立即进入后摇；后摇结束后才允许下一轮攻击。
@@ -111,6 +120,14 @@ func _attack_cycle(delta: float, res: UnitResource) -> void:
 	if uses_visual_attack_animation:
 		attack_anim_done = unit.unit_sprite == null or not unit.unit_sprite.is_playing()
 	if not attack_anim_done:
+		unit.velocity = Vector2.ZERO
+		unit.move_and_slide()
+		_play_attack_display_anim(false)
+		return
+
+	## 需求（2026-09-21 玩家拍板，从直播版同步）：萌黄 S9 打水晶的三连红光未播完 ——
+	## 挂起周期收尾（与 state_attack 同款），三道红光全部播完后才进入后摇。
+	if unit.is_tri_volley_running():
 		unit.velocity = Vector2.ZERO
 		unit.move_and_slide()
 		_play_attack_display_anim(false)

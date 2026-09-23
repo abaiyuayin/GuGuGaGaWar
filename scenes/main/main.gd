@@ -17,6 +17,8 @@ func _ready() -> void:
 	## 结束后可直接切场景而不卡主线程，从而无需加载框
 	## （2026-08-19 用户拍板：进入游戏只要开屏动画，不弹加载框）
 	ResourceLoader.load_threaded_request(MAIN_MENU_PATH, "PackedScene")
+	## Web 按需加载（2026-09-14）：开屏期间后台预取兵种图集资源包（仅 Web 生效，桌面立即返回）
+	WebPackLoader.ensure_units()
 	## 停留展示开屏，然后淡出并进入主菜单
 	await get_tree().create_timer(SPLASH_DURATION).timeout
 	await _fade_out_splash()

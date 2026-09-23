@@ -9,6 +9,7 @@
 
 # ---------- 本机/工具私有目录（含个人记忆与配置，切勿上传） ----------
 .workbuddy/
+.workbuddy-ai/
 .tmp/
 .fetch/
 .zcode/
@@ -63,6 +64,9 @@ _hero2_frames_8to16.png.import
 *.bak.*
 *.corrupt_bak
 project.godot.bak.*
+
+# ---------- Godot 导入中途残留的临时文件（如 xxx.png.import12345678.tmp） ----------
+*.import*.tmp
 
 # ---------- Python 字节码缓存 ----------
 __pycache__/

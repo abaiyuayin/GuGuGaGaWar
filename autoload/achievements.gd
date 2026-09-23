@@ -57,6 +57,8 @@ const ACHIEVEMENTS: Array[Dictionary] = [
 	## #新需求（2026-09-10）：S7 大肥鱼 / S8 丽贝卡 首次召唤成就（hidden，判定沿用 _is_achievement_mode）
 	{id = "big_fish", name = "爱吃大白饭", desc = "第一次召唤大肥鱼", hidden = true},
 	{id = "pelican", name = "大鹈鹕", desc = "第一次召唤丽贝卡", hidden = true},
+	## #2026-09-19（从直播版搬入）：萌黄（S9）首次召唤成就
+	{id = "moe", name = "萌黄", desc = "第一次召唤萌黄", hidden = true},
 ]
 
 ## 自定义成就音效（#12 用户拍板）：部分成就解锁成功时播放专属语音
@@ -90,6 +92,8 @@ func record_player_deploy(unit_id: String) -> void:
 		unlock_by_id_in_mode("big_fish")
 	elif unit_id == "S8":
 		unlock_by_id_in_mode("pelican")
+	elif unit_id == "S9":
+		unlock_by_id_in_mode("moe")
 	## 出兵计数成就：仅战役模式统计（用户拍板），跨启动持久累加
 	if not _is_achievement_mode():
 		return

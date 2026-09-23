@@ -13,11 +13,16 @@ var unlocked_level: int = DEFAULT_UNLOCKED
 ## 关卡难度完成进度字典：key=关卡编号, value=已完成的难度编号数组
 var level_difficulty_progress: Dictionary = {}
 
-## 节点就绪时自动调�?��autoload 在游戏启动时加载�?## 霢�求：每�?运�?都清空上丢�次的战役存档状况（关卡解�?战功/星星/已购兵�?/成就），
-## 战役模式每�?都从�?1 关重新开始，不保留上次的通过记录�?## 注意：�?重置同时作用于打包后玩�?每�?打开游戏（用户拍板，不持久化战役进度）��?## 例�?：Doro �?��计数（成就��为了�?润�?！��）存独�?meta_stats.cfg，跨�?��持久
+## 节点就绪时自动调用（autoload 在游戏启动时加载）
+## 2026-09-22 需求：战役进度改为**跨启动持久化**（全平台，含 Web 导出版）。
+## 旧行为是每次启动无条件 reset_progress()，导致玩家每次打开游戏「关卡解锁 / 战功 /
+## 星星 / 已购高级兵 / 成就」全部清零 —— Web 端表现为「游戏没有存档系统」。
+## 现改为：有存档就读档，无存档则保持字段初值（一份空进度）。
+## reset_progress() 保留为显式清档接口，不再在启动时自动调用。
 func _ready() -> void:
-	reset_progress()  ## 清空并保存一份空存档，�?盖上次进�?
-	_load_meta_stats()  ## 持久计数不随战役重置，单�?���?
+	_load_progress()  ## 读档（无存档 / 存档损坏时保持字段初值）
+	_load_meta_stats()  ## 持久计数独立于战役存档，单独读取
+
 ## ============================================================
 ## 持久计数（独立于战役进度，不�?reset_progress 清零�?## 成就「为了�?润�?！��：�??�?�� 500 �?Doro 兵�?（用户拍板：战役模式统�? + 跨启动持久）
 ## ============================================================
@@ -258,7 +263,10 @@ func _award_first_clear(level: int) -> void:
 	_levels_first_cleared[level] = true
 	_merit += MERIT_PER_LEVEL.get(level, 100)
 	_stars += 1
-	Achievements.check_progress()
+	## 启动期读档（_ready → _load_progress）迁移旧存档时，Achievements autoload 尚未进入
+	## 场景树（本 autoload 在它之前），此时调用会空引用报错并中断本函数。故先探测存在性。
+	if get_tree() != null and get_tree().root.has_node("Achievements"):
+		Achievements.check_progress()
 	var new_unit: String = get_level_new_unit(level)
 	level_first_cleared.emit(level, new_unit)
 

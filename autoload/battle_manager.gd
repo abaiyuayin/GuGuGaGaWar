@@ -542,6 +542,9 @@ func _check_ally_special_events() -> void:
 		_try_spawn_ally_event("S7", "big_fish")
 	if _roll_special_event():
 		_try_spawn_ally_event("S8", "pelican")
+	## 2026-09-19（从直播版搬入）：S9 萌黄接入随机特殊事件池（与 S7/S8 同级，红方友军 + 首次召唤成就）
+	if _roll_special_event():
+		_try_spawn_ally_event("S9", "moe")
 
 func _roll_special_event() -> bool:
 	if randf() >= _special_event_chance:
@@ -626,6 +629,14 @@ func dev_trigger_rebecca_event() -> void:
 	_try_spawn_ally_event("S8", "pelican")
 	print("[丽贝卡事件] 开发工具触发！召唤丽贝卡加入我方")
 
+## 开发工具：触发萌黄事件（专召 S9 加入红方友军）—— 2026-09-19 从直播版搬入
+func dev_trigger_moe_event() -> void:
+	if UnitDatabase.get_unit("S9") == null:
+		push_warning("DevTool: 萌黄（S9）资源缺失。")
+		return
+	_try_spawn_ally_event("S9", "moe")
+	print("[萌黄事件] 开发工具触发！召唤萌黄加入我方")
+
 ## 异象事件提示：屏幕中央红色大字「异象入侵！！！」（#1 2026-08-26）
 ## 与 _show_anomaly_texts 的大字规格一致，但只播提示、不负责生成单位（调用方已自行生成）。
 func _show_anomaly_event_text() -> void:
@@ -697,7 +708,9 @@ func _get_special_event_unit_name(unit_id: String, unit_res: Resource = null) ->
 ## player_id: 所属玩家 ID（0=红方, 1=蓝方）
 ## at_position: 指定出生世界坐标；默认 Vector2.INF 表示沿用基地前方的默认出生逻辑
 ##              肉鸽模式拖放部署时传入鼠标落点，实现「拖到哪出到哪」
-func spawn_unit(unit_res: Resource, player_id: int, at_position: Vector2 = Vector2.INF) -> void:
+## 返回生成出来的单位（爱弥斯召唤等技能需要拿到实例做二次削弱；
+## 旧调用方一律忽略返回值，行为不变）。
+func spawn_unit(unit_res: Resource, player_id: int, at_position: Vector2 = Vector2.INF) -> Node2D:
 	## 首次调用时缓存单位场景资源
 	if unit_scene == null:
 		unit_scene = load("res://scenes/units/unit_base.tscn")  ## 加载单位基础场景
@@ -753,6 +766,7 @@ func spawn_unit(unit_res: Resource, player_id: int, at_position: Vector2 = Vecto
 	
 	unit_spawned.emit(unit, player_id)  ## 发出单位生成信号，通知场景树挂载该单位
 	_maybe_trigger_power_fei_event(unit_res, player_id)  ## 使用菲比兵种后按特殊事件衰减概率触发动力菲比事件
+	return unit
 
 ## 动力菲比事件：玩家每次使用 F 系菲比兵种后，按特殊事件衰减概率召唤 S4 加入红方。
 ## 仅标准模式生效；肉鸽模式不改动。开发工具直接触发仍保留用于测试。

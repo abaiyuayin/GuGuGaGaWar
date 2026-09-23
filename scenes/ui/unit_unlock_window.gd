@@ -19,6 +19,9 @@ var _star_buttons: Dictionary = {}
 var _unit_lookup: Dictionary = {}
 
 func _ready() -> void:
+	## Web 按需加载（2026-09-14）：本窗口从战役地图直接打开，不经过战斗入口，
+	## 先确保兵种图集包已挂载再构建预览（桌面/Android 立即返回无感知）
+	await WebPackLoader.ensure_units()
 	_build_lookup()
 	_populate()
 	_refresh_merit()

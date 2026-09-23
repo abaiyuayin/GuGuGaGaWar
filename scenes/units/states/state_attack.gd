@@ -59,6 +59,10 @@ func exit() -> void:  ## 重写退出状态方法
 	## 无条件断开：资源在运行时可被控制台改写，按条件断开会漏掉已连接的信号
 	if unit != null and unit.attack_animation_hit.is_connected(_on_frame_hit):
 		unit.attack_animation_hit.disconnect(_on_frame_hit)
+	## 需求2（2026-09-19 玩家拍板，2026-09-20 从直播版同步，去直播门控）：离开攻击状态即取消未打完的三连红光，
+	## 避免单位切到其它状态后仍从原地继续放红光。
+	if unit != null and is_instance_valid(unit):
+		unit.cancel_tri_volley()
 
 ## 判断兵种是否使用「动画帧驱动命中」
 ## 三种配置都算帧驱动：
@@ -93,6 +97,12 @@ func update(delta: float) -> void:  ## 重写每帧更新方法
 	var res: UnitResource = unit.unit_resource
 	if res == null:
 		return
+	## #2026-09-22 防御闸门：无攻击能力单位（S5 咕嘎工钢，attack_anim_mode == "none"）
+	## 正常路径已由 state_move 拦下不会进到这里；此处兜底，避免任何外部切换把它送进来后
+	## 仍然挥空刀或对水晶结算伤害。
+	if not unit.has_attack_ability():
+		unit.change_state(unit.get_idle_state_name())
+		return
 
 	## 攻击动画结束后立即进入后摇；后摇结束才允许下一次攻击。
 	## 这里必须先处理后摇，再检查目标，避免击杀目标后跳过后摇。
@@ -112,6 +122,11 @@ func update(delta: float) -> void:  ## 重写每帧更新方法
 
 	## 攻击动画播放期间不重新索敌、不移动；命中由动画帧或动画进度触发。
 	if _attack_started:
+		## 需求2（2026-09-19 玩家拍板，2026-09-20 从直播版同步，去直播门控）：萌黄三连红光期间不做换锁/中断判定 ——
+		## 三道红光必须完整打完（目标中途阵亡由 unit_base 内部改打射程内最近敌人）。
+		if unit.is_tri_volley_running():
+			_attack_cycle(delta, res, Vector2.ZERO)
+			return
 		if res.is_ranged and _is_target_lost():
 			if not _reacquire_ranged_target(res) and res.attack_hit_frames.is_empty():
 				_abort_attack_cycle()
@@ -156,11 +171,22 @@ func update(delta: float) -> void:  ## 重写每帧更新方法
 		_move_towards_target(delta, res, dist_vec)
 		return
 
+	## #技能系统（2026-09-20）：攻击次数触发型技能在此抢占本次攻击周期。
+	## 位置刻意选在「已确认有目标且在攻击范围内、即将起播攻击动画」这一点上：
+	##   - 前摇/后摇/追击段都不抢占，技能只替代「真正的第 N+1 次挥击」；
+	##   - 抢占成功后立即 return，_attack_started 不会被置位，本周期不会产生普通伤害。
+	if unit.try_consume_attack_triggered_skill():
+		return
+
 	## 进入攻击动画状态：动画开始即进入本轮攻击，不等待任何攻击间隔。
 	_attack_started = true
 	_out_of_range_timer = 0.0
 	_attacks_done = 0
 	_sound_played = false
+	## #技能系统：新周期重新允许齐射。
+	## 在这里重置而不是只在周期收尾重置 —— 周期被 _abort_attack_cycle 中断时收尾不执行，
+	## 只挂收尾会让闸门卡死在 true，后续周期再也放不出九箭。
+	unit._skill_volley_fired = false
 	unit.attack_anim_elapsed = 0.0
 	unit.reset_attack_frame_flags()
 	if unit.anim_attack_frames_alt != null:
@@ -219,6 +245,15 @@ func _attack_cycle(delta: float, res: UnitResource, _dist_vec: Vector2) -> void:
 		_play_attack_display_anim(false)
 		return
 
+	## 需求2（2026-09-19 玩家拍板，2026-09-20 从直播版同步，去直播门控）：萌黄三连红光未播完 —— 挂起周期收尾。
+	## 原地不动、保持攻击动画，逐帧等 `unit.is_tri_volley_running()` 转 false
+	##（= 第三道红光特效播完）后才进入后摇，符合「三道红光都结束后才进入攻击后摇」。
+	if unit.is_tri_volley_running():
+		unit.velocity = Vector2.ZERO
+		unit.move_and_slide()
+		_play_attack_display_anim(false)
+		return
+
 	## 动画结束时补齐掉帧/异常漏掉的多段命中，之后立刻进入后摇。
 	if _attacks_done < count:
 		for i in range(_attacks_done, count):
@@ -227,6 +262,15 @@ func _attack_cycle(delta: float, res: UnitResource, _dist_vec: Vector2) -> void:
 	_finish_attack_cycle(res)
 
 func _finish_attack_cycle(res: UnitResource) -> void:
+	## #技能系统（2026-09-20）：普通攻击周期结束 → 通知技能组件累计「攻击次数」。
+	## 只在本函数（= 一次完整的普通攻击周期收尾）发出，技能状态 state_skill 不走这里，
+	## 因此技能动作不会被计入普通攻击次数，不会自触发。
+	## ⚠️ 技能自己接管的齐射周期（_skill_volley_fired）也**不计入**：
+	## 否则打满 N 次后，齐射周期会立刻把计数重新凑满 → 技能连着触发、中间根本不插普攻
+	##（用户实测「连续四次射出九箭」/「只普通平 a 一次又开技能」）。
+	if not unit._skill_volley_fired:
+		unit.normal_attack_cycle_finished.emit()
+	unit._skill_volley_fired = false  ## 新周期重新允许齐射
 	_attack_started = false
 	unit.attack_anim_elapsed = 0.0
 	_sound_played = false
@@ -254,7 +298,7 @@ func _backswing_update(delta: float, res: UnitResource) -> void:
 		## 非肉鸽中远程后摇按互斥优先级处理：
 		## ① 96px 内有近敌 → 后撤；② 精确圆/椭圆攻击范围内有敌 → 原地站定；
 		## ③ 攻击范围内无敌 → 才执行正常推进。每帧只走一个分支，避免前进/后撤抢控制权。
-		if not RoguelikeManager.is_active and try_ranged_retreat():
+		if not RoguelikeManager.is_active and try_ranged_retreat("move", delta):
 			return
 		if not RoguelikeManager.is_active:
 			var in_range_enemy: Unit = unit.find_nearest_enemy_in_attack_range(10.0)
@@ -371,6 +415,7 @@ func _reacquire_ranged_target(res: UnitResource) -> bool:  ## 定义远程重新
 ## 中断当前攻击周期并清空所有周期内状态
 ## 用于目标丢失时立刻脱离攻击状态，避免空放后摇
 func _abort_attack_cycle() -> void:  ## 定义中断攻击周期方法
+	unit.cancel_tri_volley()  ## 需求2（2026-09-19，2026-09-20 从直播版同步，去直播门控）：中断周期同时取消未打完的三连红光
 	unit.target = null  ## 清空失效目标
 	unit.attack_anim_elapsed = 0.0  ## 重置攻击动画计时器
 	_attacks_done = 0  ## 重置已攻击次数
@@ -397,6 +442,8 @@ func on_knockback_interrupt() -> void:
 		unit.change_state(unit.get_idle_state_name())
 	else:
 		## 情况2：出伤害后打断 —— 进入攻击后摇（硬僵直），取消攻击动画
+		## 需求2（2026-09-19，2026-09-20 从直播版同步，去直播门控）：被打断时同样取消未打完的三连红光
+		unit.cancel_tri_volley()
 		_attack_started = false
 		unit.reset_attack_frame_flags()
 		_sound_played = false

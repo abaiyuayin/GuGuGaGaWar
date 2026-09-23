@@ -90,6 +90,21 @@ const CRYSTAL_BAR_BG: Color = Color(0.10, 0.09, 0.08, 0.80)
 ## 血量低于此比例时血条闪烁提示危险
 const CRYSTAL_DANGER_RATIO: float = 0.3
 
+## ── 英雄头像 / 名称 / 文物计数（2026-09-19 用户要求：局内左上角与 hub 信息面板对齐）──
+## 左上角自上而下排布：头像+名称 → 水晶血条 → 人口读数 → 文物计数 → 控制台按钮，
+## 各行 y 区间互不相交（改动任一行都要复核相邻行的区间）。
+const AVATAR_SIZE: Vector2 = Vector2(32.0, 32.0)
+const AVATAR_MARGIN: Vector2 = Vector2(20.0, 8.0)
+## 英雄名文本起点（头像右侧留 8px 间隙）
+const HERO_NAME_MARGIN_X: float = AVATAR_MARGIN.x + AVATAR_SIZE.x + 8.0
+## 英雄名文本最大右边界
+const HERO_NAME_MARGIN_RIGHT: float = 300.0
+## 文物计数行顶部（人口读数 74~96 之下）与行高
+const ARTIFACTS_ROW_TOP: float = 100.0
+const ARTIFACTS_ROW_HEIGHT: float = 22.0
+## 控制台按钮顶部（文物行之下，避免与上方三块任意一块叠压）
+const CONSOLE_BTN_TOP: float = 128.0
+
 @onready var wave_label: Label = $WaveLabel
 @onready var hint_label: Label = $HintLabel
 @onready var gold_label: Label = $GoldLabel
@@ -120,6 +135,12 @@ var _crystal_bar: ProgressBar = null
 var _crystal_text: Label = null
 ## 场上兵力 / 人口上限读数
 var _population_label: Label = null
+## 英雄头像贴图（兵种无贴图时留空，仅显示阵营色底框）
+var _hero_avatar: TextureRect = null
+## 英雄名称标签
+var _hero_name_label: Label = null
+## 文物计数标签（tooltip 列出已持有文物名，与 hub 信息面板同口径）
+var _artifacts_label: Label = null
 
 func _ready() -> void:
 	_build_drag_preview()
@@ -132,6 +153,10 @@ func _ready() -> void:
 	BattleManager.unit_spawned.connect(_on_population_changed)
 	BattleManager.unit_removed.connect(_on_population_changed_id)
 	_build_population_label()
+	## 2026-09-19：左上角英雄头像/名称 + 文物计数（数据源与 hub 信息面板一致）
+	_build_hero_panel()
+	_build_artifacts_label()
+	RoguelikeManager.artifacts_changed.connect(_on_artifacts_changed)
 	_refresh_hand()
 	## #8：英雄技能栏（位于手牌区左侧）
 	_build_skill_bar()
@@ -146,6 +171,8 @@ func _exit_tree() -> void:
 		RoguelikeManager.gold_changed.disconnect(_on_gold_changed)
 	if RoguelikeManager.card_cooldown_changed.is_connected(_on_card_cooldown_changed):
 		RoguelikeManager.card_cooldown_changed.disconnect(_on_card_cooldown_changed)
+	if RoguelikeManager.artifacts_changed.is_connected(_on_artifacts_changed):
+		RoguelikeManager.artifacts_changed.disconnect(_on_artifacts_changed)
 	if BattleManager.unit_spawned.is_connected(_on_population_changed):
 		BattleManager.unit_spawned.disconnect(_on_population_changed)
 	if BattleManager.unit_removed.is_connected(_on_population_changed_id):
@@ -190,6 +217,113 @@ func _refresh_population_label() -> void:
 	_population_label.add_theme_color_override("font_color",
 			COLOR_INVALID if cur >= cap else HINT_DEFAULT_COLOR)
 
+## ── 英雄头像 / 名称 / 文物计数（2026-09-19 用户要求：局内补齐 hub 同款信息）──
+## 构建左上角英雄头像 + 名称：数据源与 hub 信息面板一致（RoguelikeManager.selected_hero）。
+## 无贴图时保留阵营色底框，不留空白缺口。
+func _build_hero_panel() -> void:
+	var hero_id: String = _current_hero_id()
+	var res := UnitDatabase.get_unit(hero_id) as UnitResource
+
+	## 头像底框（无贴图时以兵种阵营色兜底，与 hub 一致）
+	var frame := PanelContainer.new()
+	frame.name = "HeroAvatarFrame"
+	frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	frame.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	frame.offset_left = AVATAR_MARGIN.x
+	frame.offset_top = AVATAR_MARGIN.y
+	frame.offset_right = AVATAR_MARGIN.x + AVATAR_SIZE.x
+	frame.offset_bottom = AVATAR_MARGIN.y + AVATAR_SIZE.y
+	var frame_style := StyleBoxFlat.new()
+	frame_style.set_corner_radius_all(6)
+	frame_style.bg_color = res.color_red if res != null else Color(0.18, 0.16, 0.14, 0.85)
+	frame.add_theme_stylebox_override("panel", frame_style)
+	add_child(frame)
+
+	var tex := _load_hero_avatar_texture(hero_id)
+	if tex != null:
+		_hero_avatar = TextureRect.new()
+		_hero_avatar.name = "HeroAvatar"
+		_hero_avatar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_hero_avatar.set_anchors_preset(Control.PRESET_FULL_RECT)
+		_hero_avatar.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+		_hero_avatar.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		_hero_avatar.texture = tex
+		frame.add_child(_hero_avatar)
+
+	_hero_name_label = Label.new()
+	_hero_name_label.name = "HeroNameLabel"
+	_hero_name_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_hero_name_label.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	_hero_name_label.offset_left = HERO_NAME_MARGIN_X
+	_hero_name_label.offset_top = AVATAR_MARGIN.y
+	_hero_name_label.offset_right = HERO_NAME_MARGIN_RIGHT
+	_hero_name_label.offset_bottom = AVATAR_MARGIN.y + AVATAR_SIZE.y
+	_hero_name_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_hero_name_label.add_theme_font_size_override("font_size", 16)
+	_hero_name_label.add_theme_color_override("font_color", Color(1.0, 0.90, 0.60, 1.0))
+	_hero_name_label.add_theme_color_override("font_outline_color", Color(0.0, 0.0, 0.0, 0.7))
+	_hero_name_label.add_theme_constant_override("outline_size", 3)
+	_hero_name_label.text = res.get_display_name() if res != null else "???"
+	add_child(_hero_name_label)
+
+## 构建左上角文物计数（人口读数下方；悬停列出已持有文物名）
+func _build_artifacts_label() -> void:
+	_artifacts_label = Label.new()
+	_artifacts_label.name = "ArtifactsLabel"
+	_artifacts_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_artifacts_label.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	_artifacts_label.offset_left = CRYSTAL_BAR_MARGIN.x
+	_artifacts_label.offset_top = ARTIFACTS_ROW_TOP
+	_artifacts_label.offset_right = CRYSTAL_BAR_MARGIN.x + CRYSTAL_BAR_SIZE.x
+	_artifacts_label.offset_bottom = ARTIFACTS_ROW_TOP + ARTIFACTS_ROW_HEIGHT
+	_artifacts_label.add_theme_font_size_override("font_size", 13)
+	_artifacts_label.add_theme_color_override("font_color", HINT_DEFAULT_COLOR)
+	_artifacts_label.add_theme_color_override("font_outline_color", Color(0.0, 0.0, 0.0, 0.7))
+	_artifacts_label.add_theme_constant_override("outline_size", 3)
+	add_child(_artifacts_label)
+	_refresh_artifacts_label()
+
+## 刷新文物计数与悬停列表（口径与 hub 信息面板一致）
+func _refresh_artifacts_label() -> void:
+	if _artifacts_label == null or not is_instance_valid(_artifacts_label):
+		return
+	var count: int = RoguelikeManager.owned_artifacts.size()
+	_artifacts_label.text = "文物 %d" % count
+	if count <= 0:
+		_artifacts_label.tooltip_text = "尚未获得文物"
+		return
+	var names: Array[String] = []
+	for aid in RoguelikeManager.owned_artifacts:
+		var art := ItemDatabase.get_artifact(aid) as ArtifactData
+		if art != null:
+			names.append(art.display_name)
+	_artifacts_label.tooltip_text = "已持有文物：\n" + "\n".join(names)
+
+## 文物增减 → 刷新计数
+func _on_artifacts_changed(_artifact_ids: Array[String]) -> void:
+	_refresh_artifacts_label()
+
+## 本局英雄 ID：未选英雄时回落 Hero1（与 hub 信息面板同规则）
+func _current_hero_id() -> String:
+	var hero_id: String = RoguelikeManager.selected_hero
+	return hero_id if not hero_id.is_empty() else "Hero1"
+
+## 加载英雄头像贴图：优先兵种 sprite_texture，其次 move 动画首帧。
+## 与 roguelike_meta._load_hero_avatar_texture 同逻辑但各自独立，避免 hub 侧改动牵动局内。
+func _load_hero_avatar_texture(hero_id: String) -> Texture2D:
+	var res := UnitDatabase.get_unit(hero_id) as UnitResource
+	if res != null and res.sprite_texture != null:
+		return res.sprite_texture
+	var path: String = "res://resources/units/%s/move_frames.tres" % hero_id
+	if not ResourceLoader.exists(path):
+		return null
+	var frames := load(path) as SpriteFrames
+	if frames == null:
+		return null
+	if frames.has_animation("move") and frames.get_frame_count("move") > 0:
+		return frames.get_frame_texture("move", 0)
+	return null
+
 ## 场上单位增减 → 刷新人口读数与手牌可用状态（人口满时手牌置灰）
 func _on_population_changed(_unit: Node2D, _player_id: int = 0) -> void:
 	_refresh_population_label()
@@ -229,11 +363,14 @@ func _refresh_card_states() -> void:
 			else:
 				cd_lbl.visible = false
 
-## #27：构建肉鸽控制台入口按钮（左上角，避开顶部波次标签）
+## #27：构建肉鸽控制台入口按钮（左上角）
+## 2026-09-19 修：原坐标 (20,20) 尺寸 80×36 → 占据 y 20~56，与 #209 后加的水晶血条
+## （CRYSTAL_BAR_MARGIN.y=44，高 26 → y 44~70）重叠 12px，血条后建会压住按钮下半。
+## 现下移到文物计数行之下：左上角自上而下 = 头像/名称 / 水晶血条 / 人口 / 文物 / 控制台，互不重叠。
 func _build_debug_button() -> void:
 	var btn := Button.new()
 	btn.text = "控制台"
-	btn.position = Vector2(20, 20)
+	btn.position = Vector2(20, CONSOLE_BTN_TOP)
 	btn.size = Vector2(80, 36)
 	btn.add_theme_font_size_override("font_size", 14)
 	btn.process_mode = Node.PROCESS_MODE_ALWAYS
