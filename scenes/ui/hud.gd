@@ -88,6 +88,8 @@ var _upgrade_btn_offsets: Array[Dictionary] = [
 ]
 ## 升级按钮插槽缓存，key = "%d_%s" % [player_id, kind]，value = Control�?8�?
 var _upgrade_btn_slots: Dictionary = {}
+## 经济面板「图标列」插槽缓存（金币图标等前置图标），key = "%d_%s" % [player_id, kind]（2026-10-04）
+var _econ_icon_slots: Dictionary = {}
 ## 回合倒�?�?回合数标签的位置偏移�?3�?
 var _timer_offset: Vector2 = Vector2.ZERO
 ## #18�?026-08-11）：顶部水晶 HP 条（RedHP/BlueHP）位�?��移，按侧�?���?=�?�?�?=�?�?
@@ -117,8 +119,6 @@ var team_add_btn: Button = null
 ## 战场模式：和平/战争 + 开战控制按钮
 var combat_peace_btn: Button = null
 var combat_start_btn: Button = null
-## 战场模式：出兵范围编辑按钮
-var deploy_zone_btn: Button = null
 
 ## 当前打开的游戏内设置对话框引�?
 var _settings_dialog: AcceptDialog = null
@@ -176,6 +176,36 @@ const GRID_COLUMNS: int = 8
 const DATA_ROW_HEIGHT: float = 26.0
 ## 人口/收入行右侧升级按�?��宽度�?4，做窄以免撑破信�?��板）
 const UPGRADE_BTN_WIDTH: float = 78.0
+## #经济面板图标（2026-09-30）：人口/收入升级按钮由「22×22 的 ↑ 文字按钮」改为「图标按钮」。
+## 原 22px 尺寸下插画素材糊成一团，40px 是插画可辨的最小尺寸；该常量同时被
+## _make_upgrade_button（建按钮）与 _apply_upgrade_btn_offsets（算插槽偏移）读取，改一处即可整体缩放。
+const UPGRADE_BTN_SIZE: float = 40.0
+## 金币行左侧图标边长（与金币数字同行，略小于升级按钮，避免压过按钮视觉）
+const GOLD_ICON_SIZE: float = 30.0
+## 升级按钮鼠标悬停时的缩小比例与动画时长（进入缩小、离开弹回 1.0）
+const UPGRADE_HOVER_SCALE: float = 0.9
+const UPGRADE_HOVER_DURATION: float = 0.12
+## 经济面板图标资源（由 tools/extract_econ_icons.ps1 从素材四宫格抠图导出）
+const ICON_GOLD_PATH: String = "res://assets/ui/economy_gold_icon.png"
+const ICON_POP_UPGRADE_PATH: String = "res://assets/ui/economy_pop_upgrade_icon.png"
+const ICON_INCOME_UPGRADE_PATH: String = "res://assets/ui/economy_income_upgrade_icon.png"
+## info_panel.png 原图尺寸 + 木框内区（羊皮纸）在原图中的范围（2026-10-04）。
+## 经济面板的图标必须落在木框内区里，而面板尺寸可被调整面板 / data/ui_adjust.json 改动，
+## 所以「图标距面板内侧边缘的内缩量」按比例实时算，不能写死（写死 4px 会让 40px 图标压到木框上）。
+const INFO_ART_SIZE := Vector2(824.0, 633.0)
+const INFO_ART_PARCHMENT_MIN := Vector2(48.0, 59.0)
+const INFO_ART_PARCHMENT_MAX := Vector2(776.0, 579.0)
+## 图标与木框内区边缘之间保留的间隙（像素）
+const ECON_ICON_PARCHMENT_PAD: float = 3.0
+## 经济面板图标列逐侧横向微调（2026-10-04 用户逐侧指定；正 = 向右，单位像素）
+## pid 0 = 左面板：只把金币图标再左移，使其居中于两个升级图标的列轴线；
+## pid 1 = 右面板：金币图标与两个升级图标整列右移，离左缘木框远一点；
+##           金币图标再额外右移 5px（总 +11），使其正好居中于升级图标列轴线。
+## 只改本常量即可微调位置，不涉及图标尺寸/样式/内容与点击逻辑。
+const ECON_GOLD_NUDGE_X: Array[float] = [-6.0, 5.0]
+const ECON_COLUMN_NUDGE_X: Array[float] = [0.0, 6.0]
+## 经济面板图标列纵向统一微调（2026-10-04 用户指定；负 = 向上，单位像素）
+const ECON_ICON_NUDGE_Y: float = -3.0
 ## 信息面板与窗口边缘之间必须保留的安全距�?（像素）�?1�?
 const INFO_PANEL_MARGIN: float = 4.0
 ## 调整面板持久化配�?���?
@@ -184,7 +214,7 @@ const ADJUST_CFG_PATH: String = "res://data/ui_adjust.json"
 const DEV_GOLD_STEP: int = 500
 const DEV_POP_STEP: int = 10
 const DEV_INCOME_STEP: int = 200
-## 水晶下方扣�?日志条最多保留的行数
+## 水晶下方扣?日志条最多保留的行数
 const MAX_LOG_LINES: int = 3
 
 ## 各玩家选中兵种按钮缓存（key=player_id, value=BaseButton）
@@ -309,6 +339,9 @@ func _ready() -> void:
 	EconomyManager.gold_changed.connect(_update_gold_display)
 	## 金币变化时同步刷新升级按�?��花费/�?��状��（#138�?
 	EconomyManager.gold_changed.connect(_on_gold_changed_refresh_upgrades)
+	## 击杀赏金（2026-10-03）：只在击杀得钱时在金币数值处飘字，购买/回合结算不飘
+	if not EconomyManager.kill_reward_gained.is_connected(_on_kill_reward_gained):
+		EconomyManager.kill_reward_gained.connect(_on_kill_reward_gained)
 	## 监听倒�?时信号以更新回合时间
 	BattleManager.countdown_tick.connect(_update_timer)
 	## 监听兵�?生成信号以更新人口与�?��提示
@@ -429,8 +462,6 @@ func apply_battlefield_layout() -> void:
 	_create_team_selector()
 	## 和平/战争 + 开战控制（顶部居中）
 	_create_combat_controls()
-	## 出兵范围编辑按钮（网格按钮左侧）
-	_create_deploy_zone_button()
 	## 撤回出兵按钮（顶部开发工具按钮右侧，仅竞技场可见）
 	if undo_deploy_btn != null:
 		undo_deploy_btn.visible = true
@@ -1316,8 +1347,11 @@ func _create_unit_button(res: UnitResource, bg_tex: Texture2D, team_id: int, ind
 	btn.ignore_texture_size = true
 	btn.stretch_mode = TextureButton.STRETCH_SCALE
 	## #竞技场（2026-08-24 需求6 修）：按下反馈会把按钮缩到 0.92（选中态更小），
-	## 鼠标在按钮边缘按下时，松开点会落在「缩小后的按钮框」之外 → pressed 信号永不触发，
-	## 表现为「点击偶发没反应」。keep_pressed_outside=true 让松开点在框外也照常触发。
+	## 鼠标在按钮边缘按下时，松开点会落在「缩小后的按钮框」之外。
+	## keep_pressed_outside 只影响视觉（官方文档明确：信号发射时机与它无关），
+	## ACTION_MODE_BUTTON_RELEASE 下「松开在框外」pressed 永不触发 →「点击偶发没反应」。
+	## 2026-10-04 终极修复：点击改由 gui_input 松手分支自行派发（见下方 gui_input 连接），
+	## pressed 信号不再承接出兵点击；缩放动画从此不可能吞掉任何一次点击。
 	btn.keep_pressed_outside = true
 
 	## tooltip 显示完整属��（鼠标�?��时显示）
@@ -1369,8 +1403,9 @@ func _create_unit_button(res: UnitResource, bg_tex: Texture2D, team_id: int, ind
 	## 非双人模式下禁用敌人侧按�?（战场模式例外：右列蓝方按钮允许玩家自由布兵）
 	if team_id == 1 and not BattleManager.is_two_player and not GameManager.is_battlefield_mode:
 		btn.disabled = true
-	## 连接点击事件
-	btn.pressed.connect(_on_unit_pressed.bind(btn, team_id))
+	## 2026-10-04：点击派发权移交 gui_input（鼠标焦点保证松手事件必达本按钮，
+	## 与缩放状态、指针是否还在框内全部解耦）；focus_mode 置 NONE 关掉键盘激活双通道
+	btn.focus_mode = Control.FOCUS_NONE
 	## 按下时缩小按钮，松开时恢复（以中心为轴缩放）
 	## #按钮反馈（2026-08-21）：按下反馈改为**相对当前状态**再缩一档，而非固定 0.92。
 	## 原因是选中态从 1/5 订正为 9/10(0.9) 后，固定写 0.92 会让「按下已选中的按钮」
@@ -1439,6 +1474,12 @@ func _create_unit_button(res: UnitResource, bg_tex: Texture2D, team_id: int, ind
 					btn.set_meta("dragging", true)
 				g.set_meta("_drag_active", false)
 				_long_press_timer.stop()
+				## 2026-10-04：松手即出兵点击（替代 pressed 信号）。
+				## 鼠标焦点使本分支在「指针已移出按钮」时同样必达——
+				## 这是「按钮缩小后边缘点击没反应」的根治点。禁用态直接忽略；
+				## 长按/拖滚/详情弹窗的屏蔽逻辑全部仍由 _on_unit_pressed 内的既有闸门处理。
+				if not btn.disabled:
+					_on_unit_pressed(btn, team_id)
 		elif event is InputEventMouseMotion and Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) and bool(g.get_meta("_drag_active")):
 			if not _btn_dragged and absf(event.global_position.y - _btn_drag_y) > BTN_DRAG_THRESHOLD:
 				_btn_dragged = true
@@ -1648,7 +1689,11 @@ func _on_unit_pressed(btn: BaseButton, player_id: int) -> void:
 
 ## #2�?17�?026-08-11）：屢�内兵种按�?��按�?情面板（PopupPanel�?
 ## 图鉴式内容：名称 / 描述 / 属��表 / 动画预�?；点击�?部或 ESC �?��关闭（Popup 内建行为�?
-const UNIT_LONG_PRESS_MSEC: int = 800
+## 长按兵种按钮弹出详情所需「按住不动」的时长（毫秒）
+## #2026-09-30：800 → 2000。原 800ms 太短，玩家「按住想一想再松手」就会误触发长按：
+## 长按会吞掉本次松手的出兵点击，且弹出的详情窗会吃掉之后的一次点击（那一下只是关窗），
+## 表现为「点了兵种按钮没反应」。放宽到 2s 后只有明确的长按意图才会触发。
+const UNIT_LONG_PRESS_MSEC: int = 2000
 var _unit_detail_popup: PopupPanel = null
 
 func _show_unit_detail_popup(res: UnitResource, btn: BaseButton) -> void:
@@ -1955,51 +2000,6 @@ func _refresh_combat_btn_labels() -> void:
 		combat_start_btn.text = "开始战斗" if not ctrl.war_started else "停止战争"
 		combat_start_btn.disabled = ctrl.peace_mode
 
-## ── 战场模式：出兵范围编辑按钮（网格按钮左侧）──────────────
-func _create_deploy_zone_button() -> void:
-	if deploy_zone_btn != null:
-		return
-	var btn := Button.new()
-	btn.name = "DeployZoneBtn"
-	btn.text = "出兵范围: 关"
-	## #竞技场（2026-08-24）：按钮=编辑开关；关闭后限制保留并落盘 data/arena_deploy_zone.json
-	btn.tooltip_text = "出兵范围：设置哪些格子可以放兵。\n开启后左键框选刷亮格子（白格=可出兵）；退出编辑后限制继续生效并保存。\n右键点按钮可清空全部已刷格子。"
-	btn.custom_minimum_size = Vector2(110, 36)
-	btn.anchors_preset = Control.PRESET_TOP_RIGHT
-	btn.anchor_left = 1.0
-	btn.anchor_top = 0.0
-	btn.anchor_right = 1.0
-	btn.anchor_bottom = 0.0
-	btn.offset_left = -218.0
-	btn.offset_top = 12.0
-	btn.offset_right = -118.0
-	btn.offset_bottom = 48.0
-	btn.pressed.connect(_on_deploy_zone_toggle)
-	## 右键点按钮 = 清空全部已刷格子（2026-08-24，配合「关闭不清空」的持久化语义）
-	btn.gui_input.connect(func(event: InputEvent) -> void:
-		if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_RIGHT and event.pressed:
-			var ctrl := get_parent()
-			if ctrl != null and ctrl.has_method("clear_deploy_zone"):
-				ctrl.clear_deploy_zone()
-			_refresh_deploy_btn_label()
-	)
-	add_child(btn)
-	deploy_zone_btn = btn
-
-func _on_deploy_zone_toggle() -> void:
-	var ctrl = get_parent()
-	if ctrl != null and ctrl.has_method("toggle_deploy_zone"):
-		ctrl.toggle_deploy_zone()
-	_refresh_deploy_btn_label()
-
-func _refresh_deploy_btn_label() -> void:
-	if deploy_zone_btn == null:
-		return
-	var ctrl = get_parent()
-	var on: bool = false
-	if ctrl != null and ctrl.has_method("toggle_deploy_zone"):
-		on = ctrl.deploy_zone_enabled
-	deploy_zone_btn.text = "出兵范围: 开" if on else "出兵范围: 关"
 
 ## ── 战场模式：撤回出兵按钮（顶部，开发工具右侧）──────────────
 func _on_undo_deploy_pressed() -> void:
@@ -2066,6 +2066,39 @@ func _update_gold_display(pid: int, gold: int, income: int) -> void:
 		enemy_gold_label.text = "%d" % gold
 		enemy_income_label.text = "+%d" % income
 
+## 击杀赏金飘字（2026-10-03）：在对应阵营的金币数值上方飘出「+10」并上浮淡出。
+## 与 gold_changed 分离的专用信号驱动，所以只有「击杀得钱」会飘字，
+## 购买兵种 / 回合结算 / 开发工具加钱都不会误触。
+## pid: 收钱的玩家 ID（0=红方→左侧面板, 1=蓝方→右侧面板）
+## amount: 赏金数额
+func _on_kill_reward_gained(pid: int, amount: int) -> void:
+	if amount <= 0:
+		return
+	var anchor: Label = player_gold_label if pid == 0 else enemy_gold_label
+	if anchor == null or not is_instance_valid(anchor):
+		return
+	var lbl := Label.new()
+	lbl.name = "KillRewardFloat"
+	lbl.text = "+%d" % amount
+	lbl.add_theme_font_size_override("font_size", 20)
+	## 暖金色 + 深色描边，保证在左右两侧面板底图上都清晰可读
+	lbl.add_theme_color_override("font_color", Color(1.0, 0.84, 0.24, 1.0))
+	lbl.add_theme_color_override("font_outline_color", Color(0.22, 0.13, 0.02, 0.95))
+	lbl.add_theme_constant_override("outline_size", 5)
+	add_child(lbl)
+	## HUD 是 CanvasLayer，本 Label 直接挂在其下，position 与该层内的控件坐标同系
+	var start_pos := Vector2(anchor.global_position.x + anchor.size.x * 0.5 - 12.0,
+			anchor.global_position.y - 16.0)
+	lbl.global_position = start_pos
+	var tw: Tween = lbl.create_tween()
+	tw.set_parallel(true)
+	tw.tween_property(lbl, "position:y", start_pos.y - 34.0, 0.9).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	tw.tween_property(lbl, "modulate:a", 0.0, 0.55).set_delay(0.35)
+	tw.chain().tween_callback(func() -> void:
+		if is_instance_valid(lbl):
+			lbl.queue_free()
+	)
+
 func _update_timer(t: float) -> void:
 	## #6：累计本场���?时（countdown_tick 每帧发出且暂停时不发，累计天然与游戏节�?同�?�?
 	_battle_elapsed += get_process_delta_time()
@@ -2113,15 +2146,15 @@ func _build_data_rows(pid: int) -> void:
 	var income_label: Label = player_income_label if pid == 0 else enemy_income_label
 	## 升级按钮：玩家侧恒有；敌人侧仅双人模式（AI 侧无霢�手动升级�?
 	var with_upgrade: bool = pid == 0 or BattleManager.is_two_player
-	_wrap_data_row(gold_label, null, pid, "gold")
+	_wrap_data_row(gold_label, null, pid, "gold", load(ICON_GOLD_PATH) as Texture2D)
 	var pop_btn: Button = null
 	var inc_btn: Button = null
 	if with_upgrade:
-		pop_btn = _make_upgrade_button("PopUpgradeBtn", func() -> void:
+		pop_btn = _make_upgrade_button("PopUpgradeBtn", ICON_POP_UPGRADE_PATH, func() -> void:
 			## #4�?026-08-09）：升级失败（金币不�?满级）给�??反�?，避免��点了却没反应��的错�?
 			_try_upgrade_by_key(pid, "pop")
 		)
-		inc_btn = _make_upgrade_button("IncomeUpgradeBtn", func() -> void:
+		inc_btn = _make_upgrade_button("IncomeUpgradeBtn", ICON_INCOME_UPGRADE_PATH, func() -> void:
 			_try_upgrade_by_key(pid, "income")
 		)
 	_wrap_data_row(pop_label, pop_btn, pid, "pop")
@@ -2133,7 +2166,7 @@ func _build_data_rows(pid: int) -> void:
 ## 把一�?���?��签从 VBox �?��出，包进�?��由偏移的插槽结构
 ## label: �?��标�?；btn: 追加到右侧的升级按钮（可�?null�?
 ## pid: 玩�? ID；kind: 行类型（gold/pop/income），用于位置偏移索引
-func _wrap_data_row(label: Label, btn: Button, pid: int, kind: String) -> void:
+func _wrap_data_row(label: Label, btn: Button, pid: int, kind: String, lead_icon: Texture2D = null) -> void:
 	if label == null or not is_instance_valid(label):
 		return
 	var parent := label.get_parent() as VBoxContainer
@@ -2160,6 +2193,23 @@ func _wrap_data_row(label: Label, btn: Button, pid: int, kind: String) -> void:
 	if pid == 1:
 		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	row.add_child(label)
+	## 经济面板图标（2026-10-04 改）：金币图标不再塞进文本行 HBox（塞进去会跟着行水平偏移走），
+	## 改为与升级按钮同款的「独立插槽」——挂在 slot 上、锚在面板「内侧」边缘，
+	## 由 _apply_upgrade_btn_offsets() 与升级按钮统一定位（内缩量按 info_panel 木框内区实时算）。
+	if lead_icon != null:
+		var icon_slot := Control.new()
+		icon_slot.name = "%sIconSlot" % kind.capitalize()
+		icon_slot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		slot.add_child(icon_slot)
+		var lead := TextureRect.new()
+		lead.name = "LeadIcon"
+		lead.texture = lead_icon
+		lead.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		lead.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		lead.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		icon_slot.add_child(lead)
+		lead.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		_econ_icon_slots["%d_%s" % [pid, kind]] = icon_slot
 	if btn != null:
 		## #8�?026-08-09）：升级按钮包进�?��插槽，支持调整面板单�?��整按�?���?
 		## #霢��?1 �??（根因）：旧实现�?btn_slot 挂进 row（HBox）内�?��导致两个�??—��?
@@ -2183,19 +2233,41 @@ func _wrap_data_row(label: Label, btn: Button, pid: int, kind: String) -> void:
 
 ## 构��一�??方形升级按钮�?16：仅�?���?��，悬�?tooltip 显示详情�?
 ## btn_name: 节点名；on_pressed: 点击回调
-func _make_upgrade_button(btn_name: String, on_pressed: Callable) -> Button:
+func _make_upgrade_button(btn_name: String, icon_path: String, on_pressed: Callable) -> Button:
 	var btn := Button.new()
 	btn.name = btn_name
 	## #16：�?方形（边�?= 行高 - 4），仅显示上�?��
-	btn.custom_minimum_size = Vector2(DATA_ROW_HEIGHT - 4.0, DATA_ROW_HEIGHT - 4.0)
+	btn.custom_minimum_size = Vector2(UPGRADE_BTN_SIZE, UPGRADE_BTN_SIZE)
 	btn.size_flags_horizontal = Control.SIZE_SHRINK_END
 	btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	btn.text = "↑"
+	btn.text = ""
+	btn.icon = load(icon_path) as Texture2D
+	btn.expand_icon = true
 	btn.clip_text = false
-	btn.add_theme_font_size_override("font_size", 14)
+	btn.add_theme_font_size_override("font_size", 18)
 	btn.pressed.connect(on_pressed)
 	UIButtonHelper.setup_button(btn)
+	## 清掉 setup_button 给的木质边框：插画本身就是按钮正面，再叠一层边框会互相抢视觉。
+	## 只覆盖样式盒，保留 setup_button 附带的「按下提亮」反馈。
+	for state_name: String in ["normal", "hover", "pressed", "disabled", "focus"]:
+		btn.add_theme_stylebox_override(state_name, StyleBoxEmpty.new())
+	## 鼠标悬停缩小动画（进入缩到 UPGRADE_HOVER_SCALE，离开弹回 1.0）
+	btn.mouse_entered.connect(_tween_upgrade_btn_scale.bind(btn, UPGRADE_HOVER_SCALE))
+	btn.mouse_exited.connect(_tween_upgrade_btn_scale.bind(btn, 1.0))
 	return btn
+
+## 升级按钮悬停缩放动画：以按钮中心为轴缩到 target（1.0 = 回弹原大小）
+## 先杀掉上一个未完成的补间，避免鼠标快速进出时两个补间抢同一属性、停在中间尺寸
+func _tween_upgrade_btn_scale(btn: BaseButton, target: float) -> void:
+	if not is_instance_valid(btn):
+		return
+	var prev: Tween = btn.get_meta("hover_scale_tween", null)
+	if prev != null and prev.is_valid():
+		prev.kill()
+	btn.pivot_offset = btn.size / 2.0
+	var tw: Tween = btn.create_tween()
+	btn.set_meta("hover_scale_tween", tw)
+	tw.tween_property(btn, "scale", Vector2(target, target), UPGRADE_HOVER_DURATION)
 
 ## 应用三�?数据的位�?��移（#2�?
 ## 右侧敌方面板做水平镜像，保证「向�?向内」的调节手感与左侧一�?
@@ -2216,12 +2288,38 @@ func _apply_row_offsets() -> void:
 		row.offset_top = off.y
 		row.offset_bottom = off.y
 
-## 应用人口/收入升级按钮相�?行的位置偏移�?8�?
-## 右侧敌方面板做水平镜像，与文�??偏移手感丢��?
-## #霢��?1 �??：btn_slot 已改为��右缘锚定��，offset_* �?��对锚点的增量—��?
-## offset_right = 基准右间�?4px) + dx；offset_left = offset_right - 按钮边长（保持�?度不变）
+## 应用经济面板「图标列」的统一位置（升级按钮 +8、金币图标 2026-10-04）
+## 口径（2026-10-04 用户拍板）：两个面板的图标都贴在**面板内侧**边缘 —— 左面板(pid 0)贴右缘、
+## 右面板(pid 1)贴左缘，即都靠屏幕中心那一侧，且金币图标与人口/收入升级按钮同列。
+## 横向内缩量由 _econ_icon_inset() 按 info_panel 木框内区实时算（面板尺寸可被调整面板改），
+## 保证 40px 图标不会像旧版那样压到木框边框 / 漏到框外。
+## 纵向：图标与该行文本共用一条基线（按钮 dy = 文本行偏移 + 按钮偏移），修复
+## 「btn_slot 是 slot 的子节点、不跟随 row 偏移」造成的图标串行。
+## 偏移手感沿用文本行：off.x 为正 = 朝屏幕中心（左右面板各自镜像）。
 func _apply_upgrade_btn_offsets() -> void:
-	var btn_size: float = DATA_ROW_HEIGHT - 4.0  ## 按钮边长（与创建时一致）
+	var btn_size: float = UPGRADE_BTN_SIZE  ## 按钮边长（与创建时一致）
+	## ── 前置图标（金币等，无独立偏移滑块）──
+	for key: String in _econ_icon_slots.keys():
+		var icon_slot: Control = _econ_icon_slots[key]
+		if icon_slot == null or not is_instance_valid(icon_slot):
+			continue
+		var iparts: PackedStringArray = key.split("_")
+		if iparts.size() < 2:
+			continue
+		var ipid: int = 0 if iparts[0] == "0" else 1
+		var icon_size: float = GOLD_ICON_SIZE
+		var i_inset: float = _econ_icon_inset(ipid)
+		_anchor_icon_to_inner_edge(icon_slot, ipid, i_inset, icon_size)
+		## 逐侧横向微调（正 = 向右）
+		var i_nudge: float = ECON_GOLD_NUDGE_X[ipid] + ECON_COLUMN_NUDGE_X[ipid]
+		icon_slot.offset_left += i_nudge
+		icon_slot.offset_right += i_nudge
+		## 纵向：与该行文本同基线（文本行垂直偏移 + 行内居中）
+		var icon_dy: float = _row_offsets[ipid].get(iparts[1], Vector2.ZERO).y
+		var iv_center: float = (DATA_ROW_HEIGHT - icon_size) / 2.0
+		icon_slot.offset_top = iv_center + icon_dy + ECON_ICON_NUDGE_Y
+		icon_slot.offset_bottom = iv_center + icon_size + icon_dy + ECON_ICON_NUDGE_Y
+	## ── 人口/收入升级按钮 ──
 	for key: String in _upgrade_btn_slots.keys():
 		var slot: Control = _upgrade_btn_slots[key]
 		if slot == null or not is_instance_valid(slot):
@@ -2232,14 +2330,60 @@ func _apply_upgrade_btn_offsets() -> void:
 		var pid: int = 0 if parts[0] == "0" else 1
 		var off: Vector2 = _upgrade_btn_offsets[pid].get(parts[1], Vector2.ZERO)
 		var dx: float = off.x if pid == 0 else -off.x
-		var dy: float = off.y
-		## 右缘锚定：offset_right 相�?右缘（负值向左进入面板内侧）= 4px 间距 + dx 偏移
-		slot.offset_right = -4.0 + dx
-		slot.offset_left = slot.offset_right - btn_size
-		## 垂直居中 + dy 偏移（锚�?top/bottom �?0，offset_top 直接�?��对顶部距离）
+		## 2026-10-04 修复（图标压住数字 / 串到相邻行）：btn_slot 是 slot 的子节点，
+		## 不会跟随 row 的垂直偏移，导致文本被调低后图标还停在行首位置。
+		## 按钮垂直位置 = 该行文本偏移 + 按钮偏移，保证图标与数字始终同一条基线。
+		var row_dy: float = _row_offsets[pid].get(parts[1], Vector2.ZERO).y
+		var dy: float = off.y + row_dy
+		var inset: float = _econ_icon_inset(pid)
+		_anchor_icon_to_inner_edge(slot, pid, inset - dx, btn_size)
+		## 逐侧横向微调（正 = 向右）
+		slot.offset_left += ECON_COLUMN_NUDGE_X[pid]
+		slot.offset_right += ECON_COLUMN_NUDGE_X[pid]
+		## 垂直居中 + dy 偏移（锚点 top/bottom = 0，offset_top 直接是对顶部距离）
 		var v_center: float = (DATA_ROW_HEIGHT - btn_size) / 2.0
-		slot.offset_top = v_center + dy
-		slot.offset_bottom = v_center + btn_size + dy
+		slot.offset_top = v_center + dy + ECON_ICON_NUDGE_Y
+		slot.offset_bottom = v_center + btn_size + dy + ECON_ICON_NUDGE_Y
+
+## 把控件锚到面板「内侧」边缘：左面板(pid 0) = 面板右缘、右面板(pid 1) = 面板左缘
+## inset: 距该边缘的内缩量（像素）；size: 控件边长
+## 注意：逐个 set_anchor 且 push_opposite_anchor=false，避免对侧锚点被引擎顺手改写；
+## 锚点改完立刻写 offset，最终位置完全由本函数决定。
+func _anchor_icon_to_inner_edge(c: Control, pid: int, inset: float, size: float) -> void:
+	var ax: float = 1.0 if pid == 0 else 0.0
+	c.anchor_left = ax
+	c.anchor_right = ax
+	c.anchor_top = 0.0
+	c.anchor_bottom = 0.0
+	if pid == 0:
+		## 左面板 → 贴右缘（内侧），offset 为负 = 向左进入面板内
+		c.offset_right = -inset
+		c.offset_left = c.offset_right - size
+	else:
+		## 右面板 → 贴左缘（内侧）
+		c.offset_left = inset
+		c.offset_right = c.offset_left + size
+
+## 计算图标距面板内侧边缘的内缩量（像素，已含 ECON_ICON_PARCHMENT_PAD）
+## 依据：面板背景 res://assets/ui/info_panel.png，TextureRect 走 KEEP_ASPECT_CENTERED 居中缩放，
+## 木框内区（羊皮纸）位置 = 按比例缩放后的羊皮纸范围。面板尺寸可变，故必须实时算。
+func _econ_icon_inset(pid: int) -> float:
+	var fallback: float = INFO_PANEL_MARGIN + ECON_ICON_PARCHMENT_PAD
+	var panel: Control = left_panel if pid == 0 else right_panel
+	if panel == null or not is_instance_valid(panel):
+		return fallback
+	var w: float = panel.size.x
+	var h: float = panel.size.y
+	if w <= 0.0 or h <= 0.0:
+		return fallback
+	var s: float = minf(w / INFO_ART_SIZE.x, h / INFO_ART_SIZE.y)
+	var x_off: float = (w - INFO_ART_SIZE.x * s) * 0.5
+	var parch_left: float = x_off + INFO_ART_PARCHMENT_MIN.x * s
+	var parch_right: float = x_off + INFO_ART_PARCHMENT_MAX.x * s
+	if pid == 0:
+		## 左面板图标贴右缘：内缩 = 面板宽 - 羊皮纸右缘 + 间隙
+		return maxf(4.0, w - parch_right + ECON_ICON_PARCHMENT_PAD)
+	return maxf(4.0, parch_left + ECON_ICON_PARCHMENT_PAD)
 
 ## 把���?时标签包进可�?��偏移的插槽（#3�?
 func _setup_timer_slot() -> void:
@@ -2320,13 +2464,17 @@ func _try_upgrade_by_key(pid: int, kind: String) -> void:
 		if EconomyManager.upgrade_population(pid):
 			_refresh_upgrade_buttons_for(pid)
 			_update_population_display()
+			AudioManager.play_upgrade_success()
 		else:
 			_show_toast("人口升级失败：金币不足或已达上限")
+			AudioManager.play_upgrade_fail()
 		return
 	if EconomyManager.upgrade_income(pid):
 		_refresh_upgrade_buttons_for(pid)
+		AudioManager.play_upgrade_success()
 	else:
 		_show_toast("收入升级失败：金币不足或已达上限")
+		AudioManager.play_upgrade_fail()
 
 ## 刷新指定玩�?的两�?��级按�?���?���?��状��（金币不足时�?�?���?138�?
 ## #18�?026-08-08）：人口/收入满级时按�?��字变「满」��置灰��tooltip 提示已满�?
@@ -2342,12 +2490,14 @@ func _refresh_upgrade_buttons_for(pid: int) -> void:
 		var pop_at_cap: bool = EconomyManager.get_max_population(pid) >= Constants.MAX_POPULATION_CAP
 		if pop_at_cap:
 			## 满级：文字变「满�? �?�� + 提示
+			pop_btn.icon = null
 			pop_btn.text = "满"
 			pop_btn.tooltip_text = "人口已达上限 %d（满级），无法继续升级" % Constants.MAX_POPULATION_CAP
 			pop_btn.disabled = true
 			pop_btn.modulate = Color(0.55, 0.55, 0.55, 1.0)
 		else:
-			pop_btn.text = "↑"
+			pop_btn.icon = load(ICON_POP_UPGRADE_PATH) as Texture2D
+			pop_btn.text = ""
 			pop_btn.modulate = Color.WHITE
 			pop_btn.tooltip_text = "升级人口上限 +%d，花费 %d 金币" % [p_amt, p_cost]
 			## #霢��?：无限金币下金币不足不再禁用（点击直接升级不扣钱�?
@@ -2359,12 +2509,14 @@ func _refresh_upgrade_buttons_for(pid: int) -> void:
 		var inc_at_cap: bool = EconomyManager.bonus_income[pid] >= EconomyManager.INCOME_BONUS_CAP
 		if inc_at_cap:
 			## 满级：文字变「满�? �?�� + 提示
+			inc_btn.icon = null
 			inc_btn.text = "满"
 			inc_btn.tooltip_text = "收入升级加成已达上限（满级），无法继续升级"
 			inc_btn.disabled = true
 			inc_btn.modulate = Color(0.55, 0.55, 0.55, 1.0)
 		else:
-			inc_btn.text = "↑"
+			inc_btn.icon = load(ICON_INCOME_UPGRADE_PATH) as Texture2D
+			inc_btn.text = ""
 			inc_btn.modulate = Color.WHITE
 			inc_btn.tooltip_text = "升级每回合收入 +%d，花费 %d 金币" % [i_amt, i_cost]
 			## #霢��?：无限金币下金币不足不再禁用（点击直接升级不扣钱�?
@@ -2488,16 +2640,13 @@ func _apply_dev_gating(_on: bool = false) -> void:
 	## #竞技场（2026-09-02 用户要求）：竞技场模式不显示「调整」按钮（沙盒无局内经济，调整面板无意义）
 	## 肉鸽同理：局内无经济系统，调整面板无意义
 	adjust_btn.visible = DevMode.enabled and not GameManager.is_battlefield_mode and not RoguelikeManager.is_active
-	## #12：开发��模式开�?��默�?打开兵�?攻击距�?显示（仅进入时�?�?��次，之后�?��由开关）�?
-	## �?DevMode.dev_mode_changed 信号触发，进入开发��模式即生效；菜单项 20 仍可随时关闭�?
-	if DevMode.enabled and not Unit.show_attack_ranges:
-		Unit.show_attack_ranges = true
+	## #12（2026-10-04 修订，用户要求）：开发者模式下**不再**自动打开兵种攻击距离显示。
+	## 旧实现在 DevMode.enabled 时把 Unit.show_attack_ranges 置 true，导致一进局就满屏射程圈。
+	## 现在默认关闭，需要看范围圈时从开发工具菜单「显示兵种攻击距离」手动切换。
+	## 退出开发者模式时仍自动关闭，避免调试开关状态泄漏到非调试玩法。
+	if not DevMode.enabled and Unit.show_attack_ranges:
+		Unit.show_attack_ranges = false
 		_dev_redraw_all_units()
-	else:
-		## 退出开发者模式：自动关闭攻击距离显示（含水晶，水晶同为 Unit）
-		if Unit.show_attack_ranges:
-			Unit.show_attack_ranges = false
-			_dev_redraw_all_units()
 	## 局内上方按钮整排始终显示（F12 显隐功能已于 2026-09-02 按用户要求删除）
 	$TopCenterButtons.visible = true
 	## 按钮显隐变化后重算居中偏移（HBoxContainer 不为隐藏子节点留位）
@@ -2816,6 +2965,8 @@ func _on_exit_pressed() -> void:
 	exit_text.text = tr("EXIT_CONFIRM")
 	exit_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	exit_text.custom_minimum_size = Vector2(240, 0)
+	## 2026-10-04：提示文本居中
+	exit_text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	exit_text.add_theme_font_size_override("font_size", 14)
 	exit_text.add_theme_color_override("font_color", Color(0.30, 0.22, 0.12, 1.0))
 	confirm_vbox.add_child(exit_text)
@@ -2856,6 +3007,8 @@ func _on_exit_pressed() -> void:
 	## 所有退出操作按钮使用统一紧凑长方形样式；焦点态不绘制额外白边
 	for _b in [confirm.get_ok_button(), btn_map, btn_menu, confirm.get_cancel_button()]:
 		UIButtonHelper.setup_dialog_action_button(_b)
+	## 2026-10-04（晚）：按钮整排从默认右靠改为水平居中（用户拍板）
+	UIButtonHelper.center_dialog_buttons(confirm)
 	var _cancel_btn: Button = confirm.get_cancel_button()
 	add_child(confirm)
 	confirm.popup_centered()
@@ -2909,6 +3062,11 @@ func _on_dev_tool_pressed() -> void:
 	menu.add_item("召唤丽贝卡（红方友军）", 45)
 	## 2026-09-19（从直播版搬入）：萌黄 S9。id 47 —— 原版 46 已被「随机出兵」占用
 	menu.add_item("召唤萌黄（红方友军）", 47)
+	if GameManager.is_battlefield_mode:
+		for event_id in [23, 26, 27, 28, 40, 41, 42, 43, 44, 45, 47]:
+			var event_index: int = menu.get_item_index(event_id)
+			menu.set_item_disabled(event_index, true)
+			menu.set_item_tooltip(event_index, "竞技场不触发事件；可从兵种列表直接布置对应兵种。")
 	## 敌方兵�?阵营二级菜单（咕�?Doro/菲比/�?��），默�?全部勾��；
 	## 仅在全面战争（非双人、非战役）中生效，过�?AI �?��兵�?
 	var faction_sub := PopupMenu.new()
@@ -3365,6 +3523,8 @@ func _build_adjust_sliders(vbox: VBoxContainer) -> void:
 			for side: int in _adjust_side_targets():
 				_info_panel_size[side] = v
 			_apply_info_panel_offset()
+			## 2026-10-04：面板尺寸变了 → 图标内缩量必须重算，否则图标会重新压到木框上
+			_apply_upgrade_btn_offsets()
 	)
 	## #8�?026-08-09）：人口/收入升级按钮位置（信�?��板�?�?�?按钮，独立于文本行偏移）
 	var btn_row_titles: Dictionary = {"pop": "人口升级按钮位置", "income": "收入升级按钮位置"}

@@ -1,7 +1,7 @@
 extends Node2D
 class_name BattlefieldMode
 ## 战场模式（RTS 沙盒）根控制器
-## 设计：无 AI、无胜负、无回合（水晶可被打爆但不触发结算）。
+## 设计：无 AI、无胜负、无回合、无水晶的自由布兵沙盘。
 ## 玩家自由布兵（点选/长按连出/框选网格铺满，无限免费兵），框选已有单位、右键下令移动。
 
 @onready var battlefield: Node2D = $Battlefield
@@ -18,15 +18,16 @@ const DRAW_LAYER_SCRIPT := preload("res://scenes/battle/battle_draw_layer.gd")
 ## 保证两个模式的指挥手感完全一致）
 const UNIT_COMMAND := preload("res://scripts/battle/unit_command.gd")
 
-## ── 摄像机参数（照搬 battle_root）────────────────────────────
+## ── 竞技场沙盘与摄像机参数 ─────────────────────────────────
 const CAMERA_SPEED: float = 600.0
-const CAMERA_ZOOM_MIN_BASE: float = 0.9
+const CAMERA_ZOOM_MIN_BASE: float = 0.55
 const CAMERA_ZOOM_MAX: float = 4.0
 const ZOOM_SPEED: float = 0.15
-const MAP_LEFT: float = -656.0
-const MAP_RIGHT: float = 656.0
-const MAP_TOP: float = -368.0
-const MAP_BOTTOM: float = 368.0
+const MAP_LEFT: float = Constants.ARENA_BOUNDS.position.x
+const MAP_RIGHT: float = Constants.ARENA_BOUNDS.end.x
+const MAP_TOP: float = Constants.ARENA_BOUNDS.position.y
+const MAP_BOTTOM: float = Constants.ARENA_BOUNDS.end.y
+const SAND_TEXTURE := preload("res://assets/backgrounds/arena_sand.png")
 
 ## ── 战场交互常量 ────────────────────────────────────────────
 const GRID_SIZE: float = 30.0          ## 网格 / 编队偏移间距
@@ -75,14 +76,6 @@ var selected_team: int = 0
 ## 和平/战争 + 开战状态：combat_active = 战争模式 且 已开战
 var peace_mode: bool = true
 var war_started: bool = false
-## 出兵范围
-## #竞技场（2026-08-24 用户订正语义）：按钮 = 「编辑开关」，不是「限制开关」。
-## 关闭编辑后刷出来的区域**继续生效**，并落盘到项目 data/arena_deploy_zone.json。
-## deploy_zone_configured：是否配置过。未配置=全图可出兵；已配置但区域为空=全图禁止出兵。
-var deploy_zone_enabled: bool = false      ## 编辑模式（左键刷格子、不出兵）
-var deploy_zone_configured: bool = false   ## 是否已配置过出兵范围
-var allowed_cells: Dictionary = {}  ## key=Vector2i(cell_x,cell_y) → true
-const DEPLOY_ZONE_PATH: String = "res://data/arena_deploy_zone.json"
 
 ## 右键移动令点击反馈（阵营色椭圆，1 秒渐隐）
 const ORDER_MARK_DURATION: float = 1.0
@@ -102,6 +95,11 @@ var _current_batch: Array = []    ## 当前正在填充的批次（框选分帧�
 var _batch_open: bool = false     ## 批次是否处于「填充中」
 const MAX_UNDO_BATCHES: int = 50
 
+func _enter_tree() -> void:
+	## F6 直接运行也要在 Battlefield / HUD 的 _ready 之前确定模式。
+	GameManager.is_battlefield_mode = true
+	GameManager.is_campaign_mode = false
+
 func _ready() -> void:
 	## 根节点常驻处理（结算/暂停期间仍可操作；沙盒无暂停但保持与战斗一致）
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -119,9 +117,11 @@ func _ready() -> void:
 	BattleManager.countdown_timer = 1e12
 
 	## 摄像机初始化
+	_setup_arena_map()
 	_update_min_zoom()
 	camera.position = Vector2(0, 0)
-	camera.zoom = Vector2(camera_zoom_min, camera_zoom_min)
+	camera.zoom = Vector2.ONE * maxf(1.0, camera_zoom_min)
+	_clamp_camera()
 	get_viewport().size_changed.connect(_on_viewport_size_changed)
 
 	## 单位生成接线：加入 UnitContainer 并连接死亡；不连 base_destroyed（无胜负）
@@ -156,49 +156,21 @@ func _ready() -> void:
 	selection_layer.draw_func = _draw_selection
 	grid_layer.visible = show_grid
 
-	## #竞技场（2026-08-24）：读取项目内持久化的出兵范围配置
-	_load_deploy_zone()
 
 	AudioManager.play_battle_bgm()
 
-## ── 出兵范围持久化（项目内 data/arena_deploy_zone.json）──────────────
-## 编辑器运行时可写 res://；导出版 res:// 只读 → 写失败只打日志不报错。
-func _load_deploy_zone() -> void:
-	## #6（2026-08-26）：竞技场默认全程全图可放置兵种。
-	## 旧行为：data/ 里存在配置文件即视为「已配置」→ 进场就带着上次保存的出兵范围限制。
-	## 现改为：开局一律不生效（deploy_zone_configured 保持 false），仅本局手动进出
-	## 「出兵范围」编辑并落盘（_save_deploy_zone）后才开始限制。格子数据照常读取，
-	## 这样打开编辑模式仍能看到/续编上次画的区域。
-	deploy_zone_configured = false
-	if not FileAccess.file_exists(DEPLOY_ZONE_PATH):
-		return
-	var f := FileAccess.open(DEPLOY_ZONE_PATH, FileAccess.READ)
-	if f == null:
-		return
-	var txt: String = f.get_as_text()
-	f.close()
-	var parsed = JSON.parse_string(txt)
-	if typeof(parsed) != TYPE_DICTIONARY:
-		return
-	allowed_cells.clear()
-	var arr = parsed.get("cells", [])
-	if arr is Array:
-		for item in arr:
-			if item is Array and item.size() >= 2:
-				allowed_cells[Vector2i(int(item[0]), int(item[1]))] = true
+func _setup_arena_map() -> void:
+	## 原背景中部沙地裁片柔边拼接成大贴图，仅替换竞技场实例。
+	## 原生镜像重复铺图，不拉伸整张风景，不新增地形系统。
+	var background := battlefield.get_node("Background") as Sprite2D
+	background.texture = SAND_TEXTURE
+	background.scale = Vector2(2.0, 2.0)
+	background.texture_repeat = CanvasItem.TEXTURE_REPEAT_MIRROR
+	background.region_enabled = true
+	background.region_rect = Rect2(Vector2.ZERO, Constants.ARENA_BOUNDS.size / background.scale)
+	background.position = Constants.ARENA_BOUNDS.get_center()
+	battlefield.get_node("BGUI").hide()
 
-func _save_deploy_zone() -> void:
-	var cells: Array = []
-	for cell in allowed_cells.keys():
-		cells.append([cell.x, cell.y])
-	var data := {"grid_size": GRID_SIZE, "origin": [MAP_LEFT, MAP_TOP], "cells": cells}
-	var f := FileAccess.open(DEPLOY_ZONE_PATH, FileAccess.WRITE)
-	if f == null:
-		push_warning("[竞技场] 出兵范围配置写入失败（导出版 res:// 只读属正常）")
-		return
-	f.store_string(JSON.stringify(data, "\t"))
-	f.close()
-	deploy_zone_configured = true
 
 func _on_unit_spawned(unit: Node2D, _player_id: int) -> void:
 	unit_container.add_child(unit)
@@ -251,22 +223,6 @@ func toggle_war_started() -> void:
 	war_started = not war_started
 	_apply_combat_state()
 
-## 切换出兵范围**编辑模式**（HUD 调用）
-## #竞技场（2026-08-24 用户订正）：本按钮只切换「是否在编辑」，不切换限制生效。
-## 开启：左键框选刷亮格子（只刷格、不出兵）；关闭：退出编辑并把区域落盘，限制继续生效。
-func toggle_deploy_zone() -> void:
-	deploy_zone_enabled = not deploy_zone_enabled
-	if not deploy_zone_enabled:
-		_save_deploy_zone()   ## 退出编辑即持久化到项目 data/
-	grid_layer.queue_redraw()
-	selection_layer.queue_redraw()
-
-## 清空出兵范围（HUD 长按/右键出兵范围按钮调用）：清空白名单并落盘
-func clear_deploy_zone() -> void:
-	allowed_cells.clear()
-	_save_deploy_zone()
-	grid_layer.queue_redraw()
-	selection_layer.queue_redraw()
 
 func is_combat_active() -> bool:
 	return not peace_mode and war_started
@@ -311,6 +267,13 @@ func _input(event: InputEvent) -> void:
 	## 鼠标落在 HUD 控件上（兵种栏/顶栏按钮等）时，战场不处理任何鼠标输入
 	## 这能避免「点兵种按钮」被误判为地图出兵点击
 	if (event is InputEventMouseButton or event is InputEventMouseMotion) and _is_mouse_over_hud_control():
+		## 拖图 / 框选在 HUD 上松手也必须收尾，防止手势粘住或继续出兵。
+		if event is InputEventMouseButton and not event.pressed:
+			_is_panning = false
+			_is_left_down = false
+			_left_dragged = false
+			_drag_box = Rect2()
+			selection_layer.queue_redraw()
 		return
 
 	## 滚轮缩放（悬停 HUD 控件时交给控件自己处理，已在上面拦截）
@@ -334,9 +297,9 @@ func _input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion and _is_panning:
 		var delta_pos: Vector2 = event.position - _pan_last_pos
 		_pan_moved += delta_pos.length()
-		camera.position.x -= delta_pos.x / camera.zoom.x
-		camera.position.y -= delta_pos.y / camera.zoom.x
-		_clamp_camera()
+		if _pan_moved >= PAN_THRESHOLD:
+			camera.position -= delta_pos / camera.zoom
+			_clamp_camera()
 		_pan_last_pos = event.position
 
 	## 左键：按下记录起点；拖动超阈值→框选；松开按状态出兵/框选
@@ -348,9 +311,7 @@ func _input(event: InputEvent) -> void:
 			_drag_box = Rect2(_left_start_world, Vector2.ZERO)
 			_hold_timer = 0.0
 		else:
-			if deploy_zone_enabled:
-				_mark_deploy_cells(_drag_box)  ## 出兵范围编辑：框选标记可出兵网格
-			elif _is_left_down and not _left_dragged:
+			if _is_left_down and not _left_dragged:
 				## #竞技场（2026-08-24 用户拍板）：单击优先「取消框选」；
 				## 无选中单位时才出 1 兵。
 				## #框选攻击锁定（2026-09-04）：有选中单位且点到敌方单位 → 全体集火，
@@ -388,7 +349,7 @@ func _input(event: InputEvent) -> void:
 func _process(delta: float) -> void:
 	_update_camera_keys(delta)
 	## 长按连出：仅在「无选中单位」时生效（有选中时左键是取消框选，不该连出兵）
-	if _is_left_down and not _left_dragged and selected_units.is_empty():
+	if _is_left_down and not _left_dragged and not _is_panning and selected_units.is_empty() and not _is_mouse_over_hud_control():
 		var res = _current_spawn_res()
 		if res != null:
 			_hold_timer += delta
@@ -433,8 +394,6 @@ func _spawn_one_at_mouse() -> void:
 	_commit_batch()
 
 func _try_spawn_at_mouse() -> void:
-	if deploy_zone_enabled:
-		return  ## 出兵范围编辑模式下左键只框选区域，不出兵
 	var res = _current_spawn_res()
 	if res == null:
 		return
@@ -502,8 +461,6 @@ func _refresh_undo_btn() -> void:
 		hud._refresh_undo_btn_state()
 
 func _on_drag_release() -> void:
-	if deploy_zone_enabled:
-		return  ## 编辑模式下拖框用于标记出兵区，已在 _input 处理
 	var box: Rect2 = _drag_box
 	## 框内是否有当前选中阵营的存活（非基地）单位 → 框选它们
 	## 2026-08-18 用户确认：选择阵营 = 只控制该阵营兵种，框选按 selected_team 过滤
@@ -520,18 +477,21 @@ func _on_drag_release() -> void:
 
 ## 在矩形区域内按格子铺兵：仅「被框住面积 ≥ 格子面积 1/3」的格子出兵，落点取格子中心。
 ## #竞技场（2026-08-24 用户拍板）：原实现按 GRID_SIZE 整数倍交点铺兵（与画出来的网格线
-## 还错位），且框沾到一点就出一个兵。现改为格子制 + 中心落点，与出兵范围格子索引统一。
+## 还错位），且框沾到一点就出一个兵。现改为格子制 + 中心落点，与显示网格对齐。
 ## 落点入队而非当场生成——真正的实例化在 _process_deploy_queue 按帧分批完成，
 ## 这样一次大框选也不会在单帧同步 spawn 上百个单位（即此前卡死/闪退的根因）。
 func _grid_deploy(box: Rect2, res: Resource, team: int) -> void:
 	var origin := Vector2(MAP_LEFT, MAP_TOP)
-	var cells: Array[Vector2i] = compute_grid_cells_in_box(box, GRID_SIZE, origin, SELECT_AREA_RATIO)
+	var cells: Array[Vector2i] = compute_grid_cells_in_box(box.intersection(Constants.ARENA_BOUNDS), GRID_SIZE, origin, SELECT_AREA_RATIO)
 	var queued: int = 0
+	var remaining: int = MAX_SPAWN_UNITS - unit_container.get_child_count() - _pending_deploy_positions.size()
 	for cell in cells:
+		if queued >= remaining:
+			break
 		var pos := Vector2(
 			MAP_LEFT + (float(cell.x) + 0.5) * GRID_SIZE,
 			MAP_TOP + (float(cell.y) + 0.5) * GRID_SIZE)
-		## #竞技场（2026-08-24）：出兵范围限制同样约束框选铺兵（原先只拦单击出兵）
+		## 框选铺兵同样不能越出地图边界。
 		if not _is_cell_allowed(pos):
 			continue
 		_pending_deploy_positions.append(pos)
@@ -625,26 +585,12 @@ func _draw_grid() -> void:
 		grid_layer.draw_line(Vector2(float(x), MAP_TOP), Vector2(float(x), MAP_BOTTOM), col, 1.0)
 	for y in range(int(MAP_TOP), int(MAP_BOTTOM) + 1, int(GRID_SIZE)):
 		grid_layer.draw_line(Vector2(MAP_LEFT, float(y)), Vector2(MAP_RIGHT, float(y)), col, 1.0)
-	## 出兵范围高亮：允许的网格单元叠加半透明白色
-	## #竞技场（2026-08-24 用户订正）：只要配置过就一直显示（原先仅编辑模式下可见）
-	if deploy_zone_configured and not allowed_cells.is_empty():
-		for cell in allowed_cells.keys():
-			var cx: int = cell.x
-			var cy: int = cell.y
-			var x0: float = MAP_LEFT + float(cx) * GRID_SIZE
-			var y0: float = MAP_TOP + float(cy) * GRID_SIZE
-			grid_layer.draw_rect(Rect2(x0, y0, GRID_SIZE, GRID_SIZE), Color(1.0, 1.0, 1.0, 0.16))
 
 func _draw_selection() -> void:
-	## 框选矩形（出兵范围编辑=白；普通框选=绿）
+	## 框选矩形保持白色。
 	if _left_dragged and _drag_box.size.length() > 0.0:
-		if deploy_zone_enabled:
-			selection_layer.draw_rect(_drag_box, Color(1.0, 1.0, 1.0, 0.10))
-			selection_layer.draw_rect(_drag_box, Color(1.0, 1.0, 1.0, 0.9), false, 2.0)
-		else:
-			## #竞技场（2026-08-24 用户拍板）：框选矩形改白色（原绿色）
-			selection_layer.draw_rect(_drag_box, Color(1.0, 1.0, 1.0, 0.12))
-			selection_layer.draw_rect(_drag_box, Color(1.0, 1.0, 1.0, 0.9), false, 2.0)
+		selection_layer.draw_rect(_drag_box, Color(1.0, 1.0, 1.0, 0.12))
+		selection_layer.draw_rect(_drag_box, Color(1.0, 1.0, 1.0, 0.9), false, 2.0)
 	## #竞技场（2026-08-24 用户拍板）：选中态的绿色椭圆描边已删除 ——
 	## 选中反馈统一由 ground_layer 的阵营色光圈承担（且光圈只在选中时才画）。
 
@@ -703,17 +649,25 @@ func _update_camera_keys(delta: float) -> void:
 		_clamp_camera()
 
 func _zoom_camera(delta_zoom: float) -> void:
-	var new_zoom: float = clampf(camera.zoom.x + delta_zoom, camera_zoom_min, CAMERA_ZOOM_MAX)
+	var new_zoom: float = clampf(camera.zoom.x + delta_zoom, camera_zoom_min, maxf(CAMERA_ZOOM_MAX, camera_zoom_min))
 	camera.zoom = Vector2(new_zoom, new_zoom)
 	_clamp_camera()
 
 func _update_min_zoom() -> void:
 	var viewport_size: Vector2 = get_viewport().get_visible_rect().size
-	var map_width: float = 1152.0
-	var map_height: float = 736.0
+	var map_width: float = Constants.ARENA_BOUNDS.size.x
+	var map_height: float = Constants.ARENA_BOUNDS.size.y
 	var zoom_by_w: float = viewport_size.x / map_width
 	var zoom_by_h: float = viewport_size.y / map_height
-	camera_zoom_min = maxf(CAMERA_ZOOM_MIN_BASE, minf(zoom_by_w, zoom_by_h))
+	## 两方向都盖满视口（缩到此值不露地图外）
+	var zoom_cover: float = maxf(zoom_by_w, zoom_by_h)
+	## 整张地图进视口（缩到此值可全图总览）
+	var zoom_fit: float = minf(zoom_by_w, zoom_by_h)
+	## #全图可放（2026-10-02）：原实现取 zoom_cover，1280×720 下最小 zoom 被钉在 0.55 ——
+	## 视野 2327×1309 < 地图 3840×1440，玩家缩到底也看不到地图外围，
+	## 观感即「只允许在地图中间放置兵种」。现允许一路缩到 zoom_fit（全图进视口），
+	## 缩到最小时地图外露空属正常沙盘总览，不影响放置判定。
+	camera_zoom_min = minf(maxf(CAMERA_ZOOM_MIN_BASE, zoom_cover), zoom_fit)
 
 func _on_viewport_size_changed() -> void:
 	_update_min_zoom()
@@ -742,33 +696,14 @@ func _clamp_camera() -> void:
 func _clamp_to_map(p: Vector2) -> Vector2:
 	return Vector2(clampf(p.x, MAP_LEFT, MAP_RIGHT), clampf(p.y, MAP_TOP, MAP_BOTTOM))
 
-## 标记矩形覆盖的网格为可出兵（cell 索引 = floor((x-MAP_LEFT)/GRID_SIZE)）
-## #竞技场（2026-08-24 修）：原实现按世界坐标直接除 GRID_SIZE 算索引，未减 MAP_LEFT/MAP_TOP，
-## 与 _is_cell_allowed / _draw_grid 的索引口径不一致（偏移 656/30 非整数 → 刷亮格与实际可出兵格错位）。
-## 同时套用 1/3 面积门槛，与框选铺兵规则统一。
-func _mark_deploy_cells(box: Rect2) -> void:
-	var origin := Vector2(MAP_LEFT, MAP_TOP)
-	for cell in compute_grid_cells_in_box(box, GRID_SIZE, origin, SELECT_AREA_RATIO):
-		allowed_cells[cell] = true
-	grid_layer.queue_redraw()
-	selection_layer.queue_redraw()
-
-## 世界坐标是否落在允许出兵的网格
-## #竞技场（2026-08-24 用户订正）：不再看「编辑开关」，只看是否配置过。
-## 未配置过 → 全图可出兵；已配置但区域为空 → 全图禁止出兵（用户拍板）。
+## 竞技场全图自由布兵，仅保留地图边界。
 func _is_cell_allowed(world_pos: Vector2) -> bool:
-	if not deploy_zone_configured:
-		return true
-	if allowed_cells.is_empty():
-		return false
-	var cx: int = int(floor((world_pos.x - MAP_LEFT) / GRID_SIZE))
-	var cy: int = int(floor((world_pos.y - MAP_TOP) / GRID_SIZE))
-	return allowed_cells.has(Vector2i(cx, cy))
+	return Constants.ARENA_BOUNDS.has_point(world_pos)
 
 ## 纯静态：返回矩形覆盖的网格单元索引（供标记与单测）
 ## #竞技场（2026-08-24 用户拍板）：新增 origin（网格原点，默认 0 保持旧签名语义）与
 ## min_ratio（命中所需的最小格内被框面积占比，默认 0 = 沾到即算）。
-## 出兵范围刷格子与框选铺兵都传 SELECT_AREA_RATIO(1/3)，两处规则一致。
+## 框选铺兵使用 SELECT_AREA_RATIO(1/3) 作为格内覆盖门槛。
 static func compute_grid_cells_in_box(box: Rect2, grid_size: float, origin: Vector2 = Vector2.ZERO, min_ratio: float = 0.0) -> Array[Vector2i]:
 	var result: Array[Vector2i] = []
 	if box.size.x <= 0.0 or box.size.y <= 0.0 or grid_size <= 0.0:

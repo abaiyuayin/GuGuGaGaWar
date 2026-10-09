@@ -98,13 +98,12 @@ const FIELD_X_MAX: float = 600.0  ## 单位可到达的最右 X
 ## 上下被空气墙挡住，不再漂到屏幕边缘。
 ## #7（2026-08-08）：战场整体上下活动范围扩大（用户拍板），-10~70 → -30~90
 ## 2026-09-20：标准 / 肉鸽的战斗区域整体下移，空气墙同步收进新出兵带 37 ~ 90
-##（= 直播版红线区间 5~122 内缩半个身体高 32）。**竞技场仍用下面 ARENA_* 的原范围**，
+##（= 直播版红线区间 5~122 内缩半个身体高 32）。竞技场使用独立的 ARENA_BOUNDS，
 ## 由 `scenes/units/unit_base.gd::_clamp_to_field()` 按 `GameManager.is_battlefield_mode` 分流。
 const FIELD_Y_MIN: float = 37.0  ## 单位可到达的最上 Y（出兵区域上界）
 const FIELD_Y_MAX: float = 90.0  ## 单位可到达的最下 Y（出兵区域下界）
-## 竞技场（自由布兵沙盒）沿用下移前的空气墙范围，手感不变
-const ARENA_Y_MIN: float = -30.0
-const ARENA_Y_MAX: float = 90.0
+## 竞技场沙盘：布兵、单位移动、技能位移、网格与镜头共用同一边界。
+const ARENA_BOUNDS: Rect2 = Rect2(-1920.0, -720.0, 3840.0, 1440.0)
 ## 2026-09-20：标准战斗双方水晶整体下移，与直播版 `CRYSTAL_Y_OFFSET = 50` 对齐
 ##（肉鸽那座位居地图正中的水晶不参与，仍用 `ROGUELIKE_CRYSTAL_POS`）
 const BATTLE_CRYSTAL_Y: float = 50.0

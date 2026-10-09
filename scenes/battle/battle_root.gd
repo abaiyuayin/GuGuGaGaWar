@@ -127,10 +127,9 @@ func _ready() -> void:
 	## 否则 start_battle() 内可能 emit settings_changed，按默认 "menu" 上下文 deferred 播主菜单 BGM，
 	## 覆盖随后同步播放的战斗 BGM（deferred 晚于同步执行）。
 	AudioManager.set_bgm_context("battle")
-	## #15（2026-08-09）：开发者模式下进入战斗即默认开启兵种攻击距离显示，
-	## 不必先打开开发工具菜单（hud 菜单里仍是切换开关，幂等无副作用）
-	if DevMode.enabled:
-		Unit.show_attack_ranges = true
+	## #15（2026-08-09，2026-10-04 修订，用户要求）：开发者模式下**不再**自动开启兵种攻击距离显示。
+	## 旧实现在 DevMode.enabled 时置 Unit.show_attack_ranges = true，一进局就满屏射程圈。
+	## 现在改为默认关闭，需要看范围圈时从开发工具菜单「显示兵种攻击距离」手动切换（幂等无副作用）。
 
 	## 初始化本场战绩（成就系统数据源），在开战前读取当前关卡/难度/模式
 	_battle_stats.level = GameManager.selected_campaign_level
@@ -548,6 +547,26 @@ func _on_unit_died(unit: Unit, killer_team: int, _killer_unit_id: String) -> voi
 	if unit.team == 1 and unit.unit_resource != null and unit.unit_resource.unit_id == "Y2":
 		if battlefield != null and battlefield.get_base_hp(0) > 0:
 			Achievements.unlock_by_id_in_mode("penguin_sacrifice")
+	## 击杀赏金（2026-10-03 用户拍板）：标准模式每击杀一个敌方单位，击杀方 +10 金币
+	_grant_kill_gold(unit)
+
+## 击杀赏金发放（2026-10-03 新增机制：标准模式击杀敌人得金币，敌我双方同等生效）
+## 生效范围：仅标准模式（战役 / 全面战争 / 双人）——肉鸽共用本场景但另有 kill_gold 体系，此处拦截。
+## 排除项：
+##   - 基地单位（打爆水晶 = 游戏结束，不是「击杀单位」）
+##   - 己方误伤（真实击杀者与死者同阵营时不给任何一方赏金）
+## 归属口径：优先取 die() 记录的真实击杀者阵营 last_killer_team；
+## 无归属（流血/中毒等 DoT、环境伤害）时回退为「死者的敌方」，与既有击杀统计口径保持一致。
+func _grant_kill_gold(unit: Unit) -> void:
+	if RoguelikeManager.is_active:
+		return
+	if unit == null or not is_instance_valid(unit) or unit.is_base_unit:
+		return
+	var reward_team: int = unit.last_killer_team if unit.last_killer_team >= 0 else 1 - unit.team
+	## 己方击杀己方：不给金币（用户 2026-10-03 明确）
+	if reward_team == unit.team:
+		return
+	EconomyManager.award_kill_gold(reward_team)
 
 func _on_base_hp_changed(team: int, hp: int, max_hp: int) -> void:
 	hud.update_base_hp(team, hp, max_hp)

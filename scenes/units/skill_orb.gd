@@ -8,7 +8,7 @@ extends Node2D
 ##   EXPLODE  对爆炸半径内敌人结算一次大额魔法伤害，播完爆炸视觉后自毁
 ##
 ## 视觉全部程序化生成、不新增素材（与 ImpactEffect 同一套做法）：
-##   ① 核心：白色径向渐变柔光球（复用 ImpactEffect 的共享贴图）
+##   ① 核心：白色径向渐变柔光球 + 叠在其上的小一号白色内芯（更亮；复用 ImpactEffect 的共享贴图）
 ##   ② 星云：两圈带「透明 → 亮 → 暗 → 透明」渐变的 Line2D 光环，正反反向缓慢旋转，
 ##      形成「一圈流动的光套住光球」的观感
 ##
@@ -25,6 +25,11 @@ enum OrbState { CHARGE, FLY, EXPLODE }
 
 ## 硬性寿命兜底（秒）：任何异常导致既没爆也没回收时强制销毁，避免节点永久残留
 const MAX_LIFETIME: float = 12.0
+
+## 内核白光相对光球直径的比例（2026-09-30 用户要求「白球再亮一点点」）：
+## 柔光贴图只有中心一小块接近全白，再叠一颗更小、接近实心的白光芯把中心亮度提上去；
+## 刻意不加外圈光环（用户此前明确要求删掉环绕光），只让球体本身更亮。
+const ORB_CORE_INNER_SCALE: float = 0.5
 
 ## 施法者（充能阶段跟随它、伤害归属也记在它头上）
 var caster: Unit = null
@@ -56,6 +61,8 @@ var _life: float = 0.0
 
 ## 核心柔光球
 var _core: Sprite2D = null
+## 内核白光（叠在柔光球之上，把中心亮度再提一档）
+var _core_inner: Sprite2D = null
 ## 推进全程锁定的 Y 坐标（战场垂直居中，launch 时确定）
 var _center_y: float = 0.0
 
@@ -86,6 +93,12 @@ func _ready() -> void:
 	_core.texture = ImpactEffect._get_glow_texture()
 	_core.modulate = Color(1.0, 1.0, 1.0, 1.0)  ## 纯白（用户拍板：就用默认那颗白球）
 	add_child(_core)
+	## 内核白光：同一张贴图的小一号副本叠在中心（不是新素材，也不是外圈光环）
+	_core_inner = Sprite2D.new()
+	_core_inner.name = "OrbInnerCore"
+	_core_inner.texture = ImpactEffect._get_glow_texture()
+	_core_inner.modulate = Color(1.0, 1.0, 1.0, 1.0)
+	add_child(_core_inner)
 	_apply_diameter()
 
 ## ============================================================
@@ -233,6 +246,10 @@ func _apply_diameter() -> void:
 	if _core != null and _core.texture != null:
 		var tex_size: float = float(_core.texture.get_width())
 		_core.scale = Vector2.ONE * (_diameter / maxf(tex_size, 1.0))
+	if _core_inner != null and _core_inner.texture != null:
+		var inner_tex_size: float = float(_core_inner.texture.get_width())
+		## 内芯按固定比例跟随光球一起放大，充能三档与飞行途中都成立
+		_core_inner.scale = Vector2.ONE * (_diameter * ORB_CORE_INNER_SCALE / maxf(inner_tex_size, 1.0))
 
 ## 爆炸视觉：向外扩张并淡出的光环 + 中心闪光。
 ## 必须挂到**父节点**而不是光球自己 —— 光球紧接着就 queue_free 了。

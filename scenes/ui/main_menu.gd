@@ -126,6 +126,8 @@ func _on_btn_quit_pressed() -> void:
 	## 与局内退出框共用紧凑长方形操作按钮，避免详情框内边距把按钮撑大
 	UIButtonHelper.setup_dialog_action_button(confirm.get_ok_button())
 	UIButtonHelper.setup_dialog_action_button(confirm.get_cancel_button())
+	## 2026-10-04（晚）：按钮整排从默认右靠改为水平居中（与局内退出框一致）
+	UIButtonHelper.center_dialog_buttons(confirm)
 	add_child(confirm)
 	confirm.popup_centered()
 	## 在对话框弹出后，在内部构建上下两级结构（标题在上、正文在下）
@@ -142,6 +144,8 @@ func _on_btn_quit_pressed() -> void:
 	exit_text.text = tr("QUIT_CONFIRM")
 	exit_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	exit_text.custom_minimum_size = Vector2(240, 0)
+	## 2026-10-04：提示文本居中（与局内退出确认框同款）
+	exit_text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	exit_text.add_theme_font_size_override("font_size", 14)
 	exit_text.add_theme_color_override("font_color", Color(0.30, 0.22, 0.12, 1.0))
 	exit_vbox.add_child(exit_text)
@@ -193,7 +197,10 @@ func _show_difficulty_dialog() -> void:
 	## #7：难度选择框统一为退出提示框同款「兵种详情框」米色描边框
 	UIButtonHelper.setup_detail_frame_dialog(dialog)
 	## #5（2026-08-26）：框内「取消」按钮同步米色描边样式
-	UIButtonHelper.setup_detail_frame_button(dialog.get_ok_button())
+	## 2026-10-04：改用对话框操作按钮统一函数——150×42 圆角长方形（原来自适应文字呈小方块）
+	UIButtonHelper.setup_dialog_action_button(dialog.get_ok_button())
+	## 2026-10-04（晚）：内建按钮行默认右靠，改为水平居中
+	UIButtonHelper.center_dialog_buttons(dialog)
 
 	## 创建垂直容器放置难度按钮
 	var vbox = VBoxContainer.new()

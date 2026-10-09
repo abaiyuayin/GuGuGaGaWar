@@ -1,7 +1,9 @@
 extends Control
-## 战役地图 UI
-## 中世纪手绘羊皮纸风格，10 个关卡沿蜿蜒路径从「起始」延伸至「城堡」
-## 点击已解锁关卡弹出难度选择，通关进度由 CampaignProgress 单例管理
+## 战役地图 UI（2026-10-04 美术化改造）
+## 整张手绘地图底图（assets/ui/campaign/campaign_bg.png，道路/城堡/装饰已画进图里），
+## 关卡标记 / 强敌徽章 / 星星 / 太阳 / 标题横幅全部走贴图，旧 draw_* 程序装饰已删除。
+## Curve2D 不再绘制，仅作隐形对位工具：锚点贴合底图道路，按弧长放置 10 个关卡标记。
+## 点击已解锁关卡弹出难度选择，通关进度由 CampaignProgress 单例管理。
 
 ## 总关卡数量
 const LEVEL_COUNT: int = 10
@@ -12,24 +14,34 @@ const DIFFICULTIES: Array = [
 	["DIFF_NAME_HELL", Color(0.9, 0.35, 0.3)],  ## 2=地狱，红色
 ]
 
-## 路径颜色与宽度
-const PATH_COLOR: Color = Color(0.62, 0.45, 0.29, 1.0)
-const PATH_OUTLINE_COLOR: Color = Color(0.43, 0.30, 0.18, 1.0)
-const PATH_WIDTH: float = 14.0
-const PATH_OUTLINE_WIDTH: float = 20.0
+## 美术素材（assets/ui/campaign/，均开 mipmap）
+const ART_DIR: String = "res://assets/ui/campaign/"
+const TEX_MARKER_UNLOCKED: String = ART_DIR + "marker_unlocked.png"
+const TEX_MARKER_LOCKED: String = ART_DIR + "marker_locked.png"
+const TEX_MARKER_BOSS: String = ART_DIR + "marker_boss.png"
+const TEX_MARKER_PERFECT: String = ART_DIR + "marker_perfect.png"
+const TEX_BOSS_BADGE: String = ART_DIR + "boss_badge.png"
+const TEX_STAR_ON: String = ART_DIR + "star_on.png"
+const TEX_STAR_OFF: String = ART_DIR + "star_off.png"
+const TEX_SUN: String = ART_DIR + "sun.png"
+const TEX_BANNER: String = ART_DIR + "banner_title.png"
+## 未锁定难度按钮的挂锁图标（与成就窗未解锁徽章同款：木牌+锁链+挂锁）
+const TEX_LOCK_BADGE: String = ART_DIR + "ach_badge_locked.png"
 
-## 关卡标记尺寸
-const MARKER_SIZE: float = 56.0
-const MARKER_RADIUS: float = 28.0
+## 关卡标记显示尺寸（素材画布 128×160，含顶部旗杆）
+const MARKER_W: float = 58.0
+const MARKER_H: float = 72.0
+## 数字在标记贴图上的相对高度（木牌圆心位置）
+const MARKER_NUM_REL_Y: float = 0.61
 const STAR_SIZE: float = 14.0
-## BOSS 关卡标记上方提示标签高度
-const BOSS_LABEL_H: float = 18.0
+## 强敌（BOSS 关）徽章尺寸，替换原红色「BOSS」文本标签
+const BOSS_BADGE_SIZE: float = 40.0
 const BOSS_COLOR: Color = Color(1.0, 0.35, 0.3, 1.0)
 
-## 关卡在路径上的位置进度（0~1，按弧长）
+## 关卡在路径上的位置进度（0~1，按弧长）——均匀分布（2026-10-04 按底图实测重调）
 const LEVEL_PROGRESS: Array[float] = [
-	0.06, 0.16, 0.27, 0.38, 0.49,
-	0.59, 0.69, 0.79, 0.88, 0.96
+	0.03, 0.134, 0.239, 0.343, 0.448,
+	0.552, 0.657, 0.761, 0.866, 0.97
 ]
 
 ## 地图区域节点
@@ -45,10 +57,10 @@ const LEVEL_PROGRESS: Array[float] = [
 ## 肉鸽模式按钮
 @onready var random_mode_btn: Button = $RandomModeButton
 
-## 路径曲线
+## 路径曲线（隐形对位工具，不绘制）
 var _path_curve: Curve2D = Curve2D.new()
 ## 当前打开的难度选择对话框引用
-var _difficulty_dialog: AcceptDialog = null
+var _difficulty_dialog: Window = null
 ## 当前选中的关卡编号
 var _selected_level: int = 1
 ## 关卡标记控件列表
@@ -58,13 +70,30 @@ var _diff_tips: Dictionary = {}
 ## #12：难度提示持久化路径
 const DIFF_TIPS_PATH: String = "user://campaign_diff_tips.cfg"
 
+## 开发者拖拽布局（2026-10-04）：DevMode 下可直接拖动关卡标记微调位置，
+## 松手即保存到 user://campaign_marker_layout.cfg；
+## 该文件存在时（任何模式）优先使用保存的位置，不存在回落 Curve2D 默认布局。
+const MARKER_LAYOUT_PATH: String = "user://campaign_marker_layout.cfg"
+## level:int -> Vector2（map_area 局部坐标）
+var _saved_marker_pos: Dictionary = {}
+## 拖拽进行中的关卡编号（-1 = 未拖拽）
+var _drag_level: int = -1
+## 拖拽中的标记节点
+var _drag_marker: Control = null
+## 拖拽抓取偏移（鼠标到标记原点的距离）
+var _drag_offset: Vector2 = Vector2.ZERO
+## 本次拖拽是否真的移动过（区分「拖完松手」与「原地点击」）
+var _drag_moved: bool = false
+
 func _ready() -> void:
 	_setup_path_curve()
 	_setup_buttons()
 	_apply_localization()
+	_build_title_banner()
+	_setup_sun_sprite()
+	## 开发者拖拽布局：先读保存位置再建标记
+	_load_marker_layout()
 	_create_level_markers()
-	map_area.draw.connect(_on_map_area_draw)
-	map_area.queue_redraw()
 	## #需求10：左上角太阳位置添加透明点击按钮，点击解锁隐藏成就「日夜交替」
 	_setup_sun_button()
 	## #25：顶部导航栏收纳原右上角散落按钮
@@ -82,6 +111,8 @@ func _ready() -> void:
 ## 非开发者模式隐藏按钮，F11 开启后恢复显示
 func _apply_dev_gating(_on: bool = false) -> void:
 	random_mode_btn.visible = DevMode.enabled
+	## 开发者开关切换时重建标记，实时挂载/卸载拖拽布局功能
+	refresh_levels()
 
 ## #12：加载自定义难度提示（无自定义时回落内置默认文本）
 func _load_diff_tips() -> void:
@@ -114,6 +145,8 @@ func _build_top_navbar() -> void:
 	navbar.offset_bottom = 88.0
 	navbar.add_theme_constant_override("separation", 10)
 	add_child(navbar)
+	## 子节点靠右对齐：非开发者模式隐藏「肉鸽」按钮后，剩余按钮仍贴右缘
+	navbar.alignment = BoxContainer.ALIGNMENT_END
 	## 按从左到右顺序 reparent（信号连接不受 reparent 影响）
 	for btn in [unlock_btn, achievements_btn, random_mode_btn]:
 		if btn != null and is_instance_valid(btn):
@@ -143,68 +176,62 @@ func _apply_localization() -> void:
 	achievements_btn.text = tr("ACHIEVEMENTS") if tr("ACHIEVEMENTS") != "ACHIEVEMENTS" else "成就"
 	random_mode_btn.text = tr("ROGUELIKE_MODE") if tr("ROGUELIKE_MODE") != "ROGUELIKE_MODE" else "肉鸽模式"
 
-## 设置蜿蜒路径曲线
+## 设置路径曲线（隐形对位工具）：锚点按底图网格实测路面坐标（2026-10-04 重调，
+## 与 _artgen/layout_check.py 合成验证一致）：村庄 → 沿底部沙路 → 木桥 → 营地 → 城堡门口
 func _setup_path_curve() -> void:
 	_path_curve.clear_points()
-	_path_curve.add_point(Vector2(80, 500), Vector2(0, -40), Vector2(50, -20))
-	_path_curve.add_point(Vector2(240, 430), Vector2(-60, 10), Vector2(40, -10))
-	_path_curve.add_point(Vector2(220, 330), Vector2(30, 40), Vector2(-30, 50))
-	_path_curve.add_point(Vector2(360, 280), Vector2(-40, 40), Vector2(40, -20))
-	_path_curve.add_point(Vector2(500, 390), Vector2(-30, -40), Vector2(30, 20))
-	_path_curve.add_point(Vector2(640, 300), Vector2(-20, 30), Vector2(30, -20))
-	_path_curve.add_point(Vector2(780, 410), Vector2(-20, -30), Vector2(30, 10))
-	_path_curve.add_point(Vector2(920, 250), Vector2(-30, 30), Vector2(30, -30))
-	_path_curve.add_point(Vector2(1060, 360), Vector2(-30, -20), Vector2(20, 20))
-	_path_curve.add_point(Vector2(1120, 180), Vector2(-30, 30), Vector2(0, -30))
-	_path_curve.add_point(Vector2(1120, 100), Vector2(-20, 20), Vector2(0, 0))
+	_path_curve.add_point(Vector2(212, 654), Vector2(0, 0), Vector2(55, -10))
+	_path_curve.add_point(Vector2(333, 633), Vector2(-55, 10), Vector2(50, -5))
+	_path_curve.add_point(Vector2(442, 621), Vector2(-45, 5), Vector2(40, -8))
+	_path_curve.add_point(Vector2(517, 604), Vector2(-38, 8), Vector2(35, -25))
+	_path_curve.add_point(Vector2(583, 557), Vector2(-33, 24), Vector2(40, -30))
+	_path_curve.add_point(Vector2(663, 496), Vector2(-40, 30), Vector2(35, -21))
+	_path_curve.add_point(Vector2(733, 454), Vector2(-35, 21), Vector2(40, -20))
+	_path_curve.add_point(Vector2(813, 413), Vector2(-40, 20), Vector2(35, -19))
+	_path_curve.add_point(Vector2(883, 375), Vector2(-35, 19), Vector2(30, -31))
+	_path_curve.add_point(Vector2(942, 313), Vector2(-30, 31), Vector2(4, -50))
+	_path_curve.add_point(Vector2(950, 213), Vector2(0, -45), Vector2(0, 0))
 
-## 地图区域绘制回调
-func _on_map_area_draw() -> void:
-	_draw_decorations()
-	_draw_path()
+## 标题横幅：羊皮纸卷轴贴图 + 原标题 Label 叠加（本地化不变）
+func _build_title_banner() -> void:
+	var banner := TextureRect.new()
+	banner.name = "TitleBanner"
+	banner.texture = load(TEX_BANNER)
+	banner.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	banner.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	banner.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(banner)
+	banner.anchor_left = 0.5
+	banner.anchor_right = 0.5
+	banner.offset_left = -105.0
+	banner.offset_right = 105.0
+	banner.offset_top = 6.0
+	banner.offset_bottom = 104.0
+	## 标题随横幅缩小一半（36 → 30，横幅 210×98）
+	title_label.add_theme_font_size_override("font_size", 30)
+	title_label.reparent(banner)
+	title_label.anchor_left = 0.0
+	title_label.anchor_top = 0.0
+	title_label.anchor_right = 1.0
+	title_label.anchor_bottom = 1.0
+	title_label.offset_left = 0.0
+	title_label.offset_top = 0.0
+	title_label.offset_right = 0.0
+	title_label.offset_bottom = 0.0
+	title_label.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	title_label.grow_vertical = Control.GROW_DIRECTION_BOTH
 
-## 绘制路径（带描边）
-func _draw_path() -> void:
-	var points := _path_curve.get_baked_points()
-	if points.size() < 2:
-		return
-	
-	## 底层描边，增加立体感
-	map_area.draw_polyline(points, PATH_OUTLINE_COLOR, PATH_OUTLINE_WIDTH, true)
-	## 主路径
-	map_area.draw_polyline(points, PATH_COLOR, PATH_WIDTH, true)
-	
-	## 沿路径绘制小圆点装饰
-	var length := _path_curve.get_baked_length()
-	var step := 24.0
-	var t := step
-	while t < length - step:
-		var pos := _path_curve.sample_baked(t)
-		map_area.draw_circle(pos, 4.0, Color(0.48, 0.32, 0.18, 0.8))
-		t += step
-
-## 绘制地图装饰：太阳、云朵、山脉、河流、城堡、起始点
-func _draw_decorations() -> void:
-	_draw_sun(Vector2(80, 60))
-	_draw_cloud(Vector2(220, 80), 1.0)
-	_draw_cloud(Vector2(520, 50), 0.8)
-	_draw_cloud(Vector2(920, 90), 1.1)
-	_draw_mountains()
-	_draw_river()
-	_draw_castle(Vector2(1120, 70))
-	_draw_start_point(Vector2(80, 500))
-
-## 绘制太阳
-func _draw_sun(pos: Vector2) -> void:
-	map_area.draw_circle(pos, 36.0, Color(1.0, 0.85, 0.35, 0.9))
-	map_area.draw_circle(pos, 28.0, Color(1.0, 0.92, 0.55, 0.95))
-	## 光芒
-	var ray_count := 10
-	for i in range(ray_count):
-		var angle := (TAU / ray_count) * i
-		var inner := pos + Vector2.from_angle(angle) * 42.0
-		var outer := pos + Vector2.from_angle(angle) * 58.0
-		map_area.draw_line(inner, outer, Color(1.0, 0.85, 0.35, 0.7), 3.0, true)
+## 左上角太阳贴图（隐藏成就「日夜交替」的视觉锚点）
+func _setup_sun_sprite() -> void:
+	var sun := TextureRect.new()
+	sun.name = "SunSprite"
+	sun.texture = load(TEX_SUN)
+	sun.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	sun.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	sun.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	sun.position = Vector2(32, 12)
+	sun.size = Vector2(96, 96)
+	map_area.add_child(sun)
 
 ## #需求10：在太阳（80,60）位置放置透明点击按钮，点击解锁隐藏成就「日夜交替」
 ## 按钮完全透明、比太阳大一圈，不影响地图其余交互；解锁逻辑复用 Achievements.unlock_by_id
@@ -214,7 +241,7 @@ func _setup_sun_button() -> void:
 	btn.text = ""  ## 无文字，纯透明点击区
 	btn.flat = true  ## 无背景
 	btn.modulate = Color(1, 1, 1, 0.0)  ## 完全透明
-	## 定位到太阳位置（太阳中心 80,60，光芒半径 58，按钮取 130x130 覆盖）
+	## 定位到太阳位置（太阳中心 80,60，按钮取 130x130 覆盖）
 	btn.position = Vector2(80.0 - 65.0, 60.0 - 65.0)
 	btn.size = Vector2(130, 130)
 	btn.tooltip_text = ""
@@ -225,87 +252,6 @@ func _setup_sun_button() -> void:
 	)
 	map_area.add_child(btn)
 
-## 绘制云朵（由多个重叠圆组成）
-func _draw_cloud(pos: Vector2, cloud_scale: float) -> void:
-	var color := Color(1.0, 1.0, 1.0, 0.75)
-	map_area.draw_circle(pos + Vector2(0, 0) * cloud_scale, 30.0 * cloud_scale, color)
-	map_area.draw_circle(pos + Vector2(20, 5) * cloud_scale, 25.0 * cloud_scale, color)
-	map_area.draw_circle(pos + Vector2(-20, 8) * cloud_scale, 22.0 * cloud_scale, color)
-
-## 绘制山脉
-func _draw_mountains() -> void:
-	var mountain_color := Color(0.55, 0.42, 0.30, 0.85)
-	var peaks := [
-		[Vector2(180, 180), Vector2(260, 80), Vector2(340, 180)],
-		[Vector2(280, 200), Vector2(360, 100), Vector2(440, 200)],
-		[Vector2(780, 160), Vector2(860, 60), Vector2(940, 160)],
-	]
-	for peak in peaks:
-		var pts := PackedVector2Array([peak[0], peak[1], peak[2]])
-		map_area.draw_colored_polygon(pts, mountain_color)
-
-## 绘制河流
-func _draw_river() -> void:
-	var river_points := PackedVector2Array([
-		Vector2(1000, 520),
-		Vector2(940, 460),
-		Vector2(860, 480),
-		Vector2(760, 440),
-		Vector2(620, 480),
-		Vector2(520, 440),
-	])
-	map_area.draw_polyline(river_points, Color(0.45, 0.65, 0.85, 0.7), 14.0, true)
-	map_area.draw_polyline(river_points, Color(0.6, 0.78, 0.92, 0.5), 8.0, true)
-
-## 绘制城堡
-func _draw_castle(pos: Vector2) -> void:
-	var wall_color := Color(0.65, 0.62, 0.58, 1.0)
-	var roof_color := Color(0.55, 0.25, 0.20, 1.0)
-	var dark := Color(0.35, 0.32, 0.30, 1.0)
-	
-	## 主墙体
-	map_area.draw_rect(Rect2(pos + Vector2(-50, -20), Vector2(100, 50)), wall_color, true)
-	map_area.draw_rect(Rect2(pos + Vector2(-50, -20), Vector2(100, 50)), dark, false, 2.0)
-	
-	## 左塔
-	map_area.draw_rect(Rect2(pos + Vector2(-70, -50), Vector2(30, 80)), wall_color, true)
-	map_area.draw_rect(Rect2(pos + Vector2(-70, -50), Vector2(30, 80)), dark, false, 2.0)
-	var left_roof := PackedVector2Array([
-		pos + Vector2(-75, -50),
-		pos + Vector2(-55, -80),
-		pos + Vector2(-35, -50)
-	])
-	map_area.draw_colored_polygon(left_roof, roof_color)
-	
-	## 右塔
-	map_area.draw_rect(Rect2(pos + Vector2(40, -50), Vector2(30, 80)), wall_color, true)
-	map_area.draw_rect(Rect2(pos + Vector2(40, -50), Vector2(30, 80)), dark, false, 2.0)
-	var right_roof := PackedVector2Array([
-		pos + Vector2(35, -50),
-		pos + Vector2(55, -80),
-		pos + Vector2(75, -50)
-	])
-	map_area.draw_colored_polygon(right_roof, roof_color)
-	
-	## 中央高塔
-	map_area.draw_rect(Rect2(pos + Vector2(-20, -70), Vector2(40, 100)), wall_color, true)
-	map_area.draw_rect(Rect2(pos + Vector2(-20, -70), Vector2(40, 100)), dark, false, 2.0)
-	var center_roof := PackedVector2Array([
-		pos + Vector2(-25, -70),
-		pos + Vector2(0, -105),
-		pos + Vector2(25, -70)
-	])
-	map_area.draw_colored_polygon(center_roof, roof_color)
-	
-	## 城门
-	map_area.draw_rect(Rect2(pos + Vector2(-12, 0), Vector2(24, 30)), dark, true)
-	map_area.draw_arc(pos + Vector2(0, 0), 12.0, PI, TAU, 16, dark, 2.0, true)
-
-## 绘制起始点
-func _draw_start_point(pos: Vector2) -> void:
-	map_area.draw_circle(pos, 20.0, Color(0.35, 0.22, 0.12, 0.9))
-	map_area.draw_circle(pos, 14.0, Color(0.85, 0.78, 0.60, 1.0))
-
 ## 创建关卡标记
 func _create_level_markers() -> void:
 	## 清空已有标记
@@ -313,166 +259,211 @@ func _create_level_markers() -> void:
 		if is_instance_valid(marker):
 			marker.queue_free()
 	_level_markers.clear()
-	
+
 	var unlocked_level: int = CampaignProgress.get_unlocked_level()
 	var length := _path_curve.get_baked_length()
-	
+
 	for i in range(LEVEL_COUNT):
 		var level: int = i + 1
 		var t: float = LEVEL_PROGRESS[i] * length
 		var pos: Vector2 = _path_curve.sample_baked(t)
+		## 开发者拖拽保存过的位置优先（文件不存在回落曲线默认）
+		if _saved_marker_pos.has(level):
+			pos = _saved_marker_pos[level]
 		var marker := _create_level_marker(level, pos, level <= unlocked_level)
 		map_area.add_child(marker)
 		_level_markers.append(marker)
 
-## 创建单个关卡标记容器
+## 按状态选标记贴图：锁定 > 强敌 > 金色全通 > 普通已解锁
+func _marker_texture_path(is_unlocked: bool, is_perfect: bool, is_boss: bool) -> String:
+	if not is_unlocked:
+		return TEX_MARKER_LOCKED
+	if is_boss:
+		return TEX_MARKER_BOSS
+	if is_perfect:
+		return TEX_MARKER_PERFECT
+	return TEX_MARKER_UNLOCKED
+
+## 创建单个关卡标记容器（贴图版：TextureButton + 数字 + 星星行 + 强敌徽章）
 func _create_level_marker(level: int, pos: Vector2, is_unlocked: bool) -> Control:
 	var star_count: int = CampaignProgress.get_star_count(level)
 	var is_perfect: bool = star_count == DIFFICULTIES.size()
 	var is_boss: bool = level in CampaignProgress.BOSS_LEVELS
-	
+
 	var btn_top: float = 0.0
-	if is_boss:
-		btn_top = BOSS_LABEL_H
-	
+	if is_boss and is_unlocked:
+		btn_top = BOSS_BADGE_SIZE
+	var total_h: float = btn_top + MARKER_H + STAR_SIZE + 4.0
+
 	var marker := Control.new()
 	marker.name = "LevelMarker_%d" % level
-	marker.custom_minimum_size = Vector2(MARKER_SIZE, MARKER_SIZE + STAR_SIZE + 4 + btn_top)
-	marker.position = pos - Vector2(MARKER_SIZE / 2.0, btn_top + MARKER_SIZE / 2.0)
+	marker.custom_minimum_size = Vector2(MARKER_W, total_h)
+	marker.position = pos - Vector2(MARKER_W / 2.0, btn_top + MARKER_H / 2.0)
 	marker.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	
-	## BOSS 关卡：在按钮上方加红色「BOSS」提示标签
-	if is_boss:
-		var boss_label := Label.new()
-		boss_label.name = "BossLabel"
-		boss_label.text = tr("CAMPAIGN_BOSS")
-		boss_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		boss_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		boss_label.add_theme_font_size_override("font_size", 13)
-		boss_label.add_theme_color_override("font_color", BOSS_COLOR)
-		boss_label.custom_minimum_size = Vector2(MARKER_SIZE, BOSS_LABEL_H)
-		boss_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		marker.add_child(boss_label)
-	
-	var btn := Button.new()
+
+	## 强敌关：标记上方钉骷髅徽章（替换原红色「BOSS」文本）
+	if is_boss and is_unlocked:
+		var badge := TextureRect.new()
+		badge.name = "BossBadge"
+		badge.texture = load(TEX_BOSS_BADGE)
+		badge.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		badge.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		badge.position = Vector2((MARKER_W - BOSS_BADGE_SIZE) / 2.0, -4.0)
+		badge.size = Vector2(BOSS_BADGE_SIZE, BOSS_BADGE_SIZE)
+		badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		marker.add_child(badge)
+
+	var btn := TextureButton.new()
 	btn.name = "LevelButton"
-	btn.custom_minimum_size = Vector2(MARKER_SIZE, MARKER_SIZE)
+	btn.texture_normal = load(_marker_texture_path(is_unlocked, is_perfect, is_boss))
+	btn.ignore_texture_size = true
+	btn.stretch_mode = TextureButton.STRETCH_KEEP_ASPECT_CENTERED
+	btn.custom_minimum_size = Vector2(MARKER_W, MARKER_H)
 	btn.position = Vector2(0.0, btn_top)
-	btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	btn.text = str(level)
-	btn.disabled = not is_unlocked
-	_setup_marker_button_style(btn, is_unlocked, is_perfect, is_boss)
+	btn.size = Vector2(MARKER_W, MARKER_H)
+	## 开发者布局模式下不锁定按钮：锁定关也要能拖动位置（点击弹难度框无碍，框内难度按钮仍锁定）
+	btn.disabled = not is_unlocked and not DevMode.enabled
 	btn.pressed.connect(_on_level_pressed.bind(level))
 	marker.add_child(btn)
-	
-	## 已解锁时添加悬停动画
+
+	if DevMode.enabled:
+		## 开发者布局工具：按住拖动标记，松手自动保存位置
+		btn.button_down.connect(_on_marker_drag_start.bind(level, marker))
+		btn.button_up.connect(_on_marker_drag_end.bind(level, marker))
+
 	if is_unlocked:
+		## 数字钉在标记木牌圆心（锁定关不显示数字，贴图自带挂锁）
+		var num := Label.new()
+		num.name = "LevelNum"
+		num.text = str(level)
+		num.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		num.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		num.add_theme_font_size_override("font_size", 20)
+		var num_color: Color = Color(0.35, 0.22, 0.12, 1.0)
+		if is_boss:
+			num_color = Color(1.0, 0.92, 0.88, 1.0)
+		elif is_perfect:
+			num_color = Color(0.35, 0.22, 0.08, 1.0)
+		num.add_theme_color_override("font_color", num_color)
+		num.add_theme_color_override("font_shadow_color", Color(1, 1, 1, 0.45))
+		num.add_theme_constant_override("shadow_offset_x", 1)
+		num.add_theme_constant_override("shadow_offset_y", 1)
+		num.position = Vector2(0.0, MARKER_H * MARKER_NUM_REL_Y - 15.0)
+		num.size = Vector2(MARKER_W, 30.0)
+		num.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		btn.add_child(num)
+
+		## 已解锁时添加悬停动画
 		btn.mouse_entered.connect(func():
 			if is_instance_valid(btn):
 				btn.modulate = Color(1.2, 1.15, 1.05)
 				btn.scale = Vector2(1.12, 1.12)
-				btn.pivot_offset = Vector2(MARKER_SIZE / 2.0, MARKER_SIZE / 2.0)
+				btn.pivot_offset = Vector2(MARKER_W / 2.0, MARKER_H / 2.0)
 		)
 		btn.mouse_exited.connect(func():
 			if is_instance_valid(btn):
 				btn.modulate = Color.WHITE
 				btn.scale = Vector2(1.0, 1.0)
 		)
-	else:
-		btn.text = ""
-		## 未解锁显示锁图标
-		var lock := Label.new()
-		lock.text = "锁"
-		lock.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		lock.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		lock.add_theme_font_size_override("font_size", 22)
-		lock.anchors_preset = Control.PRESET_FULL_RECT
-		lock.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		btn.add_child(lock)
-	
-	## 星星行
+
+	## 星星行（点亮/灰星贴图）
 	var star_row := HBoxContainer.new()
 	star_row.name = "Stars"
-	star_row.position = Vector2((MARKER_SIZE - STAR_SIZE * 3) / 2.0, btn_top + MARKER_SIZE + 2)
+	star_row.position = Vector2((MARKER_W - STAR_SIZE * 3) / 2.0, btn_top + MARKER_H + 2)
 	star_row.custom_minimum_size = Vector2(STAR_SIZE * 3, STAR_SIZE)
 	star_row.add_theme_constant_override("separation", 0)
 	star_row.alignment = BoxContainer.ALIGNMENT_CENTER
 	star_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	marker.add_child(star_row)
-	
+
+	var star_on_tex: Texture2D = load(TEX_STAR_ON)
+	var star_off_tex: Texture2D = load(TEX_STAR_OFF)
 	for star_i in range(DIFFICULTIES.size()):
-		var star := Label.new()
-		star.text = "★"
-		star.add_theme_font_size_override("font_size", int(STAR_SIZE))
-		star.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		star.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		var star := TextureRect.new()
+		star.texture = star_on_tex if star_i < star_count else star_off_tex
+		star.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		star.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		star.custom_minimum_size = Vector2(STAR_SIZE, STAR_SIZE)
-		if star_i < star_count:
-			star.add_theme_color_override("font_color", Color(1.0, 0.85, 0.2, 1.0))
-		else:
-			star.add_theme_color_override("font_color", Color(0.5, 0.45, 0.35, 0.5))
+		star.size = Vector2(STAR_SIZE, STAR_SIZE)
 		star.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		star_row.add_child(star)
-	
+
 	return marker
 
-## 设置关卡按钮样式
-func _setup_marker_button_style(btn: Button, is_unlocked: bool, is_perfect: bool, is_boss: bool = false) -> void:
-	var bg_normal: Color
-	var bg_hover: Color
-	var border_color: Color
-	var font_color: Color
-	
-	if not is_unlocked:
-		bg_normal = Color(0.25, 0.23, 0.20, 0.9)
-		bg_hover = bg_normal
-		border_color = Color(0.4, 0.38, 0.35, 0.8)
-		font_color = Color(0.55, 0.52, 0.48, 0.8)
-	elif is_boss:
-		bg_normal = Color(0.6, 0.2, 0.2, 1.0)
-		bg_hover = Color(0.78, 0.3, 0.28, 1.0)
-		border_color = BOSS_COLOR
-		font_color = Color(1.0, 0.92, 0.88, 1.0)
-	elif is_perfect:
-		bg_normal = Color(0.95, 0.82, 0.45, 1.0)
-		bg_hover = Color(1.0, 0.9, 0.55, 1.0)
-		border_color = Color(0.75, 0.55, 0.1, 1.0)
-		font_color = Color(0.35, 0.22, 0.08, 1.0)
-	else:
-		bg_normal = Color(0.88, 0.79, 0.62, 1.0)
-		bg_hover = Color(0.98, 0.89, 0.72, 1.0)
-		border_color = Color(0.55, 0.35, 0.2, 1.0)
-		font_color = Color(0.35, 0.22, 0.12, 1.0)
-	
-	var normal := _make_round_style(bg_normal, border_color)
-	var hover := _make_round_style(bg_hover, Color(border_color.r * 1.2, border_color.g * 1.2, border_color.b * 1.2, 1.0))
-	var pressed := _make_round_style(Color(bg_hover.r * 0.9, bg_hover.g * 0.9, bg_hover.b * 0.9, 1.0), border_color)
-	var disabled := _make_round_style(bg_normal, border_color)
-	
-	btn.add_theme_stylebox_override("normal", normal)
-	btn.add_theme_stylebox_override("hover", hover)
-	btn.add_theme_stylebox_override("pressed", pressed)
-	btn.add_theme_stylebox_override("disabled", disabled)
-	btn.add_theme_stylebox_override("focus", hover)
-	
-	btn.add_theme_font_size_override("font_size", 24)
-	btn.add_theme_color_override("font_color", font_color)
-	btn.add_theme_color_override("font_hover_color", font_color)
-	btn.add_theme_color_override("font_pressed_color", font_color)
-	btn.add_theme_color_override("font_disabled_color", font_color)
+## —— 开发者拖拽布局 ——
+func _on_marker_drag_start(level: int, marker: Control) -> void:
+	_drag_level = level
+	_drag_marker = marker
+	_drag_offset = marker.get_global_mouse_position() - marker.global_position
+	_drag_moved = false
+	print("[战役地图] 开始拖拽关卡 %d" % level)
 
-## 创建圆形样式盒
-func _make_round_style(bg: Color, border: Color) -> StyleBoxFlat:
-	var style := StyleBoxFlat.new()
-	style.bg_color = bg
-	style.border_color = border
-	style.set_border_width_all(3)
-	style.set_corner_radius_all(int(MARKER_RADIUS))
-	style.set_content_margin_all(0)
-	return style
+func _on_marker_drag_end(_level: int, _marker: Control) -> void:
+	## button_up 路径；全局松手兜底见 _input（两者幂等，_finish_drag 内去重）
+	_finish_drag()
+
+func _finish_drag() -> void:
+	if _drag_level < 0:
+		return
+	var level := _drag_level
+	var marker := _drag_marker
+	_drag_level = -1
+	_drag_marker = null
+	if _drag_moved and marker != null and is_instance_valid(marker):
+		## 保存语义 = 标记按钮中心点（与 _create_level_markers 的加载语义一致：
+		## 加载时把该值当 pos，容器左上角 = pos - (半宽, 半高)。存左上角会导致每次刷新整体漂移）
+		var center := marker.position + Vector2(MARKER_W / 2.0, MARKER_H / 2.0)
+		var btn: Control = marker.get_node_or_null("LevelButton")
+		if btn != null:
+			center = marker.position + btn.position + btn.size / 2.0
+		_saved_marker_pos[level] = center
+		_save_marker_layout()
+		print("[战役地图] 关卡 %d 位置已保存: %s" % [level, center])
+
+func _input(event: InputEvent) -> void:
+	if _drag_level < 0 or _drag_marker == null or not is_instance_valid(_drag_marker):
+		return
+	if event is InputEventMouseMotion:
+		var new_pos: Vector2 = _drag_marker.get_global_mouse_position() - _drag_offset
+		var max_x: float = map_area.size.x - _drag_marker.size.x
+		var max_y: float = map_area.size.y - _drag_marker.size.y
+		new_pos.x = clampf(new_pos.x, 8.0, max_x - 8.0)
+		new_pos.y = clampf(new_pos.y, 8.0, max_y - 8.0)
+		if new_pos.distance_to(_drag_marker.position) > 2.0:
+			_drag_moved = true
+		_drag_marker.position = new_pos
+		get_viewport().set_input_as_handled()
+	elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and not event.pressed:
+		## 全局兜底：左键松开必结束拖拽，不依赖 button_up 是否触发
+		_finish_drag()
+
+## 读取开发者保存的标记布局（无文件 = 使用 Curve2D 默认布局）
+func _load_marker_layout() -> void:
+	_saved_marker_pos.clear()
+	var cfg := ConfigFile.new()
+	if cfg.load(MARKER_LAYOUT_PATH) != OK:
+		return
+	for level in range(1, LEVEL_COUNT + 1):
+		if not cfg.has_section_key("markers", str(level)):
+			continue
+		var v: Variant = cfg.get_value("markers", str(level))
+		_saved_marker_pos[level] = Vector2(v)
+	if not _saved_marker_pos.is_empty():
+		print("[战役地图] 已加载保存的关卡布局（%d 项）" % _saved_marker_pos.size())
+
+func _save_marker_layout() -> void:
+	var cfg := ConfigFile.new()
+	for level: int in _saved_marker_pos:
+		cfg.set_value("markers", str(level), _saved_marker_pos[level])
+	if cfg.save(MARKER_LAYOUT_PATH) != OK:
+		push_error("CampaignMap: 关卡布局写入失败 %s" % MARKER_LAYOUT_PATH)
 
 ## 关卡按钮点击回调
 func _on_level_pressed(level: int) -> void:
+	if _drag_moved:
+		## 拖拽结束的松手不当作点击（button_up 先于 pressed 触发，此处能拦住）
+		_drag_moved = false
+		return
 	AudioManager.play_ui_click()
 	_show_difficulty_dialog(level)
 
@@ -482,24 +473,15 @@ func _show_difficulty_dialog(level: int) -> void:
 	if _difficulty_dialog != null and is_instance_valid(_difficulty_dialog):
 		_difficulty_dialog.queue_free()
 		_difficulty_dialog = null
-	
-	_difficulty_dialog = AcceptDialog.new()
+
+	_difficulty_dialog = Window.new()
 	_difficulty_dialog.title = ""  ## 标题栏已隐藏，标题改在框内以 Label 呈现
-	_difficulty_dialog.dialog_text = ""
-	_difficulty_dialog.ok_button_text = tr("CAMPAIGN_CANCEL")
+	_difficulty_dialog.unresizable = true
 	add_child(_difficulty_dialog)
-	## #7：难度选择框统一为退出提示框同款「兵种详情框」米色描边框
-	UIButtonHelper.setup_detail_frame_dialog(_difficulty_dialog)
-	## #5（2026-08-26）：框内「取消」按钮同步米色描边样式
-	UIButtonHelper.setup_detail_frame_button(_difficulty_dialog.get_ok_button())
-	
-	var vbox := VBoxContainer.new()
-	vbox.custom_minimum_size = Vector2(300, 0)
-	vbox.add_theme_constant_override("separation", 8)
-	_difficulty_dialog.add_child(vbox)
-	## 标题栏已隐藏，标题在框内呈现（与退出提示框一致）
-	vbox.add_child(UIButtonHelper.make_detail_frame_title(tr("CAMPAIGN_SELECT_DIFF") % level))
-	vbox.add_child(Control.new())
+	## 2026-10-04：难度选择弹窗美术化——羊皮纸九宫格底 + 雕花金边标题牌匾（与成就窗口同套美术）
+	## 2026-10-04（晚）：标题同款牌匾后高度 64→72（文案「第 X 关 · 选择难度」较长，牌匾要够宽）
+	var vbox := UIButtonHelper.setup_campaign_popup(_difficulty_dialog, tr("CAMPAIGN_SELECT_DIFF") % level, 72.0, 20)
+	_difficulty_dialog.close_requested.connect(_close_difficulty_dialog)
 
 	var unlocked_diff: int = CampaignProgress.get_unlocked_difficulty(level)
 
@@ -518,9 +500,13 @@ func _show_difficulty_dialog(level: int) -> void:
 		var btn_text: String = diff_name
 		if is_diff_completed:
 			btn_text += " ✓"
-		if not is_diff_unlocked:
-			btn_text = "锁 " + btn_text
 		btn.text = btn_text
+		if not is_diff_unlocked:
+			## 2026-10-04：锁定视觉改用挂锁贴图（替换原「锁 」文字前缀）
+			## icon_disabled_color 默认 50% 透明，会把挂锁洗白——覆盖为不透明（文字仍走置灰字色）
+			btn.icon = load(TEX_LOCK_BADGE)
+			btn.add_theme_constant_override("icon_max_width", 26)
+			btn.add_theme_color_override("icon_disabled_color", Color(1, 1, 1, 1))
 		btn.custom_minimum_size = Vector2(170, 40)
 		btn.disabled = not is_diff_unlocked
 		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -534,16 +520,13 @@ func _show_difficulty_dialog(level: int) -> void:
 		else:
 			diff_font = Color(0.45, 0.4, 0.35, 1.0)
 		UIButtonHelper.setup_detail_frame_button(btn, diff_font)
-		## #12：难度提示支持开发者模式自定义编辑，悬停显示 tooltip（Godot 4 无 tooltip_delay 属性，
-		## 延迟用引擎默认值，已删除 Godot 3 遗留的 tooltip_delay 赋值，避免运行时 Invalid assignment）
+		## #12：难度提示支持开发者模式自定义编辑，悬停显示 tooltip
 		btn.tooltip_text = _get_diff_tip(level, i)
 		if not is_diff_unlocked:
 			btn.tooltip_text = tr("CAMPAIGN_LOCKED_HINT")
 
-		## 难度区分已改为字色（见上方 setup_detail_frame_button），不再整体 modulate 染色
-
 		btn.pressed.connect(func():
-			## #需求20：难度按钮点击直接开战（原 #12 的开发者模式「编辑难度提示」弹框已删除）
+			## #需求20：难度按钮点击直接开战
 			_close_difficulty_dialog_and_start(i)
 		)
 		row.add_child(btn)
@@ -568,6 +551,16 @@ func _show_difficulty_dialog(level: int) -> void:
 		)
 		row.add_child(win_btn)
 
+	## 底部「取消」按钮（原 AcceptDialog ok 按钮改为框内自建，样式与内容按钮统一）
+	var btn_cancel := Button.new()
+	btn_cancel.text = tr("CAMPAIGN_CANCEL")
+	btn_cancel.custom_minimum_size = Vector2(150, 42)
+	btn_cancel.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	UIButtonHelper.setup_dialog_action_button(btn_cancel)
+	btn_cancel.pressed.connect(_close_difficulty_dialog)
+	vbox.add_child(btn_cancel)
+
+	_difficulty_dialog.size = Vector2i(360, 340)
 	_difficulty_dialog.popup_centered()
 
 ## 关闭难度选择对话框（不清空引用）
@@ -680,4 +673,3 @@ func _on_roguelike_continue_requested() -> void:
 ## 刷新关卡标记（通关后调用）
 func refresh_levels() -> void:
 	_create_level_markers()
-	map_area.queue_redraw()

@@ -3,8 +3,8 @@
 [ext_resource type="Script" path="res://scenes/ui/achievements_window.gd" id="1_aw"]
 
 [node name="AchievementsWindow" type="Window"]
-title = "成就"
-size = Vector2i(460, 540)
+title = ""
+size = Vector2i(520, 640)
 script = ExtResource("1_aw")
 
 [node name="VBox" type="VBoxContainer" parent="."]

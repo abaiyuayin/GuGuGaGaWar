@@ -28,6 +28,11 @@ var _title_holder: Control = null
 ## 换主字体后需按同法重测：渲染「你赢了！」后量墨迹左右边距。
 const FULLWIDTH_BANG: String = "！"
 const TITLE_INK_SHIFT_RATIO: float = 0.2292
+## 标题字号（2026-09-30 用户拍板）：与肉鸽结算界面（RoguelikeVictoryScreen / RoguelikeDefeatScreen）
+## 的「通关胜利！/本局失败」同款 40 号，两个结算界面标题风格统一
+const TITLE_FONT_SIZE: int = 40
+## 标题外壳高度：按 40 号字留一点上下余量，避免容器把标题压扁
+const TITLE_HOLDER_H: float = 48.0
 
 func _ready() -> void:
 	## 设置为始终处理，确保暂停状态下按钮仍可响应
@@ -73,10 +78,13 @@ func _setup_parchment_frame() -> void:
 	## 只有非容器父级才能靠 anchors + offset 做墨迹居中补偿（_apply_title_ink_centering）。
 	_title_holder = Control.new()
 	_title_holder.name = "TitleHolder"
-	_title_holder.custom_minimum_size = Vector2(0, 96)
+	_title_holder.custom_minimum_size = Vector2(0, TITLE_HOLDER_H)
 	_title_holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	result_label.reparent(_title_holder)
-	result_label.set_anchors_preset(Control.PRESET_FULL_RECT)
+	## ⚠️ 必须用 set_anchors_and_offsets_preset：单用 set_anchors_preset 只改锚点、不改 offset，
+	## .tscn 里 ResultLabel 的 offset_top = 120 / offset_bottom = 340 会被原样带进新父级，
+	## 标题被顶到羊皮纸面板下沿之外（实测两张结算截图的墨迹都落在面板外、面板内空着）。
+	result_label.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	result_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	result_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	vbox.add_child(_title_holder)
@@ -151,7 +159,7 @@ func set_winner(winner_team: int, stats: Dictionary = {}) -> void:
 	if winner_team == 0:
 		## 显示胜利文本
 		result_label.text = tr("YOU_WIN")
-		result_label.add_theme_font_size_override("font_size", 72)
+		result_label.add_theme_font_size_override("font_size", TITLE_FONT_SIZE)
 		## 羊皮卷纸风格标题色（深红棕）
 		result_label.add_theme_color_override("font_color", Color(0.45, 0.12, 0.08))
 		## 战役模式下标记当前关卡的当前难度为已完成（解锁下一难度/下一关）
@@ -166,9 +174,9 @@ func set_winner(winner_team: int, stats: Dictionary = {}) -> void:
 	else:
 		## 蓝方（AI）获胜，显示失败文本
 		result_label.text = tr("YOU_LOSE")
-		## #18：失败文本保持大字号；标题色与羊皮卷纸风格统一
+		## #18 / 2026-09-30：胜负标题统一为同一字号与同一羊皮卷纸标题色
 		result_label.add_theme_color_override("font_color", Color(0.45, 0.12, 0.08))
-		result_label.add_theme_font_size_override("font_size", 72)
+		result_label.add_theme_font_size_override("font_size", TITLE_FONT_SIZE)
 
 	## 文本与字号都定下来之后再补偿墨迹居中（见 _apply_title_ink_centering）
 	_apply_title_ink_centering()

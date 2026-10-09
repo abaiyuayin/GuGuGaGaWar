@@ -30,20 +30,31 @@ func _ready() -> void:
 	_add_detail_background()
 	## #24：窗口外观统一为「兵种详情框」同款米色描边风格（去掉系统标题栏/黑框）
 	UIButtonHelper.setup_detail_frame_dialog(self)
+	## 2026-10-04：美术化——窗口 panel 清空，视觉改由羊皮纸九宫格底图承担（与成就窗口同套）
+	add_theme_stylebox_override("panel", StyleBoxEmpty.new())
 	## #25-fix：嵌入式 Window 的 panel.content_margin 对子节点布局不生效，
 	## 必须改用 vbox 的 margin_* 主题常量把内容整体往里推 20px，文本才不贴边。
 	vbox.add_theme_constant_override("margin_left", 20)
 	vbox.add_theme_constant_override("margin_right", 20)
-	vbox.add_theme_constant_override("margin_top", 20)
+	vbox.add_theme_constant_override("margin_top", 12)
 	vbox.add_theme_constant_override("margin_bottom", 20)
-	## 框内标题（原生标题栏已隐藏）
-	var title_lbl := UIButtonHelper.make_detail_frame_title("兵种解锁")
-	vbox.add_child(title_lbl)
-	vbox.move_child(title_lbl, 0)
+	## 框内标题（原生标题栏已隐藏）：「按钮1」金边横幅 + 标题 Label 居中叠加（与成就窗口同款）
+	## 2026-10-04（晚）：用户指定标题头改用主菜单按钮同款金边素材；72px 近似素段子高
+	var banner := UIButtonHelper.make_button_banner_title("兵种解锁", 72.0, 20)
+	## 2026-10-04（晚·用户要求）：标题整体下移 6px（VBox 里插 6px 空档）
+	var top_gap := Control.new()
+	top_gap.name = "TitleTopGap"
+	top_gap.custom_minimum_size = Vector2(0, 6)
+	top_gap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	vbox.add_child(top_gap)
+	vbox.move_child(top_gap, 0)
+	vbox.add_child(banner)
+	vbox.move_child(banner, 1)
 	## #12（2026-08-11）：关闭按钮放大至 180×56、字号同步放大，与设置/确认弹窗一致
 	close_button.custom_minimum_size = Vector2(180, 56)
 	close_button.add_theme_font_size_override("font_size", 28)
-	UIButtonHelper.setup_button(close_button)
+	## 2026-10-04：关闭按钮换羊皮纸描边风（原深色按钮与新底图不搭）
+	UIButtonHelper.setup_detail_frame_button(close_button)
 	close_button.pressed.connect(_on_close_pressed)
 	close_requested.connect(_on_close_pressed)
 
@@ -98,7 +109,7 @@ func _create_star_row(res: UnitResource, unit_id: String, need: int) -> HBoxCont
 	var state_btn := Button.new()
 	state_btn.custom_minimum_size = Vector2(90, 32)
 	state_btn.disabled = true
-	UIButtonHelper.setup_button(state_btn)
+	UIButtonHelper.setup_detail_frame_button(state_btn)
 	## #12（2026-08-11）：星星按钮未解锁时可点击，点击弹屏幕上方纯文本提示（不再纯展示）
 	state_btn.pressed.connect(_on_star_pressed.bind(unit_id))
 	_star_buttons[unit_id] = state_btn
@@ -126,7 +137,7 @@ func _create_row(res: UnitResource, unit_id: String, cost: int) -> HBoxContainer
 
 	var buy_btn := Button.new()
 	buy_btn.custom_minimum_size = Vector2(90, 32)
-	UIButtonHelper.setup_button(buy_btn)
+	UIButtonHelper.setup_detail_frame_button(buy_btn)
 	_buy_buttons[unit_id] = buy_btn
 	if not CampaignProgress.is_unit_unlocked(unit_id):
 		buy_btn.pressed.connect(_on_buy_pressed.bind(unit_id))
@@ -223,19 +234,18 @@ func _refresh_buttons() -> void:
 func _on_close_pressed() -> void:
 	queue_free()
 
-## #24：在窗口最底层铺一张与兵种详情框同款的米色描边背景
-## 嵌入窗口（战役地图内打开的 Window）主题渲染与 AcceptDialog 不同，仅靠 setup_detail_frame_dialog
-## 的 panel 覆盖会出现白底；显式铺一层 Panel 最稳妥，保证米色底稳定可见。
+## #24：在窗口最底层铺羊皮纸九宫格底图（2026-10-04 美术化：与成就窗口同套战役美术，
+## 藤蔓羊皮纸 + 淡彩山水淡纹；边框区 34px 源图，撕边外透出战役地图 + 暗色遮罩）
 func _add_detail_background() -> void:
 	var bg := Panel.new()
 	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
 	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var st := StyleBoxFlat.new()
-	st.bg_color = Color(0.93, 0.86, 0.70, 1.0)
-	st.border_color = Color(0.35, 0.25, 0.13, 1.0)
-	st.set_border_width_all(3)
-	st.set_corner_radius_all(8)
-	st.set_content_margin_all(14)
+	var st := StyleBoxTexture.new()
+	st.texture = load("res://assets/ui/campaign/popup_bg.png")
+	st.texture_margin_left = 34.0
+	st.texture_margin_top = 34.0
+	st.texture_margin_right = 34.0
+	st.texture_margin_bottom = 34.0
 	bg.add_theme_stylebox_override("panel", st)
 	add_child(bg)
 	move_child(bg, 0)

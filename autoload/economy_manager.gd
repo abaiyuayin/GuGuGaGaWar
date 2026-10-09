@@ -11,6 +11,11 @@ signal gold_changed(player_id: int, current_gold: int, income: int)
 ## player_id: 结算的玩家 ID
 ## gold_gained: 本回合获得的金币数（即收入）
 signal round_settled(player_id: int, gold_gained: int)
+## 信号：击杀赏金发放完成时发出（2026-10-03 击杀得金币机制）
+## 与 gold_changed 分离，供 HUD 只在「击杀得钱」时飘字，避免购买/回合结算也触发飘字
+## player_id: 收钱的玩家 ID（0=红方, 1=蓝方）
+## amount: 本次击杀赏金数额
+signal kill_reward_gained(player_id: int, amount: int)
 
 ## 每个玩家的经济数据数组，索引 0=红方，索引 1=蓝方
 ## 每个元素是一个字典，包含 "gold"（当前金币）和 "income"（每回合收入）
@@ -44,6 +49,11 @@ const ROUND_INCOME_INCREMENT: int = 10
 const INCOME_CAP: int = 400
 ## 收入升级加成封顶：升级累计加成最多 +500（#13 用户拍板：基础上限 400，升级最多增加 500）
 const INCOME_BONUS_CAP: int = 500
+
+## 击杀赏金（2026-10-03 用户拍板）：标准模式（战役 / 全面战争 / 双人）中，
+## 每击杀一个敌方单位，击杀方获得 10 金币。敌我双方同等生效。
+## 不计入每回合收入上限（INCOME_CAP 只钳制随回合增长的基础收入），金币总额本身不封顶。
+const KILL_GOLD_REWARD: int = 10
 
 ## 回合倒计时基准时长（秒）（#12）
 const ROUND_TIME_BASE: float = 10.0
@@ -164,6 +174,15 @@ func add_gold(player_id: int, amount: int) -> void:
 	player_data[player_id]["gold"] = maxi(player_data[player_id]["gold"] + amount, 0)
 	## 发出金币变化信号，通知 UI 更新显示（#8：统一用 get_income，含升级加成）
 	gold_changed.emit(player_id, player_data[player_id]["gold"], get_income(player_id))
+
+## 发放击杀赏金（2026-10-03）：标准模式每击杀一个敌方单位给 10 金币。
+## 调用方（battle_root._on_unit_died）负责判定「是否为有效击杀」，本方法只做发放与广播。
+## player_id: 获得赏金的玩家 ID（0=红方, 1=蓝方）
+func award_kill_gold(player_id: int) -> void:
+	## 无限金币（开发模式）下仍照常累加，只是不扣钱，保持数值行为一致
+	add_gold(player_id, KILL_GOLD_REWARD)
+	## 单独发信号：HUD 只据此飘字，购买/回合结算的 gold_changed 不会触发击杀飘字
+	kill_reward_gained.emit(player_id, KILL_GOLD_REWARD)
 
 ## 回合结算方法
 ## 将当前收入累加到金币中，进入下一回合前的结算步骤

@@ -23,17 +23,19 @@ attack_range_v = 0.6
 attack_speed = 3.0
 attack_hit_types = Array[int]([3])
 damage_by_hit = [{
-0: 80,
-3: 40
+0: 70,
+3: 30
 }]
 attack_hit_frame_start = 10
 attack_sound_frame = 10
 move_display_height = 54.0
 move_display_width = 54.0
-walk_display_height = 54.0
-walk_display_width = 54.0
+walk_display_height = 53.0
+walk_display_width = 53.0
 attack_display_height = 90.0
 attack_display_width = 90.0
+idle_display_height = 51.9
+idle_display_width = 55.1
 color_red = Color(0.9, 0.5, 0.7, 1)
 color_blue = Color(0.7, 0.5, 0.9, 1)
 aoe_radius = 20.0

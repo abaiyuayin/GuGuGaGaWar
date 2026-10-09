@@ -44,6 +44,9 @@ var _click_supremacy_until: float = 0.0
 const CLICK_SUPREMACY_WINDOW: float = 0.2
 ## UI 点击音效（程序化生成，带缓存）
 var _click_stream: AudioStreamWAV = null
+## 经济面板升级成功 / 失败提示音（程序化生成，带缓存）
+var _upgrade_success_stream: AudioStreamWAV = null
+var _upgrade_fail_stream: AudioStreamWAV = null
 ## 兵种点击音效缓存（unit_id -> AudioStream）
 var _unit_click_sound_cache: Dictionary = {}
 ## 兵种出兵音效缓存（unit_id -> AudioStream）
@@ -150,6 +153,59 @@ func _create_click_stream() -> AudioStreamWAV:
 		var sample := sin(t * freq * TAU) * env * 0.45
 		var s := int(clamp(sample, -1.0, 1.0) * 32767)
 		data.encode_s16(i * 2, s)  ## little-endian 16-bit
+	var stream := AudioStreamWAV.new()
+	stream.format = AudioStreamWAV.FORMAT_16_BITS
+	stream.mix_rate = sample_rate
+	stream.stereo = false
+	stream.data = data
+	return stream
+
+## 播放「升级成功」提示音（经济面板人口 / 收入升级成功时调用）
+## 与 play_ui_click 同源：程序化生成、无需外部音频文件
+func play_upgrade_success() -> void:
+	if _upgrade_success_stream == null:
+		_upgrade_success_stream = _build_tone_stream(
+				PackedFloat32Array([880.0, 1318.5]), PackedFloat32Array([0.07, 0.15]), false)
+	_play_generated_sfx(_upgrade_success_stream)
+
+## 播放「升级失败」提示音（金币不足或已满级时调用）
+func play_upgrade_fail() -> void:
+	if _upgrade_fail_stream == null:
+		_upgrade_fail_stream = _build_tone_stream(
+				PackedFloat32Array([300.0, 190.0]), PackedFloat32Array([0.09, 0.16]), true)
+	_play_generated_sfx(_upgrade_fail_stream)
+
+## 播放程序化生成的短音效：走 SFX 对象池，不受点击 / 出兵节流影响
+func _play_generated_sfx(stream: AudioStreamWAV) -> void:
+	var player: AudioStreamPlayer = _get_pooled_player()
+	player.stream = stream
+	player.bus = "SFX" if AudioServer.get_bus_index("SFX") >= 0 else "Master"
+	## 池中播放器可能被攻击音效改过音量，这里复位到满音量（总线音量仍由 SFX 总线统一控制）
+	player.volume_db = 0.0
+	player.play()
+
+## 生成由若干「频率 + 时长」片段串联而成的短音效（16bit 单声道）
+## freqs / durations 一一对应；buzzy=true 用方波做低沉嗡鸣（失败感），false 用正弦做清亮音阶（成功感）
+func _build_tone_stream(freqs: PackedFloat32Array, durations: PackedFloat32Array, buzzy: bool) -> AudioStreamWAV:
+	var sample_rate := 44100
+	## 每个片段的起音爬坡样本数（4ms），避免片段首尾突变产生「咔哒」爆音
+	var attack_samples: int = maxi(1, int(sample_rate * 0.004))
+	var data := PackedByteArray()
+	for i in range(freqs.size()):
+		var num_samples: int = int(sample_rate * durations[i])
+		var base: int = data.size()
+		data.resize(base + num_samples * 2)
+		for j in range(num_samples):
+			var t := float(j) / float(sample_rate)
+			var wave := sin(t * freqs[i] * TAU)
+			if buzzy:
+				wave = 1.0 if wave >= 0.0 else -1.0
+			var env := 1.0 - float(j) / float(num_samples)
+			env = env * env
+			if j < attack_samples:
+				env *= float(j) / float(attack_samples)
+			var amp: float = 0.30 if buzzy else 0.38
+			data.encode_s16(base + j * 2, int(clampf(wave * env * amp, -1.0, 1.0) * 32767))
 	var stream := AudioStreamWAV.new()
 	stream.format = AudioStreamWAV.FORMAT_16_BITS
 	stream.mix_rate = sample_rate

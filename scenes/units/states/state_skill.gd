@@ -344,7 +344,9 @@ func _begin_dash() -> void:
 	var dir: float = 1.0 if unit.facing_dir >= 0 else -1.0
 	_dash_from = unit.global_position
 	## 位移终点按战场 X 边界钳制，避免冲出场地
-	_dash_to = Vector2(clampf(_dash_from.x + dir * dash, Constants.FIELD_X_MIN, Constants.FIELD_X_MAX),
+	var x_min: float = Constants.ARENA_BOUNDS.position.x if GameManager.is_battlefield_mode else Constants.FIELD_X_MIN
+	var x_max: float = Constants.ARENA_BOUNDS.end.x if GameManager.is_battlefield_mode else Constants.FIELD_X_MAX
+	_dash_to = Vector2(clampf(_dash_from.x + dir * dash, x_min, x_max),
 			_dash_from.y)
 	_dash_duration = float(_hold_effect.get("dash_time", 0.0))
 	_hold_phase = HoldPhase.HOLD_DASH

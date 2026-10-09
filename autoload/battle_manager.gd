@@ -82,9 +82,16 @@ const POOL_MAX_SIZE: int = 256
 ## 每个兵种预热的实例数量（用户拍板：每种 3 个）
 const PREWARM_PER_UNIT: int = 3
 ## 预热让帧粒度：每创建这么多实例后让出一帧。
-## 实例本身仍严格逐个创建+入池（不并发），此值仅控制让帧频率：
-## 每个都让帧会导致 81 实例耗时 3.4s，按 3 个一让可压到 ~0.5s 且仍不卡顿。
-const PREWARM_YIELD_EVERY: int = 3
+## 实例本身仍严格逐个创建+入池（不并发），此值仅控制让帧频率
+## （实例化实测极快：81 个约 9ms，让帧只为避免单帧内批量创建）。
+## 2026-10-04 由 3 调到 8：动画加载已改后台异步，频繁让帧变成净耗时。
+const PREWARM_YIELD_EVERY: int = 8
+## 异步预热动画的等待上限（ms）：超出后按已完成部分继续，
+## 避免个别请求异常导致加载框无限等待
+const PREWARM_ANIM_TIMEOUT_MS: int = 20000
+## 异步预热「发起请求」阶段的分帧粒度：每发起这么多个兵种的请求后让出一帧
+## （单兵种约 7 次 exists + load_threaded_request，24 兵种一次性发起会冻结单帧约 400ms）
+const PREWARM_QUEUE_BATCH: int = 4
 ## 预热是否已完成（供 UI/调试查询）
 var is_pool_prewarmed: bool = false
 ## 远程火力均衡分配节流（2026-08-18）：与单位索敌节流同步 0.1s，避免每帧 O(R×E) 距离计算
@@ -217,6 +224,14 @@ func reset() -> void:
 	_s1_triggered = false  ## 蓝女巫事件按局清空
 	_special_event_chance = FREE_EVENT_BASE_CHANCE
 	_anomaly_event_chance = FREE_EVENT_BASE_CHANCE
+	if GameManager.is_battlefield_mode:
+		## 清理上一场挂在根节点的事件提示和追踪器，禁止带入竞技场。
+		for node in get_tree().root.get_children():
+			if node.name == "_EventTextLayer" or str(node.name).begins_with("_anomaly_tracker_") \
+					or str(node.name).begins_with("_penguin_tracker_"):
+				if node is Timer:
+					node.stop()
+				node.queue_free()
 
 ## 切换标准模式随机出兵；关闭时恢复开启前双方选择。
 func set_dev_random_spawn_enabled(value: bool) -> void:
@@ -295,6 +310,8 @@ func execute_round() -> void:
 
 ## 凑企鹅事件：敌方刷一只凑企鹅（Y2），并开启「存活期间按特殊事件衰减概率召 S1 蓝女巫入我方」追踪
 func _try_spawn_penguin_event() -> void:
+	if GameManager.is_battlefield_mode:
+		return
 	var res: Resource = UnitDatabase.get_unit("Y2")
 	if res == null:
 		return
@@ -310,6 +327,8 @@ func _try_spawn_penguin_event() -> void:
 ## 凑企鹅存活追踪器：每秒按特殊事件衰减概率召 S1 蓝女巫（特殊阵营）加入我方红方
 ## 场上无存活凑企鹅（Y2）时自动销毁
 func _start_penguin_tracker() -> void:
+	if GameManager.is_battlefield_mode:
+		return
 	var tracker := Timer.new()
 	tracker.wait_time = 1.0
 	tracker.one_shot = false
@@ -319,6 +338,9 @@ func _start_penguin_tracker() -> void:
 		return
 	root.add_child(tracker)
 	tracker.timeout.connect(func() -> void:
+		if GameManager.is_battlefield_mode:
+			tracker.queue_free()
+			return
 		## 场上是否仍有存活凑企鹅（Y2）
 		var alive: bool = false
 		for u in enemy_units:
@@ -376,6 +398,8 @@ func _get_event_text_layer() -> CanvasLayer:
 	return layer
 
 func _show_anomaly_texts(unit_id: String, unit_res: Resource) -> void:
+	if GameManager.is_battlefield_mode:
+		return
 	var texts: Array[String] = ["异象入侵！！！"]
 	var layer: CanvasLayer = _get_event_text_layer()
 	if layer == null:
@@ -421,11 +445,16 @@ func _show_anomaly_texts(unit_id: String, unit_res: Resource) -> void:
 	## 延迟（3+1+1+0.5）后实际生成异象敌兵
 	## 修复（2026-08-11）：原写 `root.get_tree()`，但本函数无 root 局部变量（root 只在
 	## _get_event_text_layer 内部），编译报 Identifier "root" not declared → 改用自身 get_tree()
+	var event_scene: Node = get_tree().current_scene
 	await get_tree().create_timer(delay + 0.5).timeout
+	if not is_instance_valid(event_scene) or event_scene != get_tree().current_scene:
+		return
 	_spawn_anomaly_unit(unit_id, unit_res)
 
 ## 生成异象敌兵并开启特殊事件定时检测
 func _spawn_anomaly_unit(unit_id: String, unit_res: Resource) -> void:
+	if GameManager.is_battlefield_mode:
+		return
 	spawn_unit(unit_res, 1)  ## 敌方（蓝方，team 1）
 	## #4：镜头自动聚焦刚生成的异象敌兵
 	event_unit_focus_requested.emit(enemy_units.back())
@@ -445,6 +474,9 @@ func _spawn_anomaly_unit(unit_id: String, unit_res: Resource) -> void:
 	
 	## 仅当死亡使者（Y1）仍存活时，蓝女巫（S1）才有概率降临（联动）
 	anomaly_tracker.timeout.connect(func() -> void:
+		if GameManager.is_battlefield_mode:
+			anomaly_tracker.queue_free()
+			return
 		var y1_alive: bool = false
 		for u in enemy_units:
 			if is_instance_valid(u) and not u.is_dead and u.unit_resource != null and u.unit_resource.unit_id == "Y1":
@@ -474,6 +506,8 @@ func _spawn_anomaly_unit(unit_id: String, unit_res: Resource) -> void:
 ## 开发工具：触发蓝色女巫事件（#自由事件 2026-08-15）
 ## 专召 S1 蓝女巫加入我方（红方）+ 金色大字 + 成就
 func dev_trigger_blue_witch_event() -> void:
+	if GameManager.is_battlefield_mode:
+		return
 	var res: Resource = UnitDatabase.get_unit("S1")
 	if res == null:
 		push_warning("DevTool: 蓝女巫（S1）资源缺失。")
@@ -490,6 +524,8 @@ func dev_trigger_blue_witch_event() -> void:
 ## 用户拍板：手动触发 = 战役/全面战争红方召唤一只；双人模式红蓝双方各召唤一只。
 ## 不设置任何 G1 变身状态——G1 变身仅由部署时的特殊事件随机觉醒（dev_set_hamster_100pct 强制必中）触发。
 func dev_trigger_hamster_event() -> void:
+	if GameManager.is_battlefield_mode:
+		return
 	var s2: Resource = UnitDatabase.get_unit("S2")
 	if s2 == null:
 		push_warning("DevTool: 仓鼠士兵（S2）资源缺失。")
@@ -505,12 +541,16 @@ func dev_trigger_hamster_event() -> void:
 ## 开发工具：将仓鼠士兵触发概率改为百分百（#自由事件 2026-08-15 / #18-7 合一）
 ## 开启 _g1_hamster_force 后，每次部署 G1 掷点必中 → 每次部署都变仓鼠（100% 概率）
 func dev_set_hamster_100pct() -> void:
+	if GameManager.is_battlefield_mode:
+		return
 	_g1_hamster_force = true
 	print("[仓鼠士兵事件] 触发概率已改为百分百（每次部署 G1 必变仓鼠士兵）")
 
 ## 开发工具：触发死亡使者异象（#自由事件 2026-08-15）
 ## 专召 Y1 死亡使者加入敌方（蓝方）+ 异象文本 + 成就 + 存活追踪（按特殊事件衰减概率召 S1）
 func dev_trigger_death_reaper_event() -> void:
+	if GameManager.is_battlefield_mode:
+		return
 	var res: Resource = UnitDatabase.get_unit("Y1")
 	if res == null:
 		push_warning("DevTool: 死亡使者（Y1）资源缺失。")
@@ -522,6 +562,8 @@ func dev_trigger_death_reaper_event() -> void:
 ## 开发工具：触发凑企鹅异象（#自由事件 2026-08-15）
 ## 专召 Y2 凑企鹅加入敌方（蓝方）+ 存活追踪（每秒按特殊事件衰减概率召 S1 蓝女巫）
 func dev_trigger_penguin_event() -> void:
+	if GameManager.is_battlefield_mode:
+		return
 	var res: Resource = UnitDatabase.get_unit("Y2")
 	if res == null:
 		push_warning("DevTool: 凑企鹅（Y2）资源缺失。")
@@ -547,12 +589,16 @@ func _check_ally_special_events() -> void:
 		_try_spawn_ally_event("S9", "moe")
 
 func _roll_special_event() -> bool:
+	if GameManager.is_battlefield_mode:
+		return false
 	if randf() >= _special_event_chance:
 		return false
 	_special_event_chance *= 0.5
 	return true
 
 func _roll_anomaly_event() -> bool:
+	if GameManager.is_battlefield_mode:
+		return false
 	if randf() >= _anomaly_event_chance:
 		return false
 	_anomaly_event_chance *= 0.5
@@ -561,6 +607,8 @@ func _roll_anomaly_event() -> bool:
 ## 生成一只特殊/异象事件单位，并可解锁配套「首次出现」成就
 ## player_id：0=红方友军，1=蓝方敌军
 func _try_spawn_ally_event(unit_id: String, ach_id: String, player_id: int = 0) -> void:
+	if GameManager.is_battlefield_mode:
+		return
 	var res: Resource = UnitDatabase.get_unit(unit_id)
 	if res == null:
 		return
@@ -583,6 +631,8 @@ func _try_spawn_ally_event(unit_id: String, ach_id: String, player_id: int = 0) 
 
 ## 开发工具：触发香蕉猫事件（专召 Y3 加入敌方蓝方 + 成就）
 func dev_trigger_banana_cat_event() -> void:
+	if GameManager.is_battlefield_mode:
+		return
 	if UnitDatabase.get_unit("Y3") == null:
 		push_warning("DevTool: 香蕉猫（Y3）资源缺失。")
 		return
@@ -591,6 +641,8 @@ func dev_trigger_banana_cat_event() -> void:
 
 ## 开发工具：触发我的刀盾事件（专召 Y4 加入敌方蓝方 + 成就）
 func dev_trigger_sword_shield_event() -> void:
+	if GameManager.is_battlefield_mode:
+		return
 	if UnitDatabase.get_unit("Y4") == null:
 		push_warning("DevTool: 我的刀盾（Y4）资源缺失。")
 		return
@@ -599,6 +651,8 @@ func dev_trigger_sword_shield_event() -> void:
 
 ## 开发工具：触发咕嘎工钢事件（专召 S5 加入红方）
 func dev_trigger_tank_event() -> void:
+	if GameManager.is_battlefield_mode:
+		return
 	if UnitDatabase.get_unit("S5") == null:
 		push_warning("DevTool: 咕嘎工钢（S5）资源缺失。")
 		return
@@ -607,6 +661,8 @@ func dev_trigger_tank_event() -> void:
 
 ## 开发工具：触发动力菲比事件（专召 S4 加入红方 + 成就）
 func dev_trigger_power_fei_event() -> void:
+	if GameManager.is_battlefield_mode:
+		return
 	if UnitDatabase.get_unit("S4") == null:
 		push_warning("DevTool: 动力菲比（S4）资源缺失。")
 		return
@@ -615,6 +671,8 @@ func dev_trigger_power_fei_event() -> void:
 
 ## 开发工具：触发大肥鱼事件（专召 S7 加入红方友军）
 func dev_trigger_big_fish_event() -> void:
+	if GameManager.is_battlefield_mode:
+		return
 	if UnitDatabase.get_unit("S7") == null:
 		push_warning("DevTool: 大肥鱼（S7）资源缺失。")
 		return
@@ -623,6 +681,8 @@ func dev_trigger_big_fish_event() -> void:
 
 ## 开发工具：触发丽贝卡事件（专召 S8 加入红方友军）
 func dev_trigger_rebecca_event() -> void:
+	if GameManager.is_battlefield_mode:
+		return
 	if UnitDatabase.get_unit("S8") == null:
 		push_warning("DevTool: 丽贝卡（S8）资源缺失。")
 		return
@@ -631,6 +691,8 @@ func dev_trigger_rebecca_event() -> void:
 
 ## 开发工具：触发萌黄事件（专召 S9 加入红方友军）—— 2026-09-19 从直播版搬入
 func dev_trigger_moe_event() -> void:
+	if GameManager.is_battlefield_mode:
+		return
 	if UnitDatabase.get_unit("S9") == null:
 		push_warning("DevTool: 萌黄（S9）资源缺失。")
 		return
@@ -640,6 +702,8 @@ func dev_trigger_moe_event() -> void:
 ## 异象事件提示：屏幕中央红色大字「异象入侵！！！」（#1 2026-08-26）
 ## 与 _show_anomaly_texts 的大字规格一致，但只播提示、不负责生成单位（调用方已自行生成）。
 func _show_anomaly_event_text() -> void:
+	if GameManager.is_battlefield_mode:
+		return
 	var layer: CanvasLayer = _get_event_text_layer()
 	if layer == null:
 		return
@@ -669,6 +733,8 @@ func _show_anomaly_event_text() -> void:
 ## 规格：固定居中、5 秒后自动消失、渐入渐出、不缩放不位移。
 ## #3（2026-08-11）：同异象文本，改挂专用 CanvasLayer(10)，避免被 Camera2D 画布变换带离屏幕。
 func _show_special_event_text(unit_id: String) -> void:
+	if GameManager.is_battlefield_mode:
+		return
 	var layer: CanvasLayer = _get_event_text_layer()
 	if layer == null:
 		return
@@ -787,6 +853,8 @@ func _maybe_trigger_power_fei_event(unit_res: Resource, player_id: int) -> void:
 ## 范围：战役/全面战争仅我方（player_id=0）有效；双人模式双方（player_id 0/1）都有效；肉鸽不触发。
 ## 返回值: 替换后的兵种资源（未触发时原样返回）
 func _maybe_apply_hamster_replacement(unit_res: Resource, player_id: int) -> Resource:
+	if GameManager.is_battlefield_mode:
+		return unit_res
 	if unit_res == null or unit_res.unit_id != "G1":
 		return unit_res
 	if not _hamster_autotrigger_enabled:  ## 2026-08-21 暂时隐藏自动觉醒触发
@@ -951,11 +1019,14 @@ func collect_prewarm_units() -> Array:
 	)
 	return result
 
-## 预热对象池（2026-08-19 改造，用户拍板）
-## 进入局内前调用：按 collect_prewarm_units() 的价格升序，从最便宜的兵种开始，
-## 逐个（串行）向池中添加实例 —— 增加完上一个才添加下一个，绝不并发批量创建。
-## 每个兵种预热 PREWARM_PER_UNIT 个空壳实例，并预加载该兵种的动画缓存。
-## on_step: 可选回调，每完成一个实例调用一次，参数 (已完成数, 总数)，供加载框刷新进度
+## 预热对象池（2026-08-19 改造，用户拍板；2026-10-04 改为异步）
+## 进入局内前调用：按 collect_prewarm_units() 的价格升序，从最便宜的兵种开始预热。
+## 分三阶段：① 分批发起各兵种动画 .tres 的异步加载请求（后台线程并行，主线程不阻塞）；
+##           ② 逐兵种预热 move/attack 首帧内容包围盒（逐像素扫描，必须主线程，逐兵种让帧）；
+##           ③ 逐个创建空壳实例入池（严格串行，绝不并发批量创建）。
+## 每个兵种预热 PREWARM_PER_UNIT 个空壳实例。
+## on_step: 可选回调，参数 (已完成数, 总进度数) —— 三个阶段的计数已加权累加，
+##          回调值单调递增，供加载框进度条直接换算比例。
 func prewarm_unit_pool(on_step: Callable = Callable()) -> void:
 	## 幂等保护：已预热过则跳过，避免「结算→返回地图→下一关」等未经 MAIN_MENU
 	## 的路径重复预热导致池无限累积（clear_unit_pool 会重置该标志）
@@ -966,31 +1037,61 @@ func prewarm_unit_pool(on_step: Callable = Callable()) -> void:
 	if unit_scene == null:
 		unit_scene = load("res://scenes/units/unit_base.tscn")
 	var units: Array = collect_prewarm_units()
-	var total: int = units.size() * PREWARM_PER_UNIT
-	var done: int = 0
-	for res in units:
-		var unit_res := res as UnitResource
-		## 先预加载该兵种动画缓存（实测占预热总耗时 ~93%：69 个 .tres 约 2.5s，
-		## 而 instantiate 81 个空壳仅 9ms）。这部分开销原本分散在「每次首次出某兵种」
-		## 时造成局内卡顿，现集中到加载框内一次付清。
-		Unit.prewarm_sprite_frames(unit_res.unit_id, unit_res.attack_alt_frames)
-		## 每个兵种的动画加载完就让出一帧，保证加载框动画与进度条不冻结
+	var instance_total: int = units.size() * PREWARM_PER_UNIT
+	var anchor_total: int = units.size()
+	## ── 阶段一（2026-10-04 改造）：分批发起全部兵种动画的异步加载请求 ──
+	## 原实现逐个兵种同步 load（实测单兵种约 500ms，24 兵种累计约 12s），
+	## 期间主线程整段冻结 → 加载框的进度条与兵种动画一顿一顿地卡住。
+	## 现改为把全部请求交给后台线程并行加载，主线程只做每帧状态轮询（开销可忽略）。
+	## 实测 9 兵种 36 条请求：后台并行 538ms 全部就绪（同步版同批须 4651ms 阻塞）。
+	var pending: Array = []
+	for i in range(units.size()):
+		var queue_res := units[i] as UnitResource
+		pending.append_array(Unit.queue_prewarm_sprite_frames(queue_res.unit_id, queue_res.attack_alt_frames))
+		## 分帧发起：单兵种约 7 次 exists + request 合计 ~25ms，
+		## 24 兵种一次性发起会在单帧内冻结约 400ms，故每 PREWARM_QUEUE_BATCH 个兵种让出一帧
+		if (i + 1) % PREWARM_QUEUE_BATCH == 0:
+			await Engine.get_main_loop().process_frame
+	var anim_total: int = pending.size()
+	var anim_done: int = 0
+	var grand_total: int = maxi(1, anim_total + anchor_total + instance_total)
+	var anim_deadline_ms: int = Time.get_ticks_msec() + PREWARM_ANIM_TIMEOUT_MS
+	while not pending.is_empty():
 		await Engine.get_main_loop().process_frame
-		## 逐个添加实例：本个 append 完成后才进入下一次循环
-		for _i in range(PREWARM_PER_UNIT):
-			if _unit_pool.size() >= POOL_MAX_SIZE:
-				break
-			var unit = unit_scene.instantiate()
-			unit.visible = false
-			unit.set_physics_process(false)
-			unit.set_process(false)
-			_unit_pool.append(unit)
-			done += 1
-			if on_step.is_valid():
-				on_step.call(done, total)
-			## 串行让帧：每 PREWARM_YIELD_EVERY 个实例让出一帧，避免单帧内批量创建造成卡顿
-			if done % PREWARM_YIELD_EVERY == 0:
-				await Engine.get_main_loop().process_frame
+		var before: int = pending.size()
+		pending = Unit.collect_prewarm_results(pending)
+		anim_done += before - pending.size()
+		if on_step.is_valid():
+			on_step.call(anim_done, grand_total)
+		if Time.get_ticks_msec() > anim_deadline_ms:
+			pending.clear()
+			break
+	## ── 阶段二：预热 move/attack 首帧内容包围盒 ──
+	## 逐像素扫描必须主线程执行（约 80ms/兵种），故逐兵种让出一帧分摊，
+	## 这一阶段同样回报进度，避免进度条在扫描期间停住。
+	var anchor_done: int = 0
+	for res in units:
+		Unit.prewarm_anchor_textures((res as UnitResource).unit_id)
+		anchor_done += 1
+		if on_step.is_valid():
+			on_step.call(anim_total + anchor_done, grand_total)
+		await Engine.get_main_loop().process_frame
+	## ── 阶段三：逐个创建空壳实例入池（严格串行，不并发批量创建）──
+	var done: int = 0
+	for _i in range(instance_total):
+		if _unit_pool.size() >= POOL_MAX_SIZE:
+			break
+		var unit = unit_scene.instantiate()
+		unit.visible = false
+		unit.set_physics_process(false)
+		unit.set_process(false)
+		_unit_pool.append(unit)
+		done += 1
+		if on_step.is_valid():
+			on_step.call(anim_total + anchor_total + done, grand_total)
+		## 串行让帧：每 PREWARM_YIELD_EVERY 个实例让出一帧，避免单帧内批量创建造成卡顿
+		if done % PREWARM_YIELD_EVERY == 0:
+			await Engine.get_main_loop().process_frame
 	is_pool_prewarmed = true
 
 ## 开发工具：清空场上所有普通兵种（双方）

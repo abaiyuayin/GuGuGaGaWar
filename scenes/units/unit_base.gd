@@ -422,6 +422,8 @@ const SKILL_NAME_LABEL_Y: float = 96.0  ## 标牌下沿距单位原点的上方�
 ## 技能名渐显 / 持续 / 渐隐时长（秒）：0.5 + 1.0 + 0.5 = 整段 2.0 秒
 const SKILL_NAME_FADE_TIME: float = 0.5
 const SKILL_NAME_HOLD_TIME: float = 1.0
+## 技能名字号（2026-09-30 用户要求「英雄释放技能时的字体大一点」）：原先不设字号、吃主题默认 16
+const SKILL_NAME_FONT_SIZE: int = 24
 
 ## #技能系统（2026-09-20）：在单位头顶弹出一条技能名（渐显 → 停留 → 渐隐）。
 ## 时间轴（用户拍板：整段 2 秒，其中出现+消失占 1 秒、持续显示 1 秒）：
@@ -437,6 +439,7 @@ func show_skill_name(skill_name: String) -> void:
 	lbl.text = skill_name
 	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	lbl.add_theme_font_size_override("font_size", SKILL_NAME_FONT_SIZE)
 	lbl.size = Vector2(SKILL_NAME_LABEL_W, SKILL_NAME_LABEL_H)
 	## 头顶正上方居中：本地坐标 = (标牌中心 - 宽度/2, 头顶之上)
 	lbl.position = Vector2(-SKILL_NAME_LABEL_W * 0.5, -SKILL_NAME_LABEL_Y)
@@ -480,6 +483,10 @@ func _ready() -> void:  ## 重写 _ready 生命周期方法
 	detection_area = get_node_or_null("DetectionArea")  ## 获取检测区域节点
 	unit_sprite = get_node_or_null("VisualBox/UnitSprite") as AnimatedSprite2D  ## 获取单位精灵节点
 	if unit_sprite != null:  ## 如果精灵节点存在
+		## 2026-10-04：兵种图集单帧 400×400，实际显示高仅 ~58px（缩小约 7 倍）。
+		## 默认纹理过滤是「线性、无 mipmap」，重缩小下会严重发糊（默认视角下兵种糊成一团）。
+		## 改为「线性 + mipmap」，配合图集 mipmaps/generate=true，保留细节且不产生锯齿。
+		unit_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 		has_animations = true  ## 标记有动画
 
 	## 记录出生阵线 Y，后续被碰撞挤压偏离后可缓慢回归，避免长期累积漂出战场
@@ -1025,33 +1032,48 @@ func play_backswing_anim() -> void:
 func play_backswing_stand() -> void:
 	play_backswing_anim()
 
-## 竞技场站定定格（#竞技场 2026-08-24 用户拍板）
-## 和平模式站着不动 / 战争模式无目标站着不动时，一律定格在行走动画第一帧；
-## 没有行走动画则定格在攻击动画第一帧。不播待机动画、不循环播放。
+## 竞技场站立待命统一播放待机（和平、战争无目标、移动到位均适用）。
+## 动画优先级：待机 > 行走 > 移动 > 攻击，**全部缺失才定格首帧兜底**。
+## #待机（2026-10-02 用户拍板）：兜底不再定格 ——
+## 缺待机素材的兵种（S1/S3/S4/S6/Hero1/Y1）原先 `unit_sprite.stop()` 定格首帧，
+## 观感仍是「放下就静止」，与本次需求冲突；改为循环播放最优可用动画。
 func play_arena_stand() -> void:
 	if unit_sprite == null:
 		return
-	var frames: SpriteFrames = anim_move_frames
-	var anim_key: String = "move"
-	if frames == null:
+	if anim_idle_frames != null and anim_idle_frames.has_animation("idle") \
+			and anim_idle_frames.get_frame_count("idle") > 0:
+		play_anim("idle", not unit_sprite.is_playing())
+		return
+	var frames: SpriteFrames = anim_walk_frames
+	var anim_key: String = "walk"
+	if not _stand_frames_usable(frames, anim_key):
+		frames = anim_move_frames
+		anim_key = "move"
+	if not _stand_frames_usable(frames, anim_key):
 		frames = anim_attack_frames
 		anim_key = "attack"
-	if frames == null:
+	if not _stand_frames_usable(frames, anim_key):
 		unit_sprite.stop()
 		return
+	if anim_key == "attack":
+		frames.set_animation_loop("attack", true)  ## 攻击帧默认单次，兜底待机需循环
 	if current_anim_state == "arena_stand" and unit_sprite.sprite_frames == frames:
-		return  ## 已定格，避免每帧重设导致抖动
+		if not unit_sprite.is_playing():
+			unit_sprite.play(anim_key)
+		return  ## 已在该动画上循环，避免每帧重设导致抖动
 	current_anim_state = "arena_stand"
 	unit_sprite.offset = Vector2.ZERO
+	unit_sprite.speed_scale = _get_anim_speed(anim_key)
 	unit_sprite.sprite_frames = frames
 	_apply_anim_scale(frames, anim_key)
-	unit_sprite.animation = anim_key
-	unit_sprite.frame = 0
-	unit_sprite.stop()  ## 定格第一帧
+	unit_sprite.play(anim_key)
 	_apply_anim_flip()
-	## #8（2026-08-26）：定格帧同样应用逐帧锚点补偿（未配置的兵种为 no-op）
-	## 2026-09-11：身体锚点偏移也在此应用（角色偏画布一侧的兵种定格帧身体对齐原点）
+	## #8（2026-08-26）：逐帧锚点补偿 + 身体锚点偏移同样适用（未配置的兵种为 no-op）
 	_apply_attack_anchor_offset()
+
+## 兜底待机帧是否可用（存在且有帧）
+static func _stand_frames_usable(frames: SpriteFrames, anim_key: String) -> bool:
+	return frames != null and frames.has_animation(anim_key) and frames.get_frame_count(anim_key) > 0
 
 ## 清空动画缩放缓存（控制台修改显示尺寸后调用，使新尺寸立即生效）
 static func clear_anim_scale_cache() -> void:  ## 定义清空缩放缓存的方法
@@ -1070,21 +1092,14 @@ static func clear_sprite_frames_cache() -> void:
 ## 进入局内前把该兵种各动画的 .tres 预先 load 进 _sprite_frames_cache，
 ## 使首次出兵时 _load_cached_frames 直接命中缓存，消除首次出兵卡顿。
 ## 与实例方法 _load_cached_frames 共用同一份静态缓存与键格式（unit_id + "_" + anim_name）。
+## 注意（2026-10-04）：主流程已改走异步路径 queue_prewarm_sprite_frames +
+## collect_prewarm_results（同步 load 会在主线程冻结，实测单兵种约 500ms）。
+## 本同步版保留给需要一次性阻塞加载的调试/工具脚本使用。
 ## unit_id: 兵种 ID
 ## attack_alt_file: 该兵种的备用攻击动画文件名（来自 UnitResource.attack_alt_frames，无则空串）
 ## 返回值: 本次新加载（未命中缓存）的动画数量，供调用方统计预热进度
 static func prewarm_sprite_frames(unit_id: String, attack_alt_file: String = "") -> int:
-	var file_map: Dictionary = {
-		"move": ANIM_MOVE_FILE,
-		"attack": ANIM_ATTACK_FILE,
-		"sprint": ANIM_SPRINT_FILE,
-		"walk": ANIM_WALK_FILE,
-		"idle": ANIM_IDLE_FILE,
-		"charge": ANIM_CHARGE_FILE,
-		"death": ANIM_DEATH_FILE,
-	}
-	if not attack_alt_file.is_empty():
-		file_map["attack_alt"] = attack_alt_file
+	var file_map: Dictionary = _prewarm_anim_file_map(attack_alt_file)
 	var loaded: int = 0
 	for anim_name in file_map:
 		var cache_key: String = unit_id + "_" + anim_name
@@ -1104,12 +1119,71 @@ static func prewarm_sprite_frames(unit_id: String, attack_alt_file: String = "")
 	## _compute_attack_anchor_offset 每次 setup 都要这两个值，而逐像素扫描 500×348
 	## 纹理单帧就要 ~48ms —— 不预热的话这笔开销会落在「第一次出该兵种」那一帧上。
 	## 预热在加载框内一次付清，池复用与后续出兵全部命中缓存。
-	_prewarm_anchor_textures(unit_id)
+	prewarm_anchor_textures(unit_id)
 	return loaded
+
+## 兵种动画名 → 文件名映射（同步预热与异步预热共用，避免两处硬编码漂移）
+## attack_alt_file 非空时追加备用攻击动画（文件名取自 UnitResource.attack_alt_frames）
+static func _prewarm_anim_file_map(attack_alt_file: String = "") -> Dictionary:
+	var file_map: Dictionary = {
+		"move": ANIM_MOVE_FILE,
+		"attack": ANIM_ATTACK_FILE,
+		"sprint": ANIM_SPRINT_FILE,
+		"walk": ANIM_WALK_FILE,
+		"idle": ANIM_IDLE_FILE,
+		"charge": ANIM_CHARGE_FILE,
+		"death": ANIM_DEATH_FILE,
+	}
+	if not attack_alt_file.is_empty():
+		file_map["attack_alt"] = attack_alt_file
+	return file_map
+
+## 异步预热指定兵种的各动画 .tres（2026-10-04 新增）
+## 与 prewarm_sprite_frames 的区别：本函数只发起 load_threaded_request 并立即返回，
+## 实际读盘/解码/上传在后台线程完成，主线程不阻塞 —— 加载框的进度条与兵种动画因此保持流畅。
+## 返回值: [[cache_key, path], ...]，交给 collect_prewarm_results() 逐帧收尾。
+static func queue_prewarm_sprite_frames(unit_id: String, attack_alt_file: String = "") -> Array:
+	var pending: Array = []
+	var file_map: Dictionary = _prewarm_anim_file_map(attack_alt_file)
+	for anim_name in file_map:
+		var cache_key: String = unit_id + "_" + anim_name
+		if _sprite_frames_cache.has(cache_key):
+			continue
+		var file_name: String = file_map[anim_name]
+		if file_name.is_empty():
+			continue
+		var path := "%s/%s/%s" % [ANIM_ROOT_DIR, unit_id, file_name]
+		## 保留 exists 预判：file_map 覆盖 7 种动画而多数兵种只有其中几种，
+		## 直接对缺失路径发请求会刷错误日志（与同步版口径一致）
+		if not ResourceLoader.exists(path):
+			continue
+		if ResourceLoader.load_threaded_request(path, "SpriteFrames") == OK:
+			pending.append([cache_key, path])
+	return pending
+
+## 收尾异步预热：把已完成的请求写进 _sprite_frames_cache，
+## 返回仍未完成（IN_PROGRESS）的条目供调用方继续轮询。
+## 失败/无效资源直接丢弃（不写缓存），行为与同步版一致。
+static func collect_prewarm_results(pending: Array) -> Array:
+	var still: Array = []
+	for item in pending:
+		var cache_key: String = String(item[0])
+		var path: String = String(item[1])
+		var st: int = ResourceLoader.load_threaded_get_status(path)
+		if st == ResourceLoader.THREAD_LOAD_IN_PROGRESS:
+			still.append(item)
+			continue
+		if st == ResourceLoader.THREAD_LOAD_LOADED:
+			## 必须调用一次 get 收尾，否则该次异步加载的结果不会被释放
+			var frames: SpriteFrames = ResourceLoader.load_threaded_get(path) as SpriteFrames
+			if frames != null:
+				_sprite_frames_cache[cache_key] = frames
+	return still
 
 ## 预热指定兵种 move/attack 首帧的内容包围盒缓存（#性能 2026-08-27）
 ## 只扫首帧：_compute_attack_anchor_offset 只用首帧，逐帧补偿走 UnitResource 的显式配置表。
-static func _prewarm_anchor_textures(unit_id: String) -> void:
+## 2026-10-04：由私有改为公开，供 battle_manager 的异步预热阶段（纹理就绪后）逐兵种分帧调用。
+static func prewarm_anchor_textures(unit_id: String) -> void:
 	for anim_name in ["move", "attack"]:
 		var frames: Variant = _sprite_frames_cache.get(unit_id + "_" + anim_name)
 		if frames == null:
@@ -2308,11 +2382,13 @@ func _clamp_to_field() -> void:  ## 定义战场边界钳制方法
 		return  ## 直接返回
 	if is_base_unit:  ## 基地单位（水晶）位置固定，不参与钳制
 		return  ## 直接返回
-	## 基础兜底：FIELD 边界（防止极端异常位移直接飞出战场）
-	## 2026-09-20：标准 / 战役 / 双人 / 肉鸽用下移后的战斗带（Constants.FIELD_Y_*），
-	## 竞技场是自由布兵沙盒，沿用原范围（Constants.ARENA_Y_*），手感不变。
-	var y_min: float = Constants.ARENA_Y_MIN if GameManager.is_battlefield_mode else Constants.FIELD_Y_MIN
-	var y_max: float = Constants.ARENA_Y_MAX if GameManager.is_battlefield_mode else Constants.FIELD_Y_MAX
+	## 沙盘不受普通战斗窄路 / 水晶之间的边界限制。
+	if GameManager.is_battlefield_mode:
+		global_position = global_position.clamp(Constants.ARENA_BOUNDS.position, Constants.ARENA_BOUNDS.end)
+		return
+	## 其余模式保留原战斗带。
+	var y_min: float = Constants.FIELD_Y_MIN
+	var y_max: float = Constants.FIELD_Y_MAX
 	## 肉鸽：敌军刚从屏幕外（|x| > FIELD_X_MAX）走入战场期间不做钳制，
 	## 否则出生点会被立刻拉回边界内，「屏幕外进场」失效且左侧出生者会被推到水晶脸上。
 	if RoguelikeManager.is_active and team == 1 and absf(global_position.x) > Constants.FIELD_X_MAX:
@@ -2896,6 +2972,27 @@ var _tri_volley_against_base: bool = false
 ##（`reset_attack_frame_flags()`），否则三连收波后动画继续循环到音效帧会再响一声（「第四声」）。
 var _attack_sfx_suppressed: bool = false
 
+## ── 萌黄（S9）印记（2026-09-30）──────────────────────────────────────────
+## 被萌黄攻击命中的敌人会被打上印记：首次命中时完整播放 burst 动画（含开头白光），
+## 播完后在敌人头顶循环播放 loop 动画（第 6 帧 ~ 最后一帧），跟随敌人移动，持续到该敌人死亡。
+## 萌黄每次实际掉血时，身上带印记的敌人各受等量伤害（传导伤害本身不再二次扩散）。
+const MOEGI_MARK_UNIT_IDS: PackedStringArray = ["S9"]  ## 拥有印记机制的兵种（可扩展）
+const MOEGI_MARK_FRAMES_FILE: String = "mark_frames.tres"  ## 印记帧动画文件（相对兵种目录）
+const MOEGI_MARK_BURST_ANIM: String = "burst"  ## 首次命中的完整播放动画
+const MOEGI_MARK_LOOP_ANIM: String = "loop"    ## 之后的头顶循环动画（第 6 帧起）
+const MOEGI_MARK_HEIGHT: float = 28.0          ## 印记显示高度（像素）（2026-09-30 用户要求「稍微缩小一点」：34 → 28）
+const MOEGI_MARK_SPEED_SCALE: float = 1.5      ## 印记动画播放倍速（2026-09-30 用户要求「动画播放速度加快一点」）
+const MOEGI_MARK_OFFSET_Y: float = -50.0       ## 印记中心相对单位原点的上方偏移（像素）
+const MOEGI_MARK_Z_INDEX: int = 70             ## 印记层级（盖在单位精灵之上，与技能名标签同层）
+const MOEGI_MARK_NODE_NAME: String = "MoegiMark"  ## 印记节点名（对象池复位时按名清理）
+
+## 本单位（萌黄）标记的敌人列表；萌黄掉血时逐个传导等量伤害
+var _moegi_marked_targets: Array[Unit] = []
+## 本单位被哪只萌黄标记（null = 未带印记）；只作「是否已有印记」判定用
+var _moegi_mark_owner: Unit = null
+## 传导伤害进行中：阻止「被标记的敌方萌黄」把自己的传导再扩散出去，避免无限递归
+static var _moegi_relay_guard: bool = false
+
 ## 本兵种是否启用三连红光
 func uses_tri_volley() -> bool:
 	return unit_resource != null and TRI_VOLLEY_UNIT_IDS.has(unit_resource.unit_id)
@@ -3358,6 +3455,8 @@ func _spawn_impact_effect(pos: Vector2) -> ImpactEffect:
 	effect.display_height = unit_resource.impact_display_height
 	effect.display_width = unit_resource.impact_display_width
 	effect.team = team
+	## 2026-10-04 用户要求：萌黄（S9）的攻击特效 z_index 拉到最高，避免被单位精灵挡住
+	effect.top_layer = _is_moegi_marker()
 	## 与投射物同层：挂在单位容器（Battlefield 下的 UnitContainer）上，随战场一起清场
 	var container = get_parent()
 	if container == null:
@@ -3366,6 +3465,98 @@ func _spawn_impact_effect(pos: Vector2) -> ImpactEffect:
 	effect.global_position = pos
 	## add_child 已同步跑完 _ready → _setup_animation，此处 impact_moment 必定就绪
 	return effect
+
+## ---- 萌黄（S9）印记（2026-09-30）----
+## 本兵种是否拥有印记机制（目前仅 S9）
+func _is_moegi_marker() -> bool:
+	return unit_resource != null and MOEGI_MARK_UNIT_IDS.has(unit_resource.unit_id)
+
+## 加载该兵种的印记帧动画（文件名固定 mark_frames.tres，路径规则与其他动画一致）
+func _load_moegi_mark_frames() -> SpriteFrames:
+	if unit_resource == null:
+		return null
+	var cache_key: String = unit_resource.unit_id + "_mark"
+	if _sprite_frames_cache.has(cache_key):
+		return _sprite_frames_cache[cache_key]
+	var path := "%s/%s/%s" % [ANIM_ROOT_DIR, unit_resource.unit_id, MOEGI_MARK_FRAMES_FILE]
+	var frames: SpriteFrames = null
+	if ResourceLoader.exists(path):
+		frames = load(path)
+	_sprite_frames_cache[cache_key] = frames
+	return frames
+
+## 命中时给敌人打上印记：登记目标；只有该敌人**第一次**被打上时才完整播放一次爆发，
+## 之后重复命中不再重播，保持头顶循环。
+func _apply_moegi_mark(target: Unit) -> void:
+	if not _is_moegi_marker():
+		return
+	if not is_instance_valid(target) or target.is_dead or target == self or target.team == team:
+		return
+	if not _moegi_marked_targets.has(target):
+		_moegi_marked_targets.append(target)
+	if target._moegi_mark_owner == null:
+		target._moegi_mark_owner = self
+		target._spawn_moegi_mark(_load_moegi_mark_frames())
+
+## 在自身头顶生成印记节点（被萌黄标记时调用）：挂在单位自己身上，随移动自动跟随
+func _spawn_moegi_mark(frames: SpriteFrames) -> void:
+	if frames == null or frames.get_animation_names().is_empty():
+		return
+	var mark := AnimatedSprite2D.new()
+	mark.name = MOEGI_MARK_NODE_NAME
+	mark.sprite_frames = frames
+	mark.centered = true
+	## 播放倍速：burst 与后续 loop 同速加快（只改播放速度，不动 mark_frames.tres 里的 10fps）
+	mark.speed_scale = MOEGI_MARK_SPEED_SCALE
+	mark.position = Vector2(0.0, MOEGI_MARK_OFFSET_Y)
+	mark.z_index = MOEGI_MARK_Z_INDEX
+	var s: float = _compute_moegi_mark_scale(frames)
+	mark.scale = Vector2(s, s)
+	add_child(mark)
+	if frames.has_animation(MOEGI_MARK_BURST_ANIM):
+		mark.play(MOEGI_MARK_BURST_ANIM)
+		mark.animation_finished.connect(_on_moegi_mark_burst_finished.bind(mark))
+	elif frames.has_animation(MOEGI_MARK_LOOP_ANIM):
+		mark.play(MOEGI_MARK_LOOP_ANIM)
+
+## 首次完整播放结束 → 切到头顶循环段（第 6 帧 ~ 最后一帧）
+func _on_moegi_mark_burst_finished(mark: AnimatedSprite2D) -> void:
+	if not is_instance_valid(mark) or mark.sprite_frames == null:
+		return
+	if mark.sprite_frames.has_animation(MOEGI_MARK_LOOP_ANIM):
+		mark.play(MOEGI_MARK_LOOP_ANIM)
+
+## 印记缩放：按显示高度与首帧纹理高度换算（与命中特效同一口径）
+func _compute_moegi_mark_scale(frames: SpriteFrames) -> float:
+	var anim: String = MOEGI_MARK_BURST_ANIM if frames.has_animation(MOEGI_MARK_BURST_ANIM) \
+			else frames.get_animation_names()[0]
+	var tex: Texture2D = frames.get_frame_texture(anim, 0)
+	if tex == null or tex.get_height() <= 0:
+		return 1.0
+	return MOEGI_MARK_HEIGHT / float(tex.get_height())
+
+## 移除自身头顶的印记（该敌人死亡 / 回池复用时调用），并通知萌黄把自己从标记列表摘掉
+func _remove_moegi_mark() -> void:
+	var mark: Node = get_node_or_null(MOEGI_MARK_NODE_NAME)
+	if mark != null:
+		mark.queue_free()
+		mark.name = MOEGI_MARK_NODE_NAME + "_Freeing"
+	if _moegi_mark_owner != null:
+		if is_instance_valid(_moegi_mark_owner):
+			_moegi_mark_owner._moegi_marked_targets.erase(self)
+		_moegi_mark_owner = null
+
+## 萌黄掉血时把等量伤害传导给所有被标记的敌人（传导伤害只走一次，不再向外扩散）
+func _relay_moegi_mark_damage(hp_lost: int) -> void:
+	if hp_lost <= 0 or _moegi_relay_guard or _moegi_marked_targets.is_empty():
+		return
+	if not _is_moegi_marker():
+		return
+	_moegi_relay_guard = true
+	for t in _moegi_marked_targets.duplicate():
+		if is_instance_valid(t) and not t.is_dead:
+			t.take_damage(hp_lost)
+	_moegi_relay_guard = false
 
 ## 瞬发命中的伤害结算入口（2026-09-19 从直播版搬入）
 ## perform_attack 在命中帧生成特效后，按「特效中间帧时刻」延迟调用本方法。
@@ -3379,6 +3570,8 @@ func _deliver_instant_hit(target: Unit, damage_entries: Array, hit_pos: Vector2,
 		return
 	var hit_units: Dictionary = {}
 	if is_instance_valid(target) and not target.is_dead:
+		## 萌黄（S9）：命中即在目标身上打上印记（2026-09-30）
+		_apply_moegi_mark(target)
 		_apply_attack_hit(target, damage_entries)
 		hit_units[target.get_instance_id()] = true
 	_apply_aoe(hit_pos, damage_entries, hit_units)
@@ -3585,6 +3778,12 @@ func attack_base(hit_index: int = 0) -> void:  ## 定义攻击基地的方法
 ## 每次 perform_attack 开始时清零，击杀死者时（die()）按攻击方累加，跨 AOE 多目标累计。
 var _attack_kill_count: int = 0
 
+## 真实击杀者阵营（2026-10-03 击杀赏金机制）：-1 = 无归属（流血/中毒等 DoT 或环境伤害）。
+## unit_died 信号的 killer_team 恒为「死者的敌方」（1-team），无法区分己方误伤；
+## 击杀赏金需要精确归属，故在 die() 里单独记录真实攻击者的阵营。
+## 只在 die() 内写、由信号回调同步读取；对象池复用时在 _clear_pool_residue() 复位。
+var last_killer_team: int = -1
+
 ## damage: 受到的伤害值
 ## attacker: 攻击者单位（用于记录击杀信息）
 func take_damage(damage: int, _attacker: Unit = null) -> void:  ## 定义受到伤害的方法
@@ -3663,10 +3862,14 @@ func take_damage_typed(damage: int, damage_type: int = 0, attacker: Unit = null)
 			armor_bar.value = current_armor
 
 	## 扣减 HP
+	var hp_before: int = current_hp  ## 受击前血量（萌黄印记传导按「实际掉血量」计算）
 	if hp_damage > 0:
 		current_hp = maxi(current_hp - hp_damage, 0)
 		if health_bar:
 			health_bar.value = current_hp
+	## 萌黄（S9）印记传导（2026-09-30）：本单位实际掉的血量，等量传导给被标记的敌人
+	if hp_damage > 0:
+		_relay_moegi_mark_damage(hp_before - current_hp)
 
 	## #16：护甲吸收全部伤害时血量不变（value_changed 不触发），这里补刷一次血条数值
 	_update_hp_bar_value_label()
@@ -3747,6 +3950,8 @@ func die(attacker: Unit = null) -> void:  ## 定义死亡处理方法
 	if is_dead:  ## 如果已经死亡
 		return  ## 直接返回
 	is_dead = true  ## 标记为已死亡
+	## 萌黄印记（2026-09-30）：该敌人死亡时移除头顶印记并解除标记
+	_remove_moegi_mark()
 	change_state("die")  ## 切换到死亡状态
 	## 死亡时清除所有活跃词条效果
 	clear_all_affixes()
@@ -3755,8 +3960,12 @@ func die(attacker: Unit = null) -> void:  ## 定义死亡处理方法
 	##  - 大力出奇迹：己方攻击方一次攻击（本攻击周期内）击杀 ≥3 名敌方
 	##  - 剑术大师：击杀者是 N2 兵种时按兵种累加击杀
 	var killer_unit_id: String = ""
+	## 击杀赏金归属（2026-10-03）：先复位为「无归属」，仅当攻击者是有效单位时记录其阵营。
+	## 己方误伤（attacker.team == team）会被 battle_root 判为不给钱，故这里如实记录。
+	last_killer_team = -1
 	if attacker != null and is_instance_valid(attacker) and attacker is Unit \
 			and attacker.unit_resource != null:
+		last_killer_team = attacker.team
 		killer_unit_id = attacker.unit_resource.unit_id
 		if attacker.team == 0:
 			attacker._attack_kill_count += 1
@@ -4005,6 +4214,11 @@ func _clear_pool_residue() -> void:
 	## 复用出来的单位若带着上一世的红光队列，会凭空对敌人连放 3 道红光。
 	cancel_tri_volley()
 	_attack_sfx_suppressed = false  ## 同时解除上一世的「三连接管音效」标志
+	## 击杀赏金归属（2026-10-03）：清上一世的真实击杀者阵营，避免复用单位带着旧归属
+	last_killer_team = -1
+	## 萌黄印记（2026-09-30）：清上一世的标记归属与头顶印记，标记列表一并清空
+	_remove_moegi_mark()
+	_moegi_marked_targets.clear()
 	clear_all_affixes()
 	## 注：死亡 tween 由 state_die 创建，回池时机（死亡动画播完/2s 兜底）保证其已自然结束，
 	## 无需在此枚举清理（Tween 是 RefCounted 非 Node，无法从 get_children 获取）。

@@ -1,6 +1,7 @@
-[gd_scene load_steps=2 format=3 uid="uid://campaign_map"]
+[gd_scene load_steps=3 format=3 uid="uid://campaign_map"]
 
 [ext_resource type="Script" path="res://scenes/ui/campaign_map.gd" id="1_cm"]
+[ext_resource type="Texture2D" path="res://assets/ui/campaign/campaign_bg.png" id="2_bg"]
 
 [node name="CampaignMap" type="Control"]
 layout_mode = 3
@@ -11,24 +12,22 @@ grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1_cm")
 
-[node name="Background" type="ColorRect" parent="."]
+[node name="Background" type="TextureRect" parent="."]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-color = Color(0.96, 0.91, 0.79, 1)
+texture = ExtResource("2_bg")
+expand_mode = 1
+stretch_mode = 6
 
 [node name="MapArea" type="Control" parent="."]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = 40.0
-offset_top = 80.0
-offset_right = -40.0
-offset_bottom = -100.0
 grow_horizontal = 2
 grow_vertical = 2
 

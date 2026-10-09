@@ -8,6 +8,14 @@ extends CanvasLayer
 ## 用法：GameManager.change_scene_with_loading("res://scenes/xxx.tscn")
 ## 注：本节点由 GameManager 在 _ready 时动态挂载（autoload 单例不可在项目设置静态声明为场景外的覆盖层，
 ## 故采用运行时 add_child 方式，保证任何场景切换前都存在）。
+##
+## 2026-10-04 卡顿优化（用户反馈「点开始游戏后弹框卡住、进度条走到头就不动、动画也停」）：
+##   ① 兵种动画由「弹框前同步 load()」改为「弹框可见后异步 load_threaded_request + 轮询」。
+##      原实现抽到 attack/idle 大图集（兵种图集共 162 张 / 327MB，均值 2MB，最大 Hero3/attack 6.7MB）
+##      时要在遮罩上屏前同步读盘 + GPU 上传 + mipmap 生成，界面会先冻结数百毫秒。
+##   ② 动画候选收敛到 LIGHT_ANIMS 白名单（单项图集 <1.5MB），不再抽到大图集。
+##   ③ 进度条到伪上限后原地停住等真实加载完成（2026-10-04 晚：删除往复摆动，用户要求不收缩）。
+##   ④ 进度条走满 100% 后先让出一帧再换场景，避免「点下去直接跳场」。
 
 const TIPS: Array[String] = [
 	"正在搬运曲奇中",
@@ -28,6 +36,19 @@ const BAR_HEIGHT: int = 14
 ## 伪进度爬升上限与速率：ResourceLoader 无精确百分比，故平滑模拟到 90% 等待，加载完成置 100%
 const PROGRESS_CAP: float = 90.0
 const PROGRESS_SPEED: float = 60.0
+## 加载框兵种动画候选白名单：(兵种ID, 动画名)
+## 只收录 2026-10-04 实测「图集 <1.5MB 且帧数足够」的条目 —— 加载框每次都从本表里随机抽，
+## 避免同步/异步都去碰 4~6.7MB 的 attack/idle 大图集。
+## 新增或替换兵种图集后如需扩表，按 resources/units/<ID>/<anim>_sheet.png 的体积挑选。
+const LIGHT_ANIMS: Array = [
+	["D2", "move"], ["Y3", "move"], ["G4", "move"], ["D2", "walk"],
+	["N1", "move"], ["F3", "move"], ["Hero4", "move"], ["S8", "attack"],
+	["G5", "move"], ["S4", "move"], ["F4", "move"], ["G2", "move"],
+	["D4", "move"], ["S5", "move"], ["D1", "move"], ["D2", "attack"],
+	["D3", "move"], ["G5", "attack"], ["Y3", "walk"], ["G6", "move"],
+	["G1", "move"], ["S3", "move"], ["F5", "move"], ["F2", "move"],
+	["G4", "walk"], ["G3", "move"],
+]
 ## 对象池预热阶段占用的进度区间（预热由实际完成数驱动，不再用伪进度）
 const PREWARM_PROGRESS_START: float = 40.0
 const PREWARM_PROGRESS_END: float = 95.0
@@ -40,6 +61,14 @@ var _anim_frames: SpriteFrames = null
 var _anim_name: String = ""
 var _anim_frame: int = 0
 var _anim_timer: float = 0.0
+## 本轮动画候选（LIGHT_ANIMS 打乱后的副本），逐个异步尝试直到加载出可用动画
+var _anim_candidates: Array = []
+## 当前尝试到的候选下标
+var _anim_cursor: int = 0
+## 异步加载在途的 .tres 路径（空串 = 无请求在途）
+var _anim_pending: String = ""
+## 在途请求对应的动画名（load_threaded_get 后校验帧数用）
+var _anim_pending_anim: String = ""
 ## 当前是否正在加载
 var _loading: bool = false
 ## 记录待加载路径（由 GameManager.show_loading 设置）
@@ -202,13 +231,15 @@ func _show_overlay() -> void:
 	var tip: Label = _root.get_node_or_null("CenterBox/LoadingPanel/VBoxContainer/TipLabel") as Label
 	if tip != null:
 		tip.text = TIPS[randi() % TIPS.size()]
-	_play_random_unit_anim()
 	_progress = 0.0
 	_prewarming = false
 	if _bar != null:
 		_bar.value = 0.0
 	_root.visible = true
 	_shown_at_ms = Time.get_ticks_msec()
+	## 2026-10-04：动画放在 visible 之后 —— 先让提示框上屏，动画只发起异步请求（无同步 IO），
+	## 不再出现「点击按钮 → 整个界面先冻结数百毫秒 → 弹框才出现」
+	_play_random_unit_anim()
 
 ## 加载完成，切换场景（不弹框路径）
 func _do_switch() -> void:
@@ -217,48 +248,87 @@ func _do_switch() -> void:
 	get_tree().change_scene_to_packed(packed)
 	_loading = false
 
-## 随机选一个兵种的行走/奔跑动画（walk > move > attack），加载帧序列并开始播放
+## 随机选一个轻量兵种动画并发起异步加载（不阻塞主线程；加载完成由 _poll_anim_load 贴图）
+## 2026-10-04 改造：原实现在此同步 load() 整张图集（含 GPU 上传 + mipmap 生成），且候选是
+## 「全部兵种的 walk/move/attack」，抽到 4~6.7MB 大图集时会在弹框出现前先冻住主线程。
+## 现改为：① 候选收敛到 LIGHT_ANIMS（图集 <1.5MB）；② load_threaded_request 异步加载。
 func _play_random_unit_anim() -> void:
 	_anim_frames = null
+	_anim_name = ""
 	_anim_tex.texture = null
+	_anim_pending = ""
+	_anim_pending_anim = ""
+	_anim_cursor = 0
+	_anim_candidates.clear()
 	## Web 按需加载（2026-09-14）：图集包未挂载时不尝试加载兵种动画（frames 存在但依赖
 	## 的图集缺失会加载失败刷错误日志），遮罩只显示随机提示词；桌面/Android 恒就绪，行为不变。
 	if not WebPackLoader.is_units_ready():
 		return
-	## 池子：常规兵种 + 隐藏事件/加载专用兵种（含 S6 小猫臭臭舞等过场动画）
-	var units: Array = UnitDatabase.unit_list + UnitDatabase.hidden_units
-	if units.is_empty():
-		return
-	var res = units[randi() % units.size()]
-	var unit_id: String = res.unit_id if "unit_id" in res else ""
-	if unit_id.is_empty():
-		return
-	for anim_name in ["walk", "move", "attack"]:
+	## 池子：白名单打乱后逐个尝试（常规兵种与隐藏事件兵种都在白名单内）
+	_anim_candidates = LIGHT_ANIMS.duplicate()
+	_anim_candidates.shuffle()
+	_request_next_anim()
+
+## 取出下一个候选动画并发起异步请求；路径不存在等同步失败的情况继续试下一个
+func _request_next_anim() -> void:
+	while _anim_cursor < _anim_candidates.size():
+		var entry: Array = _anim_candidates[_anim_cursor]
+		_anim_cursor += 1
+		var unit_id: String = String(entry[0])
+		var anim_name: String = String(entry[1])
 		var path := "res://resources/units/%s/%s_frames.tres" % [unit_id, anim_name]
-		if not ResourceLoader.exists(path):
-			continue
-		var frames: SpriteFrames = load(path)
-		## 帧数为 0 或加载失败时继续试下一个动画（原先在此直接 return，
-		## 导致「文件存在但无有效帧」时只显示静态首帧甚至对 null 取值报错）
-		if frames == null or frames.get_frame_count(anim_name) <= 0:
-			continue
+		## load_threaded_request 只做路径解析与请求登记，不做实际读盘（无同步 IO）
+		if ResourceLoader.load_threaded_request(path, "SpriteFrames") == OK:
+			_anim_pending = path
+			_anim_pending_anim = anim_name
+			return
+	_anim_pending = ""
+	_anim_pending_anim = ""
+
+## 每帧轮询在途动画的异步加载结果：加载到有效动画（≥2 帧）即贴首帧开播，
+## 失败或帧数不足则换下一个候选（候选全废时只显示提示词，不影响加载流程）
+func _poll_anim_load() -> void:
+	if _anim_pending.is_empty():
+		return
+	var st: int = ResourceLoader.load_threaded_get_status(_anim_pending)
+	if st == ResourceLoader.THREAD_LOAD_IN_PROGRESS:
+		return
+	var path: String = _anim_pending
+	var anim_name: String = _anim_pending_anim
+	_anim_pending = ""
+	_anim_pending_anim = ""
+	var frames: SpriteFrames = null
+	if st == ResourceLoader.THREAD_LOAD_LOADED:
+		## 必须调用一次 get 收尾，否则该次异步加载的结果不会被释放
+		frames = ResourceLoader.load_threaded_get(path) as SpriteFrames
+	if frames != null and frames.has_animation(anim_name) \
+			and frames.get_frame_count(anim_name) > 1:
 		_anim_frames = frames
 		_anim_name = anim_name
 		_anim_frame = 0
 		_anim_timer = 0.0
 		_anim_tex.texture = frames.get_frame_texture(anim_name, 0)
 		return
+	## 加载失败 / 单帧空动画 → 换下一个候选
+	_request_next_anim()
 
 ## 每帧驱动进度条爬升 + TextureRect 手动切帧（TextureRect 不受 AnimatedSprite2D 播放控制）
 func _process(delta: float) -> void:
 	if not _root.visible:
 		return
+	## 轮询在途的兵种动画异步加载（加载完成即贴图开播）
+	_poll_anim_load()
 	## 伪进度平滑爬升到 PROGRESS_CAP 后等待真实加载完成（置 100 见 _await_scene_loaded）
 	## 放在动画判断之前：没有可用动画的兵种进度条也要正常走
 	## 预热阶段（_prewarming）由 prewarm_unit_pool 回调按实际完成数驱动，此处不再推进
-	if _bar != null and not _prewarming and _progress < PROGRESS_CAP:
-		_progress = minf(_progress + PROGRESS_SPEED * delta, PROGRESS_CAP)
-		_bar.value = _progress
+	if _bar != null and not _prewarming:
+		if _progress < PROGRESS_CAP:
+			_progress = minf(_progress + PROGRESS_SPEED * delta, PROGRESS_CAP)
+			_bar.value = _progress
+		elif _progress < 100.0:
+			## 2026-10-04（晚）：删掉「等待态」往复摆动——用户要求进度条不许收缩，
+			## 到伪上限后原地停住，等真实加载完成置 100（见 _await_scene_loaded）。
+			pass
 	if _anim_frames == null:
 		return
 	var count: int = _anim_frames.get_frame_count(_anim_name)
@@ -287,9 +357,10 @@ func _await_scene_loaded() -> void:
 		_progress = 100.0
 		if _bar != null:
 			_bar.value = 100.0
-		## 进度满即切场景，不再额外停留（移除原先 0.5s 人为停顿）。
-		## 遮罩挂在 GameManager(autoload) 下会跨场景存活：切场景期间仍覆盖画面，
-		## 等新场景完成首帧渲染后再淡出，避免「进度满 → 白屏/空屏卡顿数秒」。
+		## 2026-10-04：先让出一帧，把「100%」真正画上屏，再同步换场景。
+		## 换场景（新场景实例化 + _ready 里的同步 load/脚本首次编译）会占满主线程，
+		## 不让这一帧的话玩家看到的是「进度条停在 90 一带不动 → 画面直接跳走」。
+		await get_tree().process_frame
 		_do_switch()
 		await get_tree().process_frame
 		await get_tree().process_frame

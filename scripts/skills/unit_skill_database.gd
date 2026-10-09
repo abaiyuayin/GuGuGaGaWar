@@ -135,7 +135,7 @@ const SKILL_DEFS: Array[Dictionary] = [
 		"id": "hero4_back_burst",
 		"unit_id": "Hero4",
 		"name": "一瞬千击",
-		"desc": "每 3 次普攻后的第 4 次攻击改为技能：攻击动画在判定帧前两帧定格 1 秒蓄力，随后 0.2 秒冲刺 150px 并回身，10 道萌黄冲击特效在 1 秒的第二次停顿里用 0.6 秒自位移起点向终点一道道铺开，铺完后 0.4 秒内连续打出 7 段伤害；剩余攻击动画播完后整批特效 1 秒渐隐。技能期间霸体，不被击退打断",
+		"desc": "每 3 次普攻后的第 4 次攻击改为技能：攻击动画在判定帧前两帧定格 1 秒蓄力，随后 0.2 秒冲刺 150px 并回身，10 道冰蓝刀光在 1 秒的第二次停顿里用 0.6 秒自位移起点向终点一道道铺开，铺完后 0.4 秒内连续打出 7 段伤害（每段伴随一声刀光切割音效）；剩余攻击动画播完后整批特效 1 秒渐隐。技能期间霸体，不被击退打断",
 		"enabled": true,
 		## 攻击次数触发：打满 3 次普通攻击后，第 4 次攻击由本技能接管
 		"trigger": {"kind": "attack_count", "count": 3},
@@ -167,14 +167,19 @@ const SKILL_DEFS: Array[Dictionary] = [
 			"damage": 60,
 			"damage_type": 0,
 			"damage_window": 0.4,
-			## 视觉：fx_count 道萌黄（S9）特效沿走廊均匀分布（0 = 位移起点，最后一道 = 位移终点），
-			## 在 fx_spread_time 内自起点向终点一道道铺开；攻击动画播完后统一 fx_fade_time 渐隐
+			## 视觉：fx_count 道冰蓝刀光沿走廊均匀分布（0 = 位移起点，最后一道 = 位移终点），
+			## 在 fx_spread_time 内自起点向终点一道道铺开；攻击动画播完后统一 fx_fade_time 渐隐。
+			## 图集为 Hero4 专属（2026-10-04 用户要求）：由 S9 萌黄的 impact_sheet.png 重绘为冰蓝，
+			## 不动 S9 源图 —— 萌黄自己的命中特效仍是橙红。
 			"fx_count": 10,
-			"fx_frames": "res://resources/units/S9/impact_frames.tres",
+			"fx_frames": "res://resources/units/Hero4/slash_frames.tres",
 			"fx_height": 68.667,
 			"fx_width": 86.667,
 			"fx_spread_time": 0.6,
 			"fx_fade_time": 1.0,
+			## 出伤切割音效（2026-10-04 新增）：damage_window 内每结算一段伤害播一次，
+			## 7 段 = 7 声连续切割。见 SkillEffects._run_back_burst_queue（force=true 绕过节流）。
+			"damage_sound": "res://assets/audio/hero/咕咕嘎嘎刀光切割.ogg",
 		},
 	},
 	{

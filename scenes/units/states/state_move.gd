@@ -30,7 +30,7 @@ func update(delta: float) -> void:  ## 重写每帧更新方法
 	if unit.order_pos.is_finite():
 		_advance_to_order(delta, speed_px)
 		return
-	## #竞技场（2026-08-24 用户拍板）：未开战（和平 / 停战）站定定格行走动画第一帧，
+	## 竞技场未开战（和平 / 停战）站定播放待机，
 	## 绝不攻击、绝不移动。此判定必须早于攻击锁定 —— 和平模式下玩家的攻击令也不该生效。
 	if GameManager.is_battlefield_mode and not unit.combat_enabled:
 		unit.velocity = Vector2.ZERO
@@ -42,7 +42,11 @@ func update(delta: float) -> void:  ## 重写每帧更新方法
 	##   - 但攻击锁定、竞技场索敌、站定还击、推进攻基全部跳过。
 	## 它只照常推进，到敌方基地前按自身射程站定（不造成任何伤害）。
 	if not unit.has_attack_ability():
-		_advance_without_attack(delta, _forward_direction(), speed_px)
+		if GameManager.is_battlefield_mode:
+			unit.velocity = Vector2.ZERO
+			unit.play_arena_stand()
+		else:
+			_advance_without_attack(delta, _forward_direction(), speed_px)
 		return
 
 	## #框选攻击锁定（2026-09-04）：玩家指定的目标优先于一切自动索敌 ——
@@ -58,7 +62,7 @@ func update(delta: float) -> void:  ## 重写每帧更新方法
 	## #竞技场（2026-08-24 用户拍板）：沙盒索敌与站定统一在此处理。
 	## 已开战：全场索敌锁最近敌人 → 进射程打，未进射程全向追击；
 	## 场上无敌人则原地站定（沙盒无基地可推，不再沿水平方向平推）。
-	if GameManager.is_battlefield_mode:
+	if GameManager.is_battlefield_mode and not unit.hold_position:
 		var arena_target: Unit = unit.find_nearest_enemy()
 		if arena_target == null or not is_instance_valid(arena_target):
 			unit.velocity = Vector2.ZERO
@@ -84,7 +88,10 @@ func update(delta: float) -> void:  ## 重写每帧更新方法
 				unit.change_state("attack")
 				return
 		unit.velocity = Vector2.ZERO
-		unit.play_anim("idle")
+		if GameManager.is_battlefield_mode:
+			unit.play_arena_stand()
+		else:
+			unit.play_anim("idle")
 		return
 
 	## 中远程单位的后撤已收拢到攻击状态的「恢复期」（#17），移动状态不再主动后撤，
@@ -298,7 +305,10 @@ func _advance_to_order(delta: float, speed_px: float) -> void:
 	## #竞技场（2026-08-24 需求3 修）：卡住检测——想去目标点却被友军顶死推不动时，
 	## 连续 1.2s 几乎无推进 → 强制视为已到位，停止原地奔跑动画。
 	var progress: float = (unit.global_position - prev).dot(dir)
-	if progress < maxf(2.0, speed_px * delta * 0.3):
+	## 沙盘慢速兵每帧正常位移也可能不足 2px，应按本帧期望步长判定卡住。
+	## 仅调整竞技场，其他模式保留原判定。
+	var progress_floor: float = 0.01 if GameManager.is_battlefield_mode else 2.0
+	if progress < maxf(progress_floor, speed_px * delta * 0.3):
 		unit._order_stuck_timer += delta
 		if unit._order_stuck_timer >= 1.2:
 			_finish_order()
@@ -324,7 +334,10 @@ func _finish_order() -> void:
 	## 竞技场（含常规战斗）：到位即站定，语义不变
 	if not unit.is_guard_mode():
 		unit.hold_position = true
-		unit.play_anim("idle")
+		if GameManager.is_battlefield_mode:
+			unit.play_arena_stand()
+		else:
+			unit.play_anim("idle")
 		return
 	## 肉鸽：到位后不再永久站定，按三级链决定是打、是折返还是回防
 	unit.hold_position = false

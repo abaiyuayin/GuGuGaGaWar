@@ -141,6 +141,9 @@ static func _run_back_burst_queue(caster: Node2D, effect: Dictionary) -> void:
 	var interval: float = window / float(hits)
 	var dmg: int = int(effect.get("damage", 0))
 	var dtype: int = int(effect.get("damage_type", 0))
+	## 出伤切割音效（2026-10-04，Hero4 冰蓝刀光）：每结算一段伤害播一次，7 段 → 连续切割。
+	## 必须 force=true：play_sound_path 默认走节流闸门会把后几声吞掉（同一路径连续触发被丢弃）。
+	var sound_path: String = String(effect.get("damage_sound", ""))
 	## 先取场景树引用：caster 可能在等待期间被回收，之后再取会报错
 	var tree: SceneTree = caster.get_tree()
 	if tree == null:
@@ -151,6 +154,8 @@ static func _run_back_burst_queue(caster: Node2D, effect: Dictionary) -> void:
 		for e in _find_enemies_in_back_rect(caster, effect):
 			if e != null and is_instance_valid(e) and not e.is_dead:
 				e.take_damage_typed(dmg, dtype, caster)
+		if sound_path != "":
+			AudioManager.play_sound_path(sound_path, true)
 		if i < hits - 1 and interval > 0.0:
 			await tree.create_timer(interval).timeout
 

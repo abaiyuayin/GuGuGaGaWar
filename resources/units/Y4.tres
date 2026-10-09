@@ -35,5 +35,7 @@ walk_display_width = 50.0
 attack_display_height = 75.0
 attack_display_width = 75.0
 attack_anim_sync_interval = true
+idle_display_height = 32.4
+idle_display_width = 49.8
 color_red = Color(0.8, 0.3, 0.2, 1)
 color_blue = Color(0.3, 0.3, 0.7, 1)

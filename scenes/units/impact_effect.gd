@@ -16,8 +16,16 @@ const GLOW_SCALE_FROM: float = 0.55
 ## 圆形光点结束缩放倍率
 const GLOW_SCALE_TO: float = 1.35
 
+## 默认层级：画在单位之上（普通兵种 z_index = 0，英雄/异象/特殊 = 20）
+const DEFAULT_Z_INDEX: int = 5
+## 最高层级（2026-10-04 用户要求：把萌黄攻击特效 z_index 拉到最高）：
+## 盖过单位（20）、印记/技能名标签与血条数值（70），避免红光被单位精灵挡住。
+const TOP_Z_INDEX: int = 4096
+
 ## 命中特效帧动画（null = 用内置圆形光点）
 var frames: SpriteFrames = null
+## 是否使用最高层级（由调用方按兵种决定；萌黄 S9 开启）
+var top_layer: bool = false
 ## 显示高度（像素），<=0 时用 DEFAULT_DISPLAY_HEIGHT
 var display_height: float = 0.0
 ## 显示宽度（像素），<=0 时与高度相同
@@ -82,7 +90,7 @@ func _compute_scale(tex: Texture2D) -> float:
 	return minf(target_w / fw, target_h / fh)
 
 func _ready() -> void:
-	z_index = 5  ## 画在单位之上，避免被单位精灵挡住
+	z_index = TOP_Z_INDEX if top_layer else DEFAULT_Z_INDEX  ## 画在单位之上，避免被单位精灵挡住
 	if frames != null and frames.get_animation_names().size() > 0:
 		_setup_animation()
 	else:
@@ -95,6 +103,8 @@ func _setup_animation() -> void:
 	var sprite := AnimatedSprite2D.new()
 	sprite.name = "EffectSprite"
 	sprite.centered = true
+	## 与兵种精灵同口径：命中图集同样是大尺寸帧重缩小，需线性 + mipmap 才不发糊
+	sprite.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 	sprite.sprite_frames = frames
 	var s: float = _compute_scale(first_tex)
 	sprite.scale = Vector2(s, s)
